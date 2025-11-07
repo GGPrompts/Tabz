@@ -168,13 +168,57 @@ Create the **simplest, fastest web-based terminal interface** with browser-style
 
 ---
 
-#### 9. Pop-Out Windows (P3)
-**Features**:
-- Pop out tab to new window
-- Drag tab out of window
-- `window.open()` with WebSocket sharing
+#### 9. Pop-Out Windows (P2)
+**Why**: Multiple monitors, native window management, better multitasking
 
-**Estimate**: 1 week
+**Features**:
+- Pop out tab to new window (`window.open()`)
+- BroadcastChannel for cross-window communication
+- Shared WebSocket connection (main window owns it)
+- Restore tab when popup closes
+- No browser extension needed
+
+**Architecture**:
+```
+Main Window (localhost:5175)
+  ├── WebSocket (ws://localhost:8127)
+  ├── BroadcastChannel('terminal-tabs')
+  └── Tab management
+
+Popup Windows (localhost:5175/terminal.html?id=abc)
+  ├── BroadcastChannel('terminal-tabs')
+  └── xterm.js Terminal
+```
+
+**Implementation Steps**:
+1. Create `public/terminal.html` - Standalone terminal page
+2. Create `src/terminal-popup.tsx` - Popup entry point
+3. Create `src/components/TerminalPopup.tsx` - Popup terminal wrapper
+4. Add BroadcastChannel to SimpleTerminalApp.tsx:
+   - Forward WebSocket messages → BroadcastChannel
+   - Listen for popup messages → Send via WebSocket
+5. Add pop-out button (⇱) to tab bar
+6. Handle popup close → Optionally restore tab
+7. Update Vite config for multi-page build
+
+**Files to Create**:
+- `public/terminal.html`
+- `src/terminal-popup.tsx`
+- `src/components/TerminalPopup.tsx`
+- `src/utils/BroadcastChannelManager.ts`
+
+**Benefits**:
+- ✅ Native window management (drag to different monitors)
+- ✅ No extension required (pure web APIs)
+- ✅ Works in all modern browsers
+- ✅ Each terminal can be full screen independently
+
+**Gotchas**:
+- ⚠️ Popup blockers (user must allow)
+- ⚠️ Main window must stay open (owns WebSocket)
+- ⚠️ Mobile behavior varies
+
+**Estimate**: 4-6 hours (simpler than initially thought!)
 
 ---
 
