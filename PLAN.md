@@ -2,10 +2,157 @@
 
 ## 🚨 CURRENT STATUS - READ FIRST
 
-**Status**: ✅ **ALL MAJOR BUGS FIXED** - Terminal spawning fully functional!
+**Status**: ✅ **CORE FUNCTIONALITY COMPLETE** - All major features working!
 
-**Date**: November 7, 2025
-**Session**: Debugging & fixing terminal spawn issues
+**Date**: November 8, 2025 (Updated - Evening)
+**Version**: v1.1.0
+
+### What's Working 🎉
+- ✅ Terminal persistence (all tabs render after refresh)
+- ✅ Tmux integration (sessions survive refresh)
+- ✅ Per-tab customization (theme, transparency, font)
+- ✅ Beautiful logging (Consola)
+- ✅ All spawning bugs fixed
+- ✅ Conditional scrollbar (tmux vs non-tmux)
+
+### What's Left
+See "Remaining Tasks" section below - all optional enhancements!
+
+**For completed features, see [CHANGELOG.md](CHANGELOG.md)**
+
+---
+
+## 🎯 Remaining Tasks (Optional Enhancements)
+
+All core functionality is complete. The items below are **nice-to-have** features for future sessions.
+
+### High Priority (UX Improvements)
+
+#### 1. Keyboard Shortcuts
+**Why**: Power users expect keyboard navigation
+
+**Shortcuts to implement**:
+- `Ctrl+T` - New terminal (already works - spawns first option)
+- `Ctrl+W` - Close active tab (already works)
+- `Ctrl+Tab` / `Ctrl+Shift+Tab` - Next/previous tab (already works)
+- `Ctrl+1-9` - Jump to tab N (already works)
+- `Ctrl+Shift+T` - Reopen last closed tab (NOT IMPLEMENTED)
+
+**Note**: Most keyboard shortcuts already work! Only missing reopen closed tab.
+
+**Estimate**: 1-2 hours
+
+---
+
+#### 2. Tab Reordering (Drag & Drop)
+**Why**: Users want to organize tabs visually
+
+**Implementation**:
+- Add `dnd-kit` library (lightweight drag & drop)
+- Make tabs draggable
+- Update terminal order in store on drop
+- Persist new order to localStorage
+
+**Files**:
+- `src/SimpleTerminalApp.tsx` - Add drag/drop handlers
+- `package.json` - Add dnd-kit dependency
+
+**Estimate**: 3-4 hours
+
+---
+
+#### 3. Session Manager UI
+**Why**: Reconnect to orphaned tmux sessions after refresh
+
+**Features**:
+- Query backend for active `tt-*` sessions on mount
+- Show "Reconnect" banner for orphaned sessions
+- Click session → reattach to existing tmux session
+- Optional: auto-reconnect setting
+
+**Backend API**: Already exists (`/api/tmux/sessions`)
+
+**Estimate**: 2-3 hours
+
+---
+
+### Medium Priority (Visual Polish)
+
+#### 4. Claude Code Theme Integration
+**Why**: 6 specialized color palettes for Claude output
+
+**Implementation**:
+- Use existing `src/styles/claude-code-themes.ts`
+- Add palette picker to customize modal
+- Show palette variant (dark/light/high-contrast)
+
+**Estimate**: 2-3 hours
+
+---
+
+#### 5. Tab Context Menu
+**Why**: Right-click options for power users
+
+**Features**:
+- Right-click tab → context menu
+- "Close", "Close Others", "Close to Right"
+- "Rename Tab"
+- "Duplicate Terminal"
+- "Copy Terminal ID"
+
+**Library**: `@radix-ui/react-dropdown-menu` or native `<dialog>`
+
+**Estimate**: 2-3 hours
+
+---
+
+### Low Priority (Future)
+
+#### 6. Mobile Responsiveness
+**Why**: Make it work on tablets/phones
+
+**Tasks**:
+- Test on iPad (1024x768)
+- Test on iPhone (375x667)
+- Fix tab bar for small screens
+- Touch-friendly controls
+- Virtual keyboard handling
+
+**Estimate**: 6-8 hours
+
+---
+
+#### 7. Light Theme Support
+**Why**: Some users prefer light backgrounds
+
+**Tasks**:
+- Create light color palettes
+- Create light background gradients
+- Add light/dark mode toggle
+- Ensure contrast meets WCAG AA
+
+**Estimate**: 4-5 hours
+
+---
+
+#### 8. Code Cleanup
+**Why**: Remove workarounds now that tmux is default
+
+**Tasks**:
+- Remove fake resize logic from Terminal.tsx
+- Remove special TUI handling in theme changes
+- Remove debug console.logs
+- Clean up unused imports
+- Add TypeScript strict mode
+
+**Estimate**: 2-3 hours
+
+---
+
+## 📋 Archived (Completed or Obsolete)
+
+The sections below document fixes and decisions from previous sessions.
+See [CHANGELOG.md](CHANGELOG.md) for completed feature details.
 
 ### ✅ Bug #1: Commands Not Executing (FIXED)
 **Issue**: Terminals spawned as empty bash shells instead of running commands (TFE, Micro Editor, etc.)
@@ -116,73 +263,57 @@ let existingTerminal = pendingSpawns.current.get(message.requestId)
 
 ---
 
-## 🎯 Vision
+## 📅 Release History
 
-Create the **simplest, fastest web-based terminal interface** with browser-style tabs. Focus on reliability, speed, and mobile-friendliness over complex features.
+### v1.1 - Persistence & Customization (✅ COMPLETE)
+**Released**: November 8, 2025
 
----
-
-## 📅 Release Roadmap
+- [x] Terminal persistence through refresh
+- [x] Tmux integration with toggle
+- [x] Per-tab customization (theme, transparency, font)
+- [x] Beautiful logging with Consola
+- [x] Conditional scrollbar
+- [x] All spawning bugs fixed
+- [x] Settings modal for spawn-options.json
 
 ### v1.0 - MVP (✅ COMPLETE)
-**Status**: Released November 7, 2025
+**Released**: November 7, 2025
+
 - [x] Tab-based interface
 - [x] Terminal spawning (15 types)
 - [x] WebSocket I/O
 - [x] Theme system
-- [x] Footer-based terminal info (cleaner design)
-- [x] Fixed stale terminal loading spinner bug
+- [x] Footer-based terminal info
 
-### v1.1 - Profile System & Persistence (✅ IN PROGRESS)
-**Target**: Next session
-**Strategy**: Windows Terminal-style profiles (not spawn-options.json)
+### v1.2 - UX Improvements (PLANNED)
+**Target**: When requested
 
-**Design Decision**: Profile-based approach solves multiple problems:
-- ✅ Working directory per profile (solves LazyGit/Claude in home folder issue)
-- ✅ Theme/font/transparency per profile
-- ✅ Default profile (what Ctrl+T spawns)
-- ✅ Familiar UX from Windows Terminal
-- ✅ Easy integration with TFE's --cwd flag
+See "Remaining Tasks" section above for:
+- Tab reordering (drag & drop)
+- Tab context menu (close others, rename, etc.)
+- Session manager UI
+- Claude Code theme integration
+- Mobile responsiveness
 
-**Tasks**:
-- [x] Backend has tmux session APIs
-- [x] Identified working directory issue with current spawn system
-- [ ] Create profiles store (migrate from spawn-options.json)
-- [ ] Build minimal settings modal
-- [ ] Implement tmux session reconnection
-- [ ] Use abbreviated session names (cc-1, tmux-dev, etc.)
-- [ ] Tab persistence with tmux sessions
+### v2.0 - Advanced Features (FUTURE)
+**Target**: TBD
 
-### v1.2 - UX Improvements
-**Target**: 2-3 weeks
-- [ ] Keyboard shortcuts (Ctrl+T, Ctrl+W, Ctrl+Tab)
-- [ ] Tab reordering (drag & drop)
-- [ ] Tab context menu (close, close others, close right)
-- [ ] Settings modal (edit spawn-options.json)
-- [ ] Tab icons (show terminal type icon)
-
-### v1.3 - Mobile Support
-**Target**: 1 month
-- [ ] Responsive CSS for tablets/phones
-- [ ] Touch-friendly tab switching
-- [ ] Mobile keyboard support
-- [ ] Portrait/landscape layouts
-- [ ] PWA manifest
-
-### v2.0 - Advanced Features
-**Target**: 2-3 months
-- [ ] Split panes (horizontal/vertical)
-- [ ] Tab groups/folders
-- [ ] Search across terminals
-- [ ] Command history
-- [ ] Copy/paste improvements
-- [ ] Export terminal output
+- Split panes (or tmuxplexer integration)
+- Tab groups/folders
+- Search across terminals
+- Export terminal output
+- Light theme support
 
 ---
 
-## 🚀 Priority Tasks
+## 🚀 Priority Tasks (ARCHIVED - See "Remaining Tasks" Section Above)
 
-### High Priority (Do First)
+The detailed task lists below are archived. See the "Remaining Tasks" section at the top for current priorities.
+
+<details>
+<summary>Click to expand archived task details</summary>
+
+### High Priority (Do First) - OBSOLETE
 
 #### 0. Profile System (P0 - NEW!)
 **Why**: Current spawn system can't set working directory before launching
@@ -444,9 +575,11 @@ Popup Windows (localhost:5175/terminal.html?id=abc)
 
 **Estimate**: 4-6 hours (simpler than initially thought!)
 
+</details>
+
 ---
 
-## 🐛 Bug Fixes Needed
+## 🐛 Bug Fixes Needed (ARCHIVED - All Fixed in v1.1)
 
 ### Critical Bugs
 1. **localStorage Clear on Mount** - Remove the `localStorage.clear()` hack from SimpleTerminalApp.tsx (line 68)
@@ -689,7 +822,8 @@ VITE_WS_URL=wss://your-domain.com/ws
 
 ---
 
-**Last Updated**: November 8, 2025 - Late Evening Session
+**Last Updated**: November 8, 2025 - Evening
+**Status**: Core functionality complete (v1.1.0) - See CHANGELOG.md for details
 
 ## 🔧 Current Session Status (Nov 8 Late Evening)
 
