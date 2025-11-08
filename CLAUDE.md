@@ -310,6 +310,41 @@ LOG_LEVEL=5  # Shows detailed PTY operations, tmux session info
 - **Backend**: http://localhost:8127 (WebSocket + REST API)
 - **WebSocket**: ws://localhost:8127
 
+### Browser Console Forwarding (Claude Debugging)
+
+**Automatic in dev mode!** Browser console logs are automatically forwarded to the backend terminal for easy debugging.
+
+**What gets forwarded:**
+- `console.log()` → Backend terminal with `[Browser]` prefix
+- `console.error()` → Red error in backend terminal
+- `console.warn()` → Yellow warning in backend terminal
+- Includes source file:line (e.g., `[Browser:SimpleTerminalApp.tsx:123]`)
+
+**View forwarded logs:**
+```bash
+# Method 1: Attach to backend session
+tmux attach -t terminal-tabs:backend
+
+# Method 2: Spawn "Dev Logs" terminal in app
+# Right-click → Dev Logs
+
+# Method 3: Capture last 50 browser logs
+tmux capture-pane -t terminal-tabs:backend -p -S -50 | grep "\[Browser"
+```
+
+**Format (optimized for Claude Code):**
+```
+[Browser:SimpleTerminalApp.tsx:456] Terminal spawned: terminal-abc123
+[Browser:Terminal.tsx:234] xterm initialized {cols: 80, rows: 24}
+[Browser] WebSocket connected
+```
+
+**Why this helps:**
+- Claude can see browser + backend logs in one place via tmux capture-pane
+- No need to copy-paste from Chrome DevTools
+- Structured format uses minimal context
+- Source location helps pinpoint issues quickly
+
 ---
 
 ## 🔗 Links

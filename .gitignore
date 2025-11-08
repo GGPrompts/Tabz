@@ -34,3 +34,5 @@ Thumbs.db
 # Workspace data
 workspace-data/
 .logs/
+PERSISTENCE_*.txt
+PERSISTENCE_*.md

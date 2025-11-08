@@ -840,6 +840,45 @@ router.post('/tmux/cleanup', asyncHandler(async (req, res) => {
   }
 }));
 
+/**
+ * POST /api/console-log - Receive browser console logs
+ * Claude-optimized: Structured, compact logs for tmux capture-pane debugging
+ */
+router.post('/console-log', asyncHandler(async (req, res) => {
+  const { logs } = req.body;
+
+  if (!Array.isArray(logs)) {
+    return res.status(400).json({ error: 'Expected logs array' });
+  }
+
+  const logger = require('../modules/logger');
+
+  logs.forEach(({ level, message, source, timestamp }) => {
+    // Format: [Browser] [source] message
+    const prefix = source ? `[Browser:${source}]` : '[Browser]';
+    const msg = `${prefix} ${message}`;
+
+    switch(level) {
+      case 'error':
+        logger.error(msg);
+        break;
+      case 'warn':
+        logger.warn(msg);
+        break;
+      case 'debug':
+        logger.debug(msg);
+        break;
+      case 'info':
+        logger.info(msg);
+        break;
+      default:
+        logger.log(msg);
+    }
+  });
+
+  res.json({ success: true, received: logs.length });
+}));
+
 // =============================================================================
 // ERROR HANDLING
 // =============================================================================
