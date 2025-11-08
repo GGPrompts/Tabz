@@ -320,7 +320,15 @@ LOG_LEVEL=5  # Shows detailed PTY operations, tmux session info
 - `console.warn()` → Yellow warning in backend terminal
 - Includes source file:line (e.g., `[Browser:SimpleTerminalApp.tsx:123]`)
 
-**View forwarded logs:**
+**Claude can capture logs directly** (when you run `./start-tmux.sh`):
+```bash
+# Claude runs these via Bash tool after making changes:
+tmux capture-pane -t terminal-tabs:backend -p -S -100   # Backend logs
+tmux capture-pane -t terminal-tabs:frontend -p -S -100  # Frontend logs
+tmux ls | grep "^tt-"                                    # Active terminals
+```
+
+**User can view logs manually:**
 ```bash
 # Method 1: Attach to backend session
 tmux attach -t terminal-tabs:backend
@@ -340,10 +348,10 @@ tmux capture-pane -t terminal-tabs:backend -p -S -50 | grep "\[Browser"
 ```
 
 **Why this helps:**
-- Claude can see browser + backend logs in one place via tmux capture-pane
-- No need to copy-paste from Chrome DevTools
-- Structured format uses minimal context
-- Source location helps pinpoint issues quickly
+- ✅ **Claude can debug autonomously** - Capture panes directly, no user copy-paste needed
+- ✅ Browser + backend logs in one place
+- ✅ Structured format uses minimal context
+- ✅ Source location helps pinpoint issues quickly
 
 ---
 
@@ -357,11 +365,54 @@ tmux capture-pane -t terminal-tabs:backend -p -S -50 | grep "\[Browser"
 
 ## 📝 Notes for AI Assistants
 
+### Project Context
 - This project was extracted from Opustrator to create a simpler tab-based version
 - The backend is shared with Opustrator (same WebSocket protocol)
 - Focus on simplicity - no canvas features should be added
 - Test spawning terminals after changes (Bash, TFE, Claude Code)
 - Keep dependencies minimal - avoid adding new npm packages
+
+### Autonomous Debugging Workflow
+
+**When user runs `./start-tmux.sh`, you can debug autonomously:**
+
+1. **Make code changes** (Edit/Write tools)
+
+2. **Check if it's working** (Bash tool):
+   ```bash
+   # Check backend logs
+   tmux capture-pane -t terminal-tabs:backend -p -S -100
+
+   # Check frontend logs (includes browser console via forwarder)
+   tmux capture-pane -t terminal-tabs:frontend -p -S -100
+
+   # Check active terminal sessions
+   tmux ls | grep "^tt-"
+
+   # Check specific terminal
+   tmux capture-pane -t tt-bash-xyz -p -S -50
+   ```
+
+3. **Analyze and fix** - You can see errors directly without asking user
+
+**Example autonomous debugging:**
+```bash
+# After updating Terminal.tsx:
+# 1. Capture backend to see if terminal spawned
+tmux capture-pane -t terminal-tabs:backend -p -S -50 | tail -20
+
+# 2. Check for browser errors
+tmux capture-pane -t terminal-tabs:backend -p -S -100 | grep "\[Browser.*ERROR"
+
+# 3. Verify terminal session exists
+tmux ls | grep "tt-bash"
+```
+
+**This enables:**
+- ✅ Fix issues without user needing to copy-paste logs
+- ✅ Verify changes work before committing
+- ✅ Debug race conditions by capturing exact timing
+- ✅ See both browser + backend logs in one capture
 
 ---
 
