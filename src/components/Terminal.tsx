@@ -18,6 +18,7 @@ import {
   getTerminalClassName,
   terminalThemes,
 } from "../styles/terminal-themes";
+import { getBackgroundCSS } from "../styles/terminal-backgrounds";
 import { ThemeDropdown } from "./ThemeDropdown";
 import { debounce } from "../utils/debounce";
 import { useSettingsStore } from "../stores/useSettingsStore";
@@ -29,6 +30,7 @@ interface TerminalProps {
   wsRef: React.MutableRefObject<WebSocket | null>;
   embedded?: boolean; // when true, hide header/status and let parent provide chrome
   initialTheme?: string; // Initial theme to use
+  initialBackground?: string; // Initial background gradient key
   initialOpacity?: number; // Initial opacity (0-1)
   initialFontSize?: number; // Initial font size
   initialFontFamily?: string; // Initial font family
@@ -48,6 +50,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       wsRef,
       embedded = false,
       initialTheme,
+      initialBackground = 'dark-neutral',
       initialOpacity = 0.2,
       initialFontSize,
       initialFontFamily,
@@ -71,6 +74,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
     const [currentTheme, setCurrentTheme] = useState(
       initialTheme || globalDefaultTheme || agent.terminalType,
     );
+    const [currentBackground, setCurrentBackground] = useState(initialBackground);
     const [opacity, setOpacity] = useState(initialOpacity);
     const themeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -1049,16 +1053,17 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       updateTheme: (themeName: string) => {
         handleThemeChange(themeName);
       },
+      updateBackground: (backgroundKey: string) => {
+        setCurrentBackground(backgroundKey);
+      },
       updateOpacity: (newOpacity: number) => {
         setOpacity(newOpacity);
       },
       updateFontSize: (newFontSize: number) => {
         if (xtermRef.current) {
           xtermRef.current.options.fontSize = newFontSize;
-          // Don't update global font size if this terminal has a specific size
-          if (!initialFontSize) {
-            useSettingsStore.getState().updateSettings({ terminalDefaultFontSize: newFontSize });
-          }
+          // NOTE: Footer font controls should NOT update global default
+          // Global default is only changed via ⚙️ spawn options manager
           // Refit terminal after font size change and send new dimensions to backend
           setTimeout(() => {
             if (fitAddonRef.current && xtermRef.current) {
@@ -1194,6 +1199,21 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
           } as React.CSSProperties
         }
       >
+        {/* Dynamic background gradient layer */}
+        <div
+          className="terminal-background-layer"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: getBackgroundCSS(currentBackground),
+            opacity: opacity,
+            zIndex: -1,
+            pointerEvents: 'none',
+          }}
+        />
         {!embedded && (
           <div
             className="terminal-header"

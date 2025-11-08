@@ -676,3 +676,126 @@ Current footer layout is awkward on ultra-wide screens:
 **All Core Features Work! 🎉**
 
 The app is fully functional - everything else is polish and nice-to-haves!
+
+---
+
+## 🎨 Text Colors Separated from Backgrounds (November 8, 2025 - Latest)
+
+### Feature: Mix-and-Match Text Themes + Background Gradients ✅ IMPLEMENTED
+
+**User Request:** Separate text color themes from background gradients for full customization freedom
+
+**Problem Identified:**
+- All themes were already using transparent backgrounds (forced by CSS `!important`)
+- The old `theme` field controlled both text colors AND background gradients
+- Users couldn't mix Amber text with Ocean background, etc.
+
+**Implementation:**
+1. ✅ **Created `terminal-backgrounds.ts`** - 18 beautiful gradient options
+   - Dark Neutral, Pure Black, Amber Warmth, Matrix Depths
+   - Cyberpunk Neon, Vaporwave Dream, Ocean Depths, Forest Night
+   - Sunset Fade, Midnight Blue, Aurora Borealis, Synthwave Sunset
+   - Neon City, Terminal Green, Transparent, and more!
+
+2. ✅ **Updated Terminal Component** - Added dynamic background layer
+   - Background rendered as React div (not xterm canvas)
+   - Full gradient control via `initialBackground` prop
+   - `updateBackground()` method for runtime changes
+
+3. ✅ **Split Customize UI** - Footer customize modal now has TWO dropdowns:
+   - **Text Color Theme** - Amber, Matrix Green, Cyberpunk, etc. (13 options)
+   - **Background Gradient** - All 18 gradients selectable independently
+
+4. ✅ **Updated Spawn Options Manager** - Settings modal (⚙️) includes both:
+   - `defaultTheme` - Text colors
+   - `defaultBackground` - Background gradient
+   - Legacy migration: Auto-maps old themes to matching backgrounds
+
+5. ✅ **Updated Terminal State** - Added `background` field to Terminal interface
+   - Persists per-tab through localStorage
+   - Falls back to theme-based background for backwards compatibility
+
+**Files Created:**
+- `src/styles/terminal-backgrounds.ts` - 18 gradient definitions with previews
+
+**Files Modified:**
+- `src/components/Terminal.tsx` - Background layer, updateBackground method
+- `src/SimpleTerminalApp.tsx` - Background handling, migration mapping
+- `src/components/SettingsModal.tsx` - Added background dropdown
+- `src/stores/simpleTerminalStore.ts` - Added background field to Terminal interface
+
+**User Can Now:**
+- Mix Amber text with Vaporwave background
+- Mix Matrix Green text with Pure Black background
+- Mix any of 13 text themes with any of 18 backgrounds
+- Transparency applies to background gradient (not text)
+
+---
+
+## 🐛 Font Size Defaulting Bug (November 8, 2025 - Latest)
+
+### Bug: Font Size Defaulting to 14/15 Instead of Spawn Option's 16 ✅ FIXED
+
+**Problem:**
+- User set `defaultFontSize: 16` in spawn-options.json
+- Terminals spawned at 15px (or 14px)
+- Footer +/- buttons were accidentally changing global default
+
+**Root Causes Found:**
+
+1. **Hardcoded 14 fallback** (SimpleTerminalApp.tsx line 780):
+   ```typescript
+   const currentSize = activeTerminal.fontSize || 14  // ❌ Wrong!
+   ```
+
+2. **Hardcoded 14 in display** (SimpleTerminalApp.tsx line 1032):
+   ```typescript
+   {activeTerminal.fontSize || 14}px  // ❌ Wrong!
+   ```
+
+3. **Footer controls changing global default** (Terminal.tsx line 1067):
+   ```typescript
+   // This was updating global setting when you just wanted to change one tab!
+   useSettingsStore.getState().updateSettings({ terminalDefaultFontSize: newFontSize });
+   ```
+
+**Fixes Applied:**
+
+1. ✅ **Use global default instead of 14**:
+   ```typescript
+   const globalDefault = useSettingsStore.getState().terminalDefaultFontSize
+   const currentSize = activeTerminal.fontSize || globalDefault  // Now uses 16!
+   ```
+
+2. ✅ **Display global default in footer**:
+   ```typescript
+   {activeTerminal.fontSize || useSettingsStore.getState().terminalDefaultFontSize}px
+   ```
+
+3. ✅ **Footer controls NO LONGER change global default**:
+   ```typescript
+   // Removed the updateSettings call
+   // Now only changes the specific terminal's fontSize
+   ```
+
+4. ✅ **Ensure new terminals get fontSize value**:
+   ```typescript
+   fontSize: option.defaultFontSize || useSettingsStore.getState().terminalDefaultFontSize
+   ```
+
+**The Separation:**
+- **Footer +/- buttons**: Change ONLY the active terminal's font size (persists per-tab)
+- **⚙️ Spawn Options Manager**: Change the global default for NEW terminals
+- **Global default in `useSettingsStore`**: 16px (line 96 in useSettingsStore.ts)
+
+**Files Modified:**
+- `src/SimpleTerminalApp.tsx` - Fixed hardcoded 14 fallbacks, added global default usage
+- `src/components/Terminal.tsx` - Removed accidental global default update
+
+**Note:** If you still see 15px, check browser localStorage for cached `opustrator-settings` with `terminalDefaultFontSize: 15` from earlier sessions. Clear localStorage or use footer +/- to update it.
+
+---
+
+**Last Updated:** November 8, 2025 - Evening (Session 2)
+**Latest Changes:** Text/Background separation + Font size defaulting fix
+**Status:** ✅ All core features working! Background customization complete!

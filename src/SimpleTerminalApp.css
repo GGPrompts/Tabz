@@ -11,8 +11,41 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
 }
 
-/* Header */
+/* Header Reveal Handle - Small tab that shows when header is hidden */
+.header-reveal-handle {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #1e1f2e 0%, #1a1b26 100%);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 4px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 200;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.header-reveal-handle:hover {
+  background: linear-gradient(135deg, #2a2b3e 0%, #24283b 100%);
+  border-color: rgba(245, 158, 11, 0.5);
+  padding-bottom: 6px;
+}
+
+.handle-icon {
+  font-size: 12px;
+  color: #f59e0b;
+  line-height: 1;
+}
+
+/* Header - Auto-hide after 10s */
 .app-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -21,6 +54,22 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   gap: 20px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+  transform: translateY(0);
+  opacity: 1;
+  z-index: 100;
+}
+
+.app-header.hidden {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-header.visible {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .app-title {
@@ -197,6 +246,15 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   overflow-x: auto;
   overflow-y: hidden;
+  margin-top: 47px; /* Space for fixed header */
+  transition: margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  z-index: 101; /* Above header (100) so header slides under tabs */
+}
+
+/* When header is hidden, remove top margin */
+.simple-terminal-app.header-hidden .tab-bar {
+  margin-top: 0;
 }
 
 .tab-bar::-webkit-scrollbar {
@@ -230,8 +288,7 @@
 
 .tab.active {
   background: #1a1b26;
-  border-color: #f59e0b;
-  border-bottom-color: #1a1b26;
+  border-color: #f59e0b; /* Orange glow around the tab */
   position: relative;
   z-index: 1;
 }
@@ -514,21 +571,16 @@
 /* App Footer - Terminal Info Bar */
 .app-footer {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
   padding: 6px 16px;
   background: #000000;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   font-size: 13px;
   color: rgba(255, 255, 255, 0.7);
-  min-height: 32px;
+  height: 36px;
   flex-shrink: 0;
-}
-
-.app-footer > div:first-child {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
 .footer-terminal-info {
@@ -562,18 +614,7 @@
 .footer-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.footer-font-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 8px;
 }
 
 .font-size-display {
@@ -614,33 +655,7 @@
   cursor: not-allowed;
 }
 
-.footer-action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 14px;
-  padding: 0;
-}
-
-.footer-action-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.footer-action-btn.footer-close:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: #ef4444;
-}
+/* Removed footer-action-btn and footer-close - close button now only in tab */
 
 /* Customize Modal */
 .customize-modal-overlay {
@@ -780,14 +795,16 @@
 /* Responsive Design - Mobile & Tablet */
 @media (max-width: 768px) {
   /* Stack footer info and controls vertically on mobile */
-  .app-footer > div:first-child {
+  .app-footer {
     flex-direction: column;
     align-items: flex-start;
+    height: auto;
+    gap: 8px;
   }
 
   .footer-controls {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-end;
   }
 
   /* Customize modal - center on mobile */
@@ -808,12 +825,7 @@
 
 @media (max-width: 480px) {
   /* Extra small screens - make controls even more compact */
-  .footer-font-controls {
-    font-size: 11px;
-  }
-
-  .footer-control-btn,
-  .footer-action-btn {
+  .footer-control-btn {
     min-width: 28px;
     height: 28px;
     font-size: 12px;

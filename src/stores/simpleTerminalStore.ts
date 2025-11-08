@@ -9,7 +9,8 @@ export interface Terminal {
   icon?: string;
   agentId?: string;
   workingDir?: string;
-  theme?: string;
+  theme?: string; // Text color theme (amber, matrix, etc.)
+  background?: string; // Background gradient key (dark-neutral, amber-warmth, etc.)
   transparency?: number;
   fontSize?: number;
   fontFamily?: string;

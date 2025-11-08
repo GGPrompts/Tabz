@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import './SettingsModal.css'
+import { backgroundGradients } from '../styles/terminal-backgrounds'
 
 interface SpawnOption {
   label: string
@@ -9,6 +10,7 @@ interface SpawnOption {
   description: string
   workingDir?: string
   defaultTheme?: string
+  defaultBackground?: string // Background gradient key
   defaultTransparency?: number
   defaultFontFamily?: string
   defaultFontSize?: number
@@ -35,6 +37,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
     description: '',
     workingDir: '~',
     defaultTheme: 'default',
+    defaultBackground: 'dark-neutral',
     defaultTransparency: 100,
     defaultFontFamily: 'monospace',
     defaultFontSize: 14,
@@ -116,6 +119,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
       defaultFontSize: option.defaultFontSize ?? 16, // Use global default if not set
       defaultFontFamily: option.defaultFontFamily ?? 'monospace',
       defaultTheme: option.defaultTheme ?? 'default',
+      defaultBackground: option.defaultBackground ?? 'dark-neutral',
       defaultTransparency: option.defaultTransparency ?? 100,
     })
     setEditingIndex(index)
@@ -148,6 +152,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
       description: '',
       workingDir: '~',
       defaultTheme: 'default',
+      defaultBackground: 'dark-neutral',
       defaultTransparency: 100,
       defaultFontFamily: 'monospace',
       defaultFontSize: 14,
@@ -319,20 +324,42 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
 
               <div className="form-row">
                 <label>
-                  Theme
+                  Text Color Theme
                   <select
                     value={formData.defaultTheme}
                     onChange={(e) => setFormData({ ...formData, defaultTheme: e.target.value })}
                   >
                     <option value="default">Default</option>
                     <option value="amber">Amber</option>
-                    <option value="matrix">Matrix</option>
+                    <option value="matrix">Matrix Green</option>
                     <option value="dracula">Dracula</option>
                     <option value="monokai">Monokai</option>
                     <option value="solarized-dark">Solarized Dark</option>
                     <option value="github-dark">GitHub Dark</option>
+                    <option value="cyberpunk">Cyberpunk Neon</option>
+                    <option value="holographic">Holographic</option>
+                    <option value="vaporwave">Vaporwave</option>
+                    <option value="retro">Retro Amber</option>
+                    <option value="synthwave">Synthwave</option>
+                    <option value="aurora">Aurora Borealis</option>
                   </select>
                 </label>
+                <label>
+                  Background Gradient
+                  <select
+                    value={formData.defaultBackground}
+                    onChange={(e) => setFormData({ ...formData, defaultBackground: e.target.value })}
+                  >
+                    {Object.entries(backgroundGradients).map(([key, bg]) => (
+                      <option key={key} value={key}>
+                        {bg.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="form-row">
                 <label>
                   Transparency
                   <input

@@ -1,6 +1,25 @@
 {
   "spawnOptions": [
     {
+      "label": "Bash",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "💻",
+      "description": "Plain bash terminal",
+      "defaultTheme": "matrix",
+      "defaultTransparency": 90
+    },
+    {
+      "label": "TFE",
+      "command": "tfe",
+      "terminalType": "bash",
+      "workingDir": "~/projects",
+      "icon": "📁",
+      "description": "Terminal File Explorer",
+      "defaultTheme": "default",
+      "defaultTransparency": 95
+    },
+    {
       "label": "Tmuxplexer",
       "command": "./tmuxplexer",
       "terminalType": "tui-tool",
@@ -20,16 +39,6 @@
       "description": "Claude Code with no permission prompts",
       "defaultTheme": "amber",
       "defaultTransparency": 100
-    },
-    {
-      "label": "TFE",
-      "command": "tfe",
-      "terminalType": "bash",
-      "workingDir": "~/projects",
-      "icon": "📁",
-      "description": "Terminal File Explorer",
-      "defaultTheme": "default",
-      "defaultTransparency": 95
     },
     {
       "label": "Claude Code",
@@ -66,15 +75,6 @@
       "description": "Google Gemini AI",
       "defaultTheme": "amber",
       "defaultTransparency": 100
-    },
-    {
-      "label": "Bash",
-      "command": "",
-      "terminalType": "bash",
-      "icon": "💻",
-      "description": "Plain bash terminal",
-      "defaultTheme": "matrix",
-      "defaultTransparency": 90
     },
     {
       "label": "Micro Editor",

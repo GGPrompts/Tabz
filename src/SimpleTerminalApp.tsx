@@ -6,6 +6,7 @@ import { Agent, TERMINAL_TYPES } from './types'
 import { useSimpleTerminalStore, Terminal as StoredTerminal } from './stores/simpleTerminalStore'
 import { useSettingsStore } from './stores/useSettingsStore'
 import SimpleSpawnService from './services/SimpleSpawnService'
+import { backgroundGradients, getBackgroundCSS } from './styles/terminal-backgrounds'
 
 interface SpawnOption {
   label: string
@@ -15,23 +16,27 @@ interface SpawnOption {
   description: string
   workingDir?: string
   defaultTheme?: string
+  defaultBackground?: string // Background gradient key
   defaultTransparency?: number
   defaultFontFamily?: string
   defaultFontSize?: number
 }
 
-// Theme-to-gradient background mapping
+// Legacy theme-to-background mapping for migration (auto-assign backgrounds from themes)
 const THEME_BACKGROUNDS: Record<string, string> = {
-  default: 'linear-gradient(135deg, #1a1b26 0%, #24283b 100%)',
-  amber: 'linear-gradient(135deg, #2d1810 0%, #1a1308 100%)',
-  matrix: 'linear-gradient(135deg, #001a00 0%, #000d00 100%)',
-  dracula: 'linear-gradient(135deg, #282a36 0%, #1a1b26 100%)',
-  monokai: 'linear-gradient(135deg, #272822 0%, #1a1b1a 100%)',
-  'solarized-dark': 'linear-gradient(135deg, #002b36 0%, #073642 100%)',
-  'github-dark': 'linear-gradient(135deg, #0d1117 0%, #161b22 100%)',
-  cyberpunk: 'linear-gradient(135deg, #14001e 0%, #2d0033 100%)',
-  holographic: 'linear-gradient(135deg, #1a0033 0%, #330066 100%)',
-  vaporwave: 'linear-gradient(135deg, #1a0033 0%, #4d0066 100%)',
+  default: 'dark-neutral',
+  amber: 'amber-warmth',
+  matrix: 'matrix-depths',
+  dracula: 'dracula-purple',
+  monokai: 'monokai-brown',
+  'solarized-dark': 'solarized-dark',
+  'github-dark': 'github-dark',
+  cyberpunk: 'cyberpunk-neon',
+  holographic: 'ocean-depths',
+  vaporwave: 'vaporwave-dream',
+  retro: 'amber-warmth',
+  synthwave: 'synthwave-sunset',
+  aurora: 'aurora-borealis',
 }
 
 function SimpleTerminalApp() {
@@ -39,6 +44,8 @@ function SimpleTerminalApp() {
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected')
   const [showSpawnMenu, setShowSpawnMenu] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [headerVisible, setHeaderVisible] = useState(true)
+  const headerHideTimer = useRef<NodeJS.Timeout | null>(null)
 
   // Settings
   const { useTmux, updateSettings } = useSettingsStore()
@@ -571,8 +578,9 @@ function SimpleTerminalApp() {
         icon: option.icon,
         workingDir: option.workingDir || '~',
         theme: option.defaultTheme,
+        background: option.defaultBackground || THEME_BACKGROUNDS[option.defaultTheme || 'default'] || 'dark-neutral',
         transparency: option.defaultTransparency,
-        fontSize: option.defaultFontSize,
+        fontSize: option.defaultFontSize || useSettingsStore.getState().terminalDefaultFontSize,
         fontFamily: option.defaultFontFamily,
         sessionName, // Store session name for persistence
         createdAt: Date.now(),
@@ -658,8 +666,9 @@ function SimpleTerminalApp() {
         name: option.label,
         workingDir: terminal.workingDir || option.workingDir || '~',
         theme: terminal.theme || option.defaultTheme,
+        background: terminal.background || option.defaultBackground || THEME_BACKGROUNDS[terminal.theme || 'default'] || 'dark-neutral',
         transparency: terminal.transparency ?? option.defaultTransparency,
-        fontSize: terminal.fontSize ?? option.defaultFontSize,
+        fontSize: terminal.fontSize ?? option.defaultFontSize ?? useSettingsStore.getState().terminalDefaultFontSize,
         fontFamily: terminal.fontFamily ?? option.defaultFontFamily,
         size: { width: 800, height: 600 },
         useTmux: true, // Must be true for reconnection
@@ -741,7 +750,13 @@ function SimpleTerminalApp() {
     // Clear all terminals from store (will also clear localStorage via persist)
     clearAllTerminals()
 
-    console.log('[SimpleTerminalApp] ✅ All sessions cleared')
+    // Clear global settings including cached font size (opustrator-settings)
+    localStorage.removeItem('opustrator-settings')
+
+    console.log('[SimpleTerminalApp] ✅ All sessions and settings cleared')
+
+    // Reload page to apply fresh defaults
+    window.location.reload()
   }
 
   const handleCommand = (command: string, terminalId: string) => {
@@ -770,17 +785,48 @@ function SimpleTerminalApp() {
   // New spawns always use defaults from spawn-options.json
   const handleFontSizeChange = (delta: number) => {
     if (!activeTerminal || !terminalRef.current) return
-    const currentSize = activeTerminal.fontSize || 14
+    const globalDefault = useSettingsStore.getState().terminalDefaultFontSize
+    const currentSize = activeTerminal.fontSize || globalDefault
     const newSize = Math.max(10, Math.min(24, currentSize + delta))
     terminalRef.current.updateFontSize(newSize)
     // Save to this terminal's state (persisted in localStorage)
     updateTerminal(activeTerminal.id, { fontSize: newSize })
   }
 
-  const handleRefitTerminal = () => {
-    if (!terminalRef.current) return
-    // Call the Terminal's refit method to force a proper refit
-    terminalRef.current.refit()
+  const handleResetToDefaults = () => {
+    if (!activeTerminal || !terminalRef.current) return
+
+    // Find the spawn option for this terminal
+    const spawnOption = spawnOptions.find(opt =>
+      opt.label === activeTerminal.name ||
+      opt.terminalType === activeTerminal.terminalType
+    )
+
+    if (!spawnOption) {
+      console.warn('No spawn option found for terminal:', activeTerminal.name)
+      return
+    }
+
+    // Reset to spawn option defaults
+    const defaults = {
+      theme: spawnOption.defaultTheme,
+      background: spawnOption.defaultBackground || THEME_BACKGROUNDS[spawnOption.defaultTheme || 'default'] || 'dark-neutral',
+      transparency: spawnOption.defaultTransparency,
+      fontSize: spawnOption.defaultFontSize || useSettingsStore.getState().terminalDefaultFontSize,
+      fontFamily: spawnOption.defaultFontFamily,
+    }
+
+    // Update terminal state
+    updateTerminal(activeTerminal.id, defaults)
+
+    // Apply to terminal component
+    if (defaults.theme) terminalRef.current.updateTheme(defaults.theme)
+    if (defaults.background) terminalRef.current.updateBackground(defaults.background)
+    if (defaults.transparency !== undefined) terminalRef.current.updateOpacity(defaults.transparency / 100)
+    if (defaults.fontSize) terminalRef.current.updateFontSize(defaults.fontSize)
+    if (defaults.fontFamily) terminalRef.current.updateFontFamily(defaults.fontFamily)
+
+    console.log(`[SimpleTerminalApp] Reset terminal "${activeTerminal.name}" to spawn-option defaults`)
   }
 
   const handleThemeChange = (theme: string) => {
@@ -794,6 +840,13 @@ function SimpleTerminalApp() {
         terminalRef.current.refit()
       }
     }, 350)
+  }
+
+  const handleBackgroundChange = (background: string) => {
+    if (!activeTerminal || !terminalRef.current) return
+    terminalRef.current.updateBackground(background)
+    // Save to this terminal's state (persisted in localStorage)
+    updateTerminal(activeTerminal.id, { background })
   }
 
   const handleTransparencyChange = (transparency: number) => {
@@ -811,18 +864,97 @@ function SimpleTerminalApp() {
     updateTerminal(activeTerminal.id, { fontFamily })
   }
 
-  // Compute dynamic background based on active terminal theme
+  // Compute dynamic background based on active terminal's background setting
   const appBackgroundStyle: React.CSSProperties = {
-    background: activeTerminal?.theme && THEME_BACKGROUNDS[activeTerminal.theme]
-      ? THEME_BACKGROUNDS[activeTerminal.theme]
-      : THEME_BACKGROUNDS.default,
+    background: activeTerminal?.background
+      ? getBackgroundCSS(activeTerminal.background)
+      : getBackgroundCSS('dark-neutral'),
     transition: 'background 0.5s ease-in-out',
   }
 
+  // Auto-hide header after 10 seconds of inactivity
+  const resetHeaderTimer = () => {
+    setHeaderVisible(true)
+    if (headerHideTimer.current) {
+      clearTimeout(headerHideTimer.current)
+    }
+    // Don't auto-hide if settings or spawn menu is open
+    if (!showSettings && !showSpawnMenu) {
+      headerHideTimer.current = setTimeout(() => {
+        setHeaderVisible(false)
+      }, 10000) // 10 seconds
+    }
+  }
+
+  // Click handler for header reveal handle
+  const handleHeaderReveal = () => {
+    resetHeaderTimer()
+  }
+
+  // Mouse hover on header to keep it visible
+  const handleHeaderHover = () => {
+    if (headerVisible) {
+      resetHeaderTimer()
+    }
+  }
+
+  // Touch gesture detection for mobile (swipe down from top)
+  const touchStartY = useRef<number>(0)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const currentY = e.touches[0].clientY
+    const deltaY = currentY - touchStartY.current
+
+    // If swiping down from top 40px by more than 50px, show header
+    if (touchStartY.current < 40 && deltaY > 50) {
+      resetHeaderTimer()
+    }
+  }
+
+  // Start the auto-hide timer on mount and when modals close
+  useEffect(() => {
+    resetHeaderTimer()
+    return () => {
+      if (headerHideTimer.current) {
+        clearTimeout(headerHideTimer.current)
+      }
+    }
+  }, [showSettings, showSpawnMenu])
+
+  // Refit terminal when header visibility changes (gains/loses 47px of vertical space)
+  useEffect(() => {
+    if (terminalRef.current) {
+      // Wait for CSS transition to complete (300ms) then refit
+      const timer = setTimeout(() => {
+        terminalRef.current?.refit()
+      }, 350)
+      return () => clearTimeout(timer)
+    }
+  }, [headerVisible])
+
   return (
-    <div className="simple-terminal-app" style={appBackgroundStyle}>
-      {/* Header */}
-      <div className="app-header">
+    <div
+      className={`simple-terminal-app ${!headerVisible ? 'header-hidden' : ''}`}
+      style={appBackgroundStyle}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+    >
+      {/* Header Reveal Handle - Shows when header is hidden */}
+      {!headerVisible && (
+        <div className="header-reveal-handle" onClick={handleHeaderReveal}>
+          <div className="handle-icon">▼</div>
+        </div>
+      )}
+
+      {/* Header - Auto-hides after 10s, reveals on click or mobile swipe */}
+      <div
+        className={`app-header ${headerVisible ? 'visible' : 'hidden'}`}
+        onMouseEnter={handleHeaderHover}
+        onMouseMove={handleHeaderHover}
+      >
         <div className="app-title">Terminal Tabs</div>
 
         {/* Tmux Toggle */}
@@ -977,6 +1109,7 @@ function SimpleTerminalApp() {
                     wsRef={wsRef}
                     embedded={true}
                     initialTheme={terminal.theme}
+                    initialBackground={terminal.background || THEME_BACKGROUNDS[terminal.theme || 'default'] || 'dark-neutral'}
                     initialOpacity={terminal.transparency !== undefined ? terminal.transparency / 100 : 1}
                     initialFontSize={terminal.fontSize}
                     initialFontFamily={terminal.fontFamily}
@@ -1004,34 +1137,32 @@ function SimpleTerminalApp() {
           </div>
 
           <div className="footer-controls">
-            {/* Font Size Controls - Always Visible */}
-            <div className="footer-font-controls">
-              <button
-                className="footer-control-btn"
-                onClick={() => handleFontSizeChange(-1)}
-                title="Decrease font size"
-                disabled={!activeTerminal.fontSize || activeTerminal.fontSize <= 10}
-              >
-                -
-              </button>
-              <span className="font-size-display">{activeTerminal.fontSize || 14}px</span>
-              <button
-                className="footer-control-btn"
-                onClick={() => handleFontSizeChange(1)}
-                title="Increase font size"
-                disabled={!!activeTerminal.fontSize && activeTerminal.fontSize >= 24}
-              >
-                +
-              </button>
-            </div>
-
-            {/* Refit Button */}
+            {/* Font Size Controls */}
             <button
               className="footer-control-btn"
-              onClick={handleRefitTerminal}
-              title="Refit terminal (fix blank/stuck display)"
+              onClick={() => handleFontSizeChange(-1)}
+              title="Decrease font size"
+              disabled={!activeTerminal.fontSize || activeTerminal.fontSize <= 10}
             >
-              🔄
+              −
+            </button>
+            <span className="font-size-display">{activeTerminal.fontSize || useSettingsStore.getState().terminalDefaultFontSize}px</span>
+            <button
+              className="footer-control-btn"
+              onClick={() => handleFontSizeChange(1)}
+              title="Increase font size"
+              disabled={!!activeTerminal.fontSize && activeTerminal.fontSize >= 24}
+            >
+              +
+            </button>
+
+            {/* Reset to Defaults Button */}
+            <button
+              className="footer-control-btn"
+              onClick={handleResetToDefaults}
+              title="Reset to spawn-option defaults (theme, font, transparency)"
+            >
+              ↺
             </button>
 
             {/* Customize Panel Toggle */}
@@ -1042,27 +1173,13 @@ function SimpleTerminalApp() {
             >
               🎨
             </button>
-
-            {/* Close Button */}
-            <button
-              className="footer-action-btn footer-close"
-              onClick={() => handleCloseTerminal(activeTerminal.id)}
-              title="Close terminal"
-            >
-              ✕
-            </button>
           </div>
         </div>
       )}
 
       {/* Floating Customize Modal */}
       {showCustomizePanel && activeTerminal && (
-        <>
-          <div
-            className="customize-modal-overlay"
-            onClick={() => setShowCustomizePanel(false)}
-          />
-          <div className="customize-modal">
+        <div className="customize-modal">
             <div className="customize-modal-header">
               <h3>🎨 Customize Terminal</h3>
               <button
@@ -1075,21 +1192,38 @@ function SimpleTerminalApp() {
 
             <div className="customize-modal-body">
               <label>
-                Theme
+                Text Color Theme
                 <select
                   value={activeTerminal.theme || 'default'}
                   onChange={(e) => handleThemeChange(e.target.value)}
                 >
                   <option value="default">Default</option>
                   <option value="amber">Amber</option>
-                  <option value="matrix">Matrix</option>
+                  <option value="matrix">Matrix Green</option>
                   <option value="dracula">Dracula</option>
                   <option value="monokai">Monokai</option>
                   <option value="solarized-dark">Solarized Dark</option>
                   <option value="github-dark">GitHub Dark</option>
-                  <option value="cyberpunk">Cyberpunk</option>
+                  <option value="cyberpunk">Cyberpunk Neon</option>
                   <option value="holographic">Holographic</option>
                   <option value="vaporwave">Vaporwave</option>
+                  <option value="retro">Retro Amber</option>
+                  <option value="synthwave">Synthwave</option>
+                  <option value="aurora">Aurora Borealis</option>
+                </select>
+              </label>
+
+              <label>
+                Background Gradient
+                <select
+                  value={activeTerminal.background || 'dark-neutral'}
+                  onChange={(e) => handleBackgroundChange(e.target.value)}
+                >
+                  {Object.entries(backgroundGradients).map(([key, bg]) => (
+                    <option key={key} value={key}>
+                      {bg.name}
+                    </option>
+                  ))}
                 </select>
               </label>
 
@@ -1121,7 +1255,6 @@ function SimpleTerminalApp() {
               </label>
             </div>
           </div>
-        </>
       )}
     </div>
   )
