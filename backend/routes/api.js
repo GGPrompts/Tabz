@@ -872,7 +872,7 @@ router.post('/console-log', asyncHandler(async (req, res) => {
         logger.info(msg);
         break;
       default:
-        logger.log(msg);
+        logger.info(msg);  // Consola uses .info() not .log()
     }
   });
 
