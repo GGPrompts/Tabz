@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React from 'react'
 import './FontFamilyDropdown.css'
+import { GenericDropdown } from './GenericDropdown'
 
 interface FontOption {
   value: string
@@ -24,61 +25,32 @@ const FONT_OPTIONS: FontOption[] = [
 interface FontFamilyDropdownProps {
   value: string
   onChange: (value: string) => void
-  openUpward?: boolean // Open menu above trigger instead of below
+  openUpward?: boolean
 }
 
 export function FontFamilyDropdown({ value, onChange, openUpward = false }: FontFamilyDropdownProps) {
-  const [isOpen, setIsOpen] = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
-
   const selectedOption = FONT_OPTIONS.find(opt => opt.value === value) || FONT_OPTIONS[0]
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [isOpen])
-
-  const handleSelect = (option: FontOption) => {
-    onChange(option.value)
-    setIsOpen(false)
-  }
-
   return (
-    <div className="font-family-dropdown" ref={dropdownRef}>
-      <button
-        type="button"
-        className="font-dropdown-trigger"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <span style={{ fontFamily: selectedOption.fontFamily }}>
-          {selectedOption.label}
+    <GenericDropdown<FontOption>
+      value={selectedOption}
+      onChange={(option) => onChange(option.value)}
+      options={FONT_OPTIONS}
+      getOptionKey={(option) => option.value}
+      isSelected={(option, selected) => option.value === selected.value}
+      openUpward={openUpward}
+      className="font-family-dropdown"
+      renderTrigger={(option) => (
+        <span style={{ fontFamily: option.fontFamily }}>
+          {option.label}
         </span>
-        <span className="dropdown-arrow">{isOpen ? '▲' : '▼'}</span>
-      </button>
-
-      {isOpen && (
-        <div className={`font-dropdown-menu ${openUpward ? 'open-upward' : ''}`}>
-          {FONT_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={`font-dropdown-option ${option.value === value ? 'selected' : ''}`}
-              onClick={() => handleSelect(option)}
-              style={{ fontFamily: option.fontFamily }}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
       )}
-    </div>
+      renderOption={(option, isSelected) => (
+        <span style={{ fontFamily: option.fontFamily }}>
+          {isSelected && '✓ '}
+          {option.label}
+        </span>
+      )}
+    />
   )
 }
