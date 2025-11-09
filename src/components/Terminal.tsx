@@ -304,17 +304,12 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
         if (terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
           xterm.open(terminalRef.current);
 
-          // CRITICAL: Wait for fonts to load before fitting
-          // Without this, fit() calculates cols/rows using default font metrics,
-          // resulting in 80x24 instead of the correct full-screen dimensions
+          // Wait for fonts to load
           try {
             await document.fonts.ready;
-            console.log(`[Terminal] Fonts loaded for ${agent.name}`);
-          } catch (err) {
-            console.warn(`[Terminal] Font loading wait failed:`, err);
-          }
+          } catch {}
 
-          console.log(`[Terminal] xterm opened successfully for ${agent.name} (attempt ${retryCount + 1})`);
+          console.log(`[Terminal] xterm opened for ${agent.name}, fontSize: ${xterm.options.fontSize}, fontFamily: ${xterm.options.fontFamily}`);
         } else if (retryCount < MAX_RETRIES) {
           retryCount++;
           console.log(`[Terminal] Element not ready (0x0 dimensions), retrying... (${retryCount}/${MAX_RETRIES})`);
