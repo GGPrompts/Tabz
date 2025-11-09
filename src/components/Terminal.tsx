@@ -22,6 +22,10 @@ import { getBackgroundCSS } from "../styles/terminal-backgrounds";
 import { ThemeDropdown } from "./ThemeDropdown";
 import { debounce } from "../utils/debounce";
 import { useSettingsStore } from "../stores/useSettingsStore";
+import { useTerminalMouse } from "../hooks/useTerminalMouse";
+import { useTerminalTheme } from "../hooks/useTerminalTheme";
+import { useTerminalResize } from "../hooks/useTerminalResize";
+import { useTerminalFont } from "../hooks/useTerminalFont";
 
 interface TerminalProps {
   agent: Agent;
@@ -64,7 +68,6 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
     const terminalRef = useRef<HTMLDivElement>(null);
     const xtermRef = useRef<XTerm | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
-    const roRef = useRef<ResizeObserver | null>(null);
     const [isMaximized, setIsMaximized] = useState(false);
     const [showThemePicker, setShowThemePicker] = useState(false);
     // Check if this is PyRadio - it needs special theme handling
@@ -136,6 +139,35 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
           }
         }, isTUITool ? 20 : 200), // 200ms for normal terminals, 20ms for TUI tools
       [isTUITool],
+    );
+
+    // Use custom hooks for mouse, theme, resize, and font management
+    useTerminalMouse(terminalRef, isSelected);
+    const applyTheme = useTerminalTheme(
+      xtermRef,
+      fitAddonRef,
+      wsRef,
+      agent.id,
+      agent.terminalType,
+      isTUITool,
+      debouncedResize
+    );
+    const { handleResize } = useTerminalResize(
+      terminalRef,
+      xtermRef,
+      fitAddonRef,
+      wsRef,
+      agent.id,
+      agent.name,
+      debouncedResize,
+      mountKey
+    );
+    const { updateFontSize, updateFontFamily } = useTerminalFont(
+      xtermRef,
+      fitAddonRef,
+      agent.id,
+      initialFontSize,
+      debouncedResize
     );
 
     useEffect(() => {
@@ -339,133 +371,6 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
         }
       };
 
-      // CRITICAL: Mouse coordinate transformation for canvas zoom
-      // The key insight from diagnostics:
-      // - Browser zoom changes the coordinate system (devicePixelRatio, viewport size)
-      // - CSS transform only changes visual rendering (boundingRect ≠ offsetWidth)
-      // - We need to transform using the visual-to-layout ratio, NOT just canvasZoom
-
-      // Use WeakSet to track processed events (prevents infinite recursion)
-      const processedEvents = new WeakSet<Event>();
-
-      const mouseTransformHandler = (e: MouseEvent) => {
-        if (!terminalRef.current) return;
-
-        // Check if we've already processed this event (prevent infinite recursion)
-        if (processedEvents.has(e)) {
-          return;
-        }
-
-        // CRITICAL: For wheel events, only intercept if terminal is selected OR focused
-        // This allows canvas zoom when hovering over unselected/unfocused terminals
-        // But ensures wheel scrolling works reliably in TUI apps when terminal has focus
-        if (e.type === 'wheel' && !isSelected) {
-          // Check if the terminal or any of its children has focus
-          const hasFocus = terminalRef.current.contains(document.activeElement);
-          if (!hasFocus) {
-            return; // Let event bubble to App's handleWheel for canvas zoom
-          }
-          // Terminal has focus (orange border) - intercept wheel for scrolling
-        }
-
-        // CRITICAL: Don't intercept mouse events during active drag operations
-        // When dragging terminals, react-draggable tracks global mousemove events
-        // Transforming these coordinates breaks dragging at non-100% zoom
-        const terminalWrapper = terminalRef.current.closest('.draggable-terminal-wrapper');
-        if (terminalWrapper && terminalWrapper.classList.contains('dragging')) {
-          // A drag is in progress - let react-draggable handle the event
-          return;
-        }
-
-        // Mark this event as processed
-        processedEvents.add(e);
-
-        const rect = terminalRef.current.getBoundingClientRect();
-        const offsetWidth = terminalRef.current.offsetWidth;
-        const offsetHeight = terminalRef.current.offsetHeight;
-
-        // Calculate the ratio between visual size and layout size
-        // This accounts for BOTH browser zoom AND canvas zoom
-        const visualToLayoutRatioX = rect.width / offsetWidth;
-        const visualToLayoutRatioY = rect.height / offsetHeight;
-
-        // Only transform if there's a visual/layout mismatch (i.e., canvas is zoomed)
-        if (Math.abs(visualToLayoutRatioX - 1) > 0.01 || Math.abs(visualToLayoutRatioY - 1) > 0.01) {
-          e.stopImmediatePropagation(); // Prevent xterm from seeing original event
-
-          // Get click position relative to terminal (in visual coordinates)
-          const visualX = e.clientX - rect.left;
-          const visualY = e.clientY - rect.top;
-
-          // Transform to layout coordinates (what xterm expects)
-          const layoutX = visualX / visualToLayoutRatioX;
-          const layoutY = visualY / visualToLayoutRatioY;
-
-          // Create new event with transformed coordinates
-          // CRITICAL: Use WheelEvent for wheel events to preserve deltaY/deltaX
-          const transformedEvent = e.type === 'wheel'
-            ? new WheelEvent(e.type, {
-                bubbles: e.bubbles,
-                cancelable: e.cancelable,
-                view: e.view,
-                detail: e.detail,
-                screenX: e.screenX,
-                screenY: e.screenY,
-                clientX: rect.left + layoutX,
-                clientY: rect.top + layoutY,
-                ctrlKey: e.ctrlKey,
-                shiftKey: e.shiftKey,
-                altKey: e.altKey,
-                metaKey: e.metaKey,
-                button: e.button,
-                buttons: e.buttons,
-                relatedTarget: e.relatedTarget,
-                deltaX: (e as WheelEvent).deltaX,
-                deltaY: (e as WheelEvent).deltaY,
-                deltaZ: (e as WheelEvent).deltaZ,
-                deltaMode: (e as WheelEvent).deltaMode,
-              })
-            : new MouseEvent(e.type, {
-                bubbles: e.bubbles,
-                cancelable: e.cancelable,
-                view: e.view,
-                detail: e.detail,
-                screenX: e.screenX,
-                screenY: e.screenY,
-                clientX: rect.left + layoutX,
-                clientY: rect.top + layoutY,
-                ctrlKey: e.ctrlKey,
-                shiftKey: e.shiftKey,
-                altKey: e.altKey,
-                metaKey: e.metaKey,
-                button: e.button,
-                buttons: e.buttons,
-                relatedTarget: e.relatedTarget,
-              });
-
-          // Mark the transformed event as processed too
-          processedEvents.add(transformedEvent);
-
-          // Dispatch to the xterm viewport element, NOT the terminal wrapper
-          // This prevents re-triggering our capture handler
-          const xtermViewport = terminalRef.current.querySelector('.xterm-viewport, .xterm-screen');
-          if (xtermViewport) {
-            xtermViewport.dispatchEvent(transformedEvent);
-          } else {
-            // Fallback to terminal element if xterm not ready
-            terminalRef.current.dispatchEvent(transformedEvent);
-          }
-        }
-      };
-
-      // Add mouse transform handler in capture phase (intercepts BEFORE xterm sees events)
-      const mouseEventTypes = ['mousedown', 'mouseup', 'mousemove', 'click', 'dblclick', 'contextmenu', 'wheel'];
-      try {
-        mouseEventTypes.forEach(eventType => {
-          terminalRef.current?.addEventListener(eventType, mouseTransformHandler as EventListener, { capture: true });
-        });
-      } catch {}
-
       try {
         terminalRef.current.addEventListener("mousedown", focusHandler);
         terminalRef.current.addEventListener("click", focusHandler);
@@ -555,105 +460,9 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
         }
       });
 
-      // Handle resize
-      const handleResize = () => {
-        if (fitAddonRef.current && xtermRef.current) {
-          fitAddonRef.current.fit();
-
-          // Send resize dimensions to backend
-          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            wsRef.current.send(
-              JSON.stringify({
-                type: "resize",
-                terminalId: agent.id,
-                cols: xtermRef.current.cols,
-                rows: xtermRef.current.rows,
-              }),
-            );
-
-            // Special handling for PyRadio - send Ctrl+L to force refresh
-            if (agent.name?.toLowerCase().includes('pyradio') ||
-                (agent as any).toolName === 'pyradio') {
-              setTimeout(() => {
-                // Send Ctrl+L to refresh PyRadio display
-                wsRef.current?.send(
-                  JSON.stringify({
-                    type: "command",
-                    terminalId: agent.id,
-                    command: "\x0C", // Ctrl+L character
-                  }),
-                );
-              }, 100);
-            }
-          }
-        }
-      };
-
-      window.addEventListener("resize", handleResize);
-      // ResizeObserver for container size changes (drag/resize)
-      if (terminalRef.current?.parentElement) {
-        roRef.current = new ResizeObserver((entries) => {
-          if (fitAddonRef.current && xtermRef.current) {
-            // Get the actual dimensions from the resize entry
-            const entry = entries[0];
-            if (
-              entry &&
-              entry.contentRect.width > 0 &&
-              entry.contentRect.height > 0
-            ) {
-              try {
-                fitAddonRef.current.fit();
-                // Use debounced resize handler
-                debouncedResize(
-                  agent.id,
-                  xtermRef.current.cols,
-                  xtermRef.current.rows,
-                );
-              } catch {}
-            }
-          }
-        });
-        roRef.current.observe(terminalRef.current.parentElement);
-      }
-
-      // Listen for font size changes (only apply if no initialFontSize is set)
-      const handleFontSizeChange = (event: CustomEvent) => {
-        // If this terminal has a specific font size, ignore global changes
-        if (initialFontSize) return;
-
-        const newSize = event.detail.fontSize;
-        if (xterm && newSize) {
-          xterm.options.fontSize = newSize;
-          // Refit terminal after font size change
-          setTimeout(() => {
-            if (fitAddon) {
-              fitAddon.fit();
-            }
-          }, 100);
-        }
-      };
-
-      window.addEventListener(
-        "terminalFontSizeChange",
-        handleFontSizeChange as any,
-      );
-
       // (Removed banner message per user request to avoid flicker during resize)
 
       return () => {
-        window.removeEventListener("resize", handleResize);
-        window.removeEventListener(
-          "terminalFontSizeChange",
-          handleFontSizeChange as any,
-        );
-
-        // Remove mouse transform handlers
-        if (terminalRef.current) {
-          mouseEventTypes.forEach(eventType => {
-            terminalRef.current?.removeEventListener(eventType, mouseTransformHandler as EventListener, { capture: true });
-          });
-        }
-
         // Remove focus event listeners
         if (terminalRef.current) {
           terminalRef.current.removeEventListener("mousedown", focusHandler);
@@ -664,10 +473,6 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
         // Dispose of the data handler
         dataHandler.dispose();
 
-        try {
-          roRef.current?.disconnect();
-        } catch {}
-        roRef.current = null;
         // Clean up mouse event listeners if they exist
         if ((xterm as any).__mouseCleanup) {
           (xterm as any).__mouseCleanup();
@@ -679,39 +484,6 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
         fitAddonRef.current = null;
       };
     }, [agent.id, currentTheme]);
-
-    // Hot Refresh Recovery: Force a fit after mount to handle HMR scenarios
-    // During hot refresh, the xterm instance might exist but not be properly rendered
-    useEffect(() => {
-      if (!xtermRef.current || !fitAddonRef.current) return;
-
-      // Wait for DOM to settle after hot refresh
-      const timer = setTimeout(() => {
-        try {
-          const parent = terminalRef.current?.parentElement;
-          if (parent && parent.clientWidth > 0 && parent.clientHeight > 0) {
-            fitAddonRef.current?.fit();
-            xtermRef.current?.refresh(0, xtermRef.current.rows - 1);
-
-            // Send resize to backend
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && xtermRef.current) {
-              wsRef.current.send(
-                JSON.stringify({
-                  type: "resize",
-                  terminalId: agent.id,
-                  cols: xtermRef.current.cols,
-                  rows: xtermRef.current.rows,
-                }),
-              );
-            }
-          }
-        } catch (err) {
-          console.debug('[Terminal] Hot refresh fit error:', err);
-        }
-      }, 100);
-
-      return () => clearTimeout(timer);
-    }, []); // Empty deps - only run once after mount
 
     /**
      * ✅ SOLVED: Terminal mouse accuracy at non-100% zoom
@@ -759,122 +531,13 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
         handleTerminalOutput as EventListener,
       );
 
-      // Listen for container resize events dispatched by wrapper to refit columns precisely
-      const handleContainerResized = (e: CustomEvent) => {
-        if (e.detail.id === agent.id && fitAddonRef.current) {
-          // Small timeout allows DOM layout to settle
-          requestAnimationFrame(() => {
-            try {
-              fitAddonRef.current!.fit();
-              const cols = xtermRef.current?.cols || 0;
-              const rows = xtermRef.current?.rows || 0;
-
-              // After a fit, send exact cols/rows to backend so PTY wraps correctly
-              if (
-                wsRef.current &&
-                wsRef.current.readyState === WebSocket.OPEN &&
-                xtermRef.current
-              ) {
-                wsRef.current.send(
-                  JSON.stringify({
-                    type: "resize",
-                    terminalId: agent.id,
-                    cols: xtermRef.current.cols,
-                    rows: xtermRef.current.rows,
-                  }),
-                );
-              }
-            } catch (err) {
-              console.error('[Terminal] Resize error:', err);
-            }
-          });
-        }
-      };
-      window.addEventListener(
-        "terminal-container-resized",
-        handleContainerResized as EventListener,
-      );
-
       return () => {
         window.removeEventListener(
           "terminal-output",
           handleTerminalOutput as EventListener,
         );
-        window.removeEventListener(
-          "terminal-container-resized",
-          handleContainerResized as EventListener,
-        );
       };
     }, [agent.id]); // Only depend on agent.id, not the ref itself
-
-    // Re-attach ResizeObserver and force a re-fit when the portal host changes (dock <-> canvas)
-    useEffect(() => {
-      // Only run if the terminal is initialized
-      if (!terminalRef.current || !xtermRef.current || !fitAddonRef.current)
-        return;
-
-      // Re-attach ResizeObserver to the new parent element
-      try {
-        roRef.current?.disconnect();
-      } catch {}
-      roRef.current = null;
-      const parent = terminalRef.current?.parentElement;
-      if (parent) {
-        try {
-          roRef.current = new ResizeObserver(() => {
-            try {
-              fitAddonRef.current?.fit();
-              if (xtermRef.current) {
-                // Use debounced resize handler
-                debouncedResize(
-                  agent.id,
-                  xtermRef.current.cols,
-                  xtermRef.current.rows,
-                );
-              }
-            } catch {}
-          });
-          roRef.current.observe(parent);
-        } catch {}
-      }
-
-      // After reparenting, ensure container has size before fit/focus
-      let attempts = 0;
-      const tryFit = () => {
-        attempts++;
-        const parentEl = terminalRef.current?.parentElement;
-        const ready =
-          !!parentEl && parentEl.clientWidth > 0 && parentEl.clientHeight > 0;
-        if (!ready && attempts < 10) {
-          return setTimeout(tryFit, 40);
-        }
-        try {
-          fitAddonRef.current?.fit();
-          xtermRef.current?.refresh(0, xtermRef.current.rows - 1);
-          // Always restore focus after a reparent so typing works
-          xtermRef.current?.focus();
-          const ta = terminalRef.current?.querySelector(
-            ".xterm-helper-textarea",
-          ) as HTMLTextAreaElement | null;
-          ta?.focus();
-          if (
-            wsRef.current &&
-            wsRef.current.readyState === WebSocket.OPEN &&
-            xtermRef.current
-          ) {
-            wsRef.current.send(
-              JSON.stringify({
-                type: "resize",
-                terminalId: agent.id,
-                cols: xtermRef.current.cols,
-                rows: xtermRef.current.rows,
-              }),
-            );
-          }
-        } catch {}
-      };
-      setTimeout(tryFit, 50);
-    }, [mountKey, agent.id]);
 
     // Handle tab switching - refresh terminal when it becomes visible
     useEffect(() => {
@@ -902,153 +565,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
     const handleThemeChange = (themeName: string) => {
       setCurrentTheme(themeName);
       setShowThemePicker(false);
-
-      // Apply new theme to existing terminal
-      if (xtermRef.current && fitAddonRef.current) {
-        const newTheme = getThemeForTerminalType(themeName);
-        xtermRef.current.options.theme = newTheme.xterm;
-
-        // For WebGL terminals, be more conservative with refitting
-        const usesWebGL = !["opencode", "bash", "gemini"].includes(
-          agent.terminalType,
-        );
-
-        if (usesWebGL) {
-          // For WebGL terminals, just do a simple refresh and single refit
-          // Increased delay to ensure theme is fully applied before refresh
-          setTimeout(() => {
-            if (xtermRef.current && fitAddonRef.current) {
-              // Refresh the terminal content
-              xtermRef.current.refresh(0, xtermRef.current.rows - 1);
-
-              // Single refit after a longer delay to let WebGL settle
-              setTimeout(() => {
-                if (fitAddonRef.current && xtermRef.current) {
-                  // For TUI apps, do a "real" resize to force complete redraw
-                  if (isTUITool) {
-                    const currentCols = xtermRef.current.cols;
-                    const currentRows = xtermRef.current.rows;
-
-                    // Resize xterm itself to trigger complete redraw
-                    xtermRef.current.resize(currentCols - 1, currentRows);
-
-                    // Send resize to PTY
-                    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                      wsRef.current.send(
-                        JSON.stringify({
-                          type: "resize",
-                          terminalId: agent.id,
-                          cols: currentCols - 1,
-                          rows: currentRows,
-                        }),
-                      );
-                    }
-
-                    // Wait a moment, then resize back to correct size
-                    setTimeout(() => {
-                      if (xtermRef.current && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                        xtermRef.current.resize(currentCols, currentRows);
-                        wsRef.current.send(
-                          JSON.stringify({
-                            type: "resize",
-                            terminalId: agent.id,
-                            cols: currentCols,
-                            rows: currentRows,
-                          }),
-                        );
-                      }
-                    }, 100);
-                  } else {
-                    // For non-TUI, just fit and send resize with Ctrl+L
-                    fitAddonRef.current.fit();
-                    debouncedResize(
-                      agent.id,
-                      xtermRef.current.cols,
-                      xtermRef.current.rows,
-                    );
-                  }
-                }
-              }, 200);
-            }
-          }, 150);
-        } else {
-          // For non-WebGL terminals, use the more aggressive refitting
-          // Increased initial delay to ensure theme is fully applied
-          setTimeout(() => {
-            if (xtermRef.current && fitAddonRef.current) {
-              // Strategy 1: Fit the terminal
-              fitAddonRef.current.fit();
-
-              // Strategy 2: Force a full refresh
-              xtermRef.current.refresh(0, xtermRef.current.rows - 1);
-
-              // Strategy 3: Trigger resize event
-              const resizeEvent = new Event("resize");
-              window.dispatchEvent(resizeEvent);
-
-              // Strategy 4: Additional refit after animation starts
-              setTimeout(() => {
-                if (xtermRef.current && fitAddonRef.current) {
-                  // Scroll to bottom to ensure content is visible
-                  xtermRef.current.scrollToBottom();
-                  fitAddonRef.current.fit();
-                  xtermRef.current.refresh(0, xtermRef.current.rows - 1);
-                }
-              }, 100);
-
-              // Strategy 5: Final refit after CSS animations settle
-              setTimeout(() => {
-                if (xtermRef.current && fitAddonRef.current) {
-                  // For TUI apps, do a "real" resize to force complete redraw
-                  if (isTUITool) {
-                    const currentCols = xtermRef.current.cols;
-                    const currentRows = xtermRef.current.rows;
-
-                    // Resize xterm itself to trigger complete redraw
-                    xtermRef.current.resize(currentCols - 1, currentRows);
-
-                    // Send resize to PTY
-                    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                      wsRef.current.send(
-                        JSON.stringify({
-                          type: "resize",
-                          terminalId: agent.id,
-                          cols: currentCols - 1,
-                          rows: currentRows,
-                        }),
-                      );
-                    }
-
-                    // Wait a moment, then resize back to correct size
-                    setTimeout(() => {
-                      if (xtermRef.current && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                        xtermRef.current.resize(currentCols, currentRows);
-                        wsRef.current.send(
-                          JSON.stringify({
-                            type: "resize",
-                            terminalId: agent.id,
-                            cols: currentCols,
-                            rows: currentRows,
-                          }),
-                        );
-                      }
-                    }, 100);
-                  } else {
-                    // For non-TUI, fit and use debounced resize with Ctrl+L (fixes stuck terminals)
-                    fitAddonRef.current.fit();
-                    xtermRef.current.refresh(0, xtermRef.current.rows - 1);
-                    debouncedResize(
-                      agent.id,
-                      xtermRef.current.cols,
-                      xtermRef.current.rows,
-                    );
-                  }
-                }
-              }, 300);
-            }
-          }, 10);
-        }
-      }
+      applyTheme(themeName);
     };
 
     // Expose theme and opacity update methods via ref
@@ -1073,68 +590,8 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       updateOpacity: (newOpacity: number) => {
         setOpacity(newOpacity);
       },
-      updateFontSize: (newFontSize: number) => {
-        if (xtermRef.current) {
-          xtermRef.current.options.fontSize = newFontSize;
-          // NOTE: Footer font controls should NOT update global default
-          // Global default is only changed via ⚙️ spawn options manager
-          // Refit terminal after font size change and send new dimensions to backend
-          setTimeout(() => {
-            if (fitAddonRef.current && xtermRef.current) {
-              fitAddonRef.current.fit();
-
-              // Use the debounced resize handler to send new dimensions to backend PTY
-              // This prevents corrupted text when font size changes
-              debouncedResize(
-                agent.id,
-                xtermRef.current.cols,
-                xtermRef.current.rows,
-              );
-            }
-          }, 100);
-        }
-      },
-      updateFontFamily: (newFontFamily: string) => {
-        if (xtermRef.current && fitAddonRef.current) {
-          console.log('[Terminal] updateFontFamily called with:', newFontFamily);
-          console.log('[Terminal] Current font:', xtermRef.current.options.fontFamily);
-
-          // Store current scroll position
-          const currentScrollPos = xtermRef.current.buffer.active.viewportY;
-
-          xtermRef.current.options.fontFamily = newFontFamily;
-          console.log('[Terminal] Set new font:', xtermRef.current.options.fontFamily);
-
-          // Force complete redraw by clearing renderer cache
-          // This is necessary because the canvas renderer caches glyphs
-          setTimeout(() => {
-            if (xtermRef.current && fitAddonRef.current) {
-              console.log('[Terminal] Clearing and refitting after font change');
-
-              // Clear the screen (forces renderer to redraw everything)
-              xtermRef.current.clear();
-
-              // Restore viewport position
-              xtermRef.current.scrollToLine(currentScrollPos);
-
-              // Full refresh
-              xtermRef.current.refresh(0, xtermRef.current.rows - 1);
-
-              // Refit
-              fitAddonRef.current.fit();
-
-              // Send new dimensions to backend PTY
-              debouncedResize(
-                agent.id,
-                xtermRef.current.cols,
-                xtermRef.current.rows,
-              );
-
-              console.log('[Terminal] Font change complete');
-            }
-          }, 100);
-        }
-      },
+      updateFontSize,
+      updateFontFamily,
       focus: () => {
         // Only focus if not embedded to avoid stealing focus from chat
         if (!embedded) {
