@@ -303,6 +303,12 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       const attemptOpen = () => {
         if (terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
           xterm.open(terminalRef.current);
+
+          // CRITICAL: Load webfont and refresh xterm's font metrics BEFORE fitting
+          // Without this, fit() calculates cols/rows using default font metrics,
+          // resulting in 80x24 instead of the correct full-screen dimensions
+          xterm.loadWebfontAndRefresh();
+
           console.log(`[Terminal] xterm opened successfully for ${agent.name} (attempt ${retryCount + 1})`);
         } else if (retryCount < MAX_RETRIES) {
           retryCount++;
