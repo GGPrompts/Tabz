@@ -131,8 +131,17 @@ class TerminalRegistry extends EventEmitter {
         terminal.state = 'closed';
         terminal.exitCode = exitCode;
         terminal.signal = signal;
-        this.terminals.delete(terminalId);
-        this.emit('closed', terminalId);
+
+        // CRITICAL FIX: Don't auto-delete tmux terminals - they might be reconnecting
+        // Tmux sessions persist even when PTY is killed, so keep terminal in registry
+        if (terminal.sessionId || terminal.sessionName) {
+          console.log(`[TerminalRegistry] PTY closed for tmux terminal ${terminal.name}, keeping in registry for reconnection`);
+          terminal.state = 'disconnected'; // Mark as disconnected instead of closed
+        } else {
+          // Non-tmux terminals can be safely deleted when PTY closes
+          this.terminals.delete(terminalId);
+          this.emit('closed', terminalId);
+        }
       }
     });
   }
@@ -141,6 +150,56 @@ class TerminalRegistry extends EventEmitter {
    * Register a new terminal with explicit type
    */
   async registerTerminal(config) {
+    // CRITICAL FIX: Check if we're reconnecting to an existing tmux session
+    // If sessionName/sessionId is provided and matches an existing terminal, reuse it!
+    const sessionName = config.sessionName || config.sessionId;
+    if (sessionName) {
+      const existingTerminal = Array.from(this.terminals.values()).find(t =>
+        (t.sessionId === sessionName || t.sessionName === sessionName)
+      );
+
+      if (existingTerminal) {
+        console.log(`[TerminalRegistry] 🔄 Reconnecting to existing terminal ${existingTerminal.name} (session: ${sessionName})`);
+
+        // Update existing terminal state for reconnection
+        existingTerminal.state = 'spawning';
+        existingTerminal.lastActivity = new Date();
+        existingTerminal.config = { ...existingTerminal.config, ...config };
+
+        // Update customizations from config (theme, fontSize, etc.)
+        if (config.theme) existingTerminal.config.theme = config.theme;
+        if (config.background) existingTerminal.config.background = config.background;
+        if (config.transparency !== undefined) existingTerminal.config.transparency = config.transparency;
+        if (config.fontSize) existingTerminal.config.fontSize = config.fontSize;
+        if (config.fontFamily) existingTerminal.config.fontFamily = config.fontFamily;
+
+        try {
+          // Kill old PTY if it exists (reconnection scenario)
+          if (existingTerminal.ptyInfo) {
+            console.log(`[TerminalRegistry] Killing old PTY for ${existingTerminal.name}`);
+            await ptyHandler.killPTY(existingTerminal.id).catch(() => {});
+          }
+
+          // Create new PTY attachment to the tmux session
+          const terminalConfig = { ...existingTerminal.config, ...config };
+          const ptyInfo = ptyHandler.createPTY(terminalConfig);
+          existingTerminal.state = 'active';
+          existingTerminal.ptyInfo = ptyInfo;
+
+          console.log(`[TerminalRegistry] ✅ Reconnected to terminal ${existingTerminal.name} (ID: ${existingTerminal.id}, session: ${sessionName})`);
+          return existingTerminal;
+        } catch (error) {
+          console.error(`[TerminalRegistry] Failed to reconnect terminal ${existingTerminal.name}:`, error);
+          existingTerminal.state = 'error';
+          existingTerminal.error = error.message;
+          throw error;
+        }
+      } else {
+        console.log(`[TerminalRegistry] Session ${sessionName} not in registry, creating new terminal`);
+      }
+    }
+
+    // NEW TERMINAL: Generate unique ID and name
     const id = uuidv4();
 
     // Update name counters before generating a new name

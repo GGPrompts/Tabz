@@ -43,9 +43,58 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [containerHeight, setContainerHeight] = useState(0);
-  const { updateTerminal } = useSimpleTerminalStore();
+  const { updateTerminal, focusedTerminalId, setFocusedTerminal, removeTerminal } = useSimpleTerminalStore();
+
+  // Handle closing a pane in a split
+  const handleClosePane = (paneTerminalId: string) => {
+    if (!splitLayout || splitLayout.type === 'single') return;
+
+    const remainingPanes = splitLayout.panes.filter(p => p.terminalId !== paneTerminalId);
+
+    if (remainingPanes.length === 1) {
+      // Only 1 pane left - convert to single terminal
+      console.log('[SplitLayout] Only 1 pane remaining after close, converting to single terminal');
+      updateTerminal(terminal.id, {
+        splitLayout: { type: 'single', panes: [] }
+      });
+      // Unhide the remaining pane
+      const remainingPaneTerminalId = remainingPanes[0].terminalId;
+      updateTerminal(remainingPaneTerminalId, { isHidden: false });
+    } else if (remainingPanes.length > 1) {
+      // Still have multiple panes
+      updateTerminal(terminal.id, {
+        splitLayout: {
+          ...splitLayout,
+          panes: remainingPanes
+        }
+      });
+    }
+
+    // Close the pane's terminal (will trigger backend cleanup)
+    onClose(paneTerminalId);
+  };
 
   const { splitLayout } = terminal;
+
+  // Debug: Log split layout when rendering
+  if (splitLayout && splitLayout.type !== 'single') {
+    console.log('[SplitLayout] Rendering split:', {
+      terminalId: terminal.id.slice(-8),
+      type: splitLayout.type,
+      panes: splitLayout.panes.map(p => ({
+        terminalId: p.terminalId.slice(-8),
+        position: p.position
+      })),
+      hasAgent: !!terminal.agentId,
+      agentId: terminal.agentId?.slice(-8),
+      allTerminals: terminals.map(t => ({
+        id: t.id.slice(-8),
+        isHidden: t.isHidden,
+        hasAgent: !!t.agentId,
+        agentId: t.agentId?.slice(-8)
+      }))
+    });
+  }
 
   // Measure container dimensions
   useEffect(() => {
@@ -99,14 +148,54 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
     const leftPane = splitLayout.panes.find(p => p.position === 'left');
     const rightPane = splitLayout.panes.find(p => p.position === 'right');
 
-    if (!leftPane || !rightPane) return null;
+    if (!leftPane || !rightPane) {
+      console.warn('[SplitLayout] Missing panes in vertical split:', { leftPane, rightPane });
+      return null;
+    }
 
     const leftTerminal = terminals.find(t => t.id === leftPane.terminalId);
     const rightTerminal = terminals.find(t => t.id === rightPane.terminalId);
-    const leftAgent = agents.find(a => a.id === leftTerminal?.agentId);
-    const rightAgent = agents.find(a => a.id === rightTerminal?.agentId);
+    const leftAgent = leftTerminal?.agentId ? agents.find(a => a.id === leftTerminal.agentId) : null;
+    const rightAgent = rightTerminal?.agentId ? agents.find(a => a.id === rightTerminal.agentId) : null;
 
-    if (!leftTerminal || !rightTerminal || !leftAgent || !rightAgent) return null;
+    // If terminals don't exist at all, something is wrong - return null
+    if (!leftTerminal || !rightTerminal) {
+      console.error('[SplitLayout] Pane terminals not found in store!', {
+        leftPane: leftPane.terminalId.slice(-8),
+        rightPane: rightPane.terminalId.slice(-8),
+        leftTerminal: !!leftTerminal,
+        rightTerminal: !!rightTerminal,
+        allTerminalIds: terminals.map(t => t.id.slice(-8))
+      });
+      return null;
+    }
+
+    // If agents aren't connected yet, show loading state (race condition during reconnection)
+    if (!leftAgent || !rightAgent) {
+      console.warn('[SplitLayout] Waiting for agents in vertical split:', {
+        leftPane: leftPane.terminalId.slice(-8),
+        rightPane: rightPane.terminalId.slice(-8),
+        leftTerminal: leftTerminal.name,
+        rightTerminal: rightTerminal.name,
+        leftAgent: !!leftAgent,
+        rightAgent: !!rightAgent,
+        leftAgentId: leftTerminal.agentId?.slice(-8),
+        rightAgentId: rightTerminal.agentId?.slice(-8),
+        availableAgents: agents.map(a => a.id.slice(-8))
+      });
+
+      // Show loading state for the split (instead of hiding it completely)
+      return (
+        <div ref={containerRef} style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div className="loading-spinner"></div>
+            <div style={{ marginTop: '10px', color: '#888' }}>
+              Connecting split panes...
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     const leftWidth = (leftPane.size / 100) * containerWidth;
 
@@ -134,8 +223,19 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
             window.dispatchEvent(new Event('terminal-container-resized'));
           }}
           resizeHandles={['e']}
-          className="split-pane split-pane-left"
+          className={`split-pane split-pane-left ${leftTerminal.id === focusedTerminalId ? 'focused' : ''}`}
+          onClick={() => setFocusedTerminal(leftTerminal.id)}
         >
+          <button
+            className="pane-close-button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClosePane(leftTerminal.id);
+            }}
+            title={`Close ${leftTerminal.name}`}
+          >
+            ✕
+          </button>
           <div style={{ width: '100%', height: '100%' }}>
             <Terminal
               key={`term-${leftTerminal.id}`}
@@ -151,11 +251,26 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
               initialFontSize={leftTerminal.fontSize}
               initialFontFamily={leftTerminal.fontFamily}
               isSelected={leftTerminal.id === activeTerminalId}
+              isFocused={leftTerminal.id === focusedTerminalId}
             />
           </div>
         </ResizableBox>
 
-        <div className="split-pane split-pane-right" style={{ flex: 1 }}>
+        <div
+          className={`split-pane split-pane-right ${rightTerminal.id === focusedTerminalId ? 'focused' : ''}`}
+          style={{ flex: 1 }}
+          onClick={() => setFocusedTerminal(rightTerminal.id)}
+        >
+          <button
+            className="pane-close-button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClosePane(rightTerminal.id);
+            }}
+            title={`Close ${rightTerminal.name}`}
+          >
+            ✕
+          </button>
           <Terminal
             key={`term-${rightTerminal.id}`}
             ref={rightTerminal.id === activeTerminalId ? terminalRef : null}
@@ -170,6 +285,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
             initialFontSize={rightTerminal.fontSize}
             initialFontFamily={rightTerminal.fontFamily}
             isSelected={rightTerminal.id === activeTerminalId}
+            isFocused={rightTerminal.id === focusedTerminalId}
           />
         </div>
       </div>
@@ -181,14 +297,54 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
     const topPane = splitLayout.panes.find(p => p.position === 'top');
     const bottomPane = splitLayout.panes.find(p => p.position === 'bottom');
 
-    if (!topPane || !bottomPane) return null;
+    if (!topPane || !bottomPane) {
+      console.warn('[SplitLayout] Missing panes in horizontal split:', { topPane, bottomPane });
+      return null;
+    }
 
     const topTerminal = terminals.find(t => t.id === topPane.terminalId);
     const bottomTerminal = terminals.find(t => t.id === bottomPane.terminalId);
-    const topAgent = agents.find(a => a.id === topTerminal?.agentId);
-    const bottomAgent = agents.find(a => a.id === bottomTerminal?.agentId);
+    const topAgent = topTerminal?.agentId ? agents.find(a => a.id === topTerminal.agentId) : null;
+    const bottomAgent = bottomTerminal?.agentId ? agents.find(a => a.id === bottomTerminal.agentId) : null;
 
-    if (!topTerminal || !bottomTerminal || !topAgent || !bottomAgent) return null;
+    // If terminals don't exist at all, something is wrong - return null
+    if (!topTerminal || !bottomTerminal) {
+      console.error('[SplitLayout] Pane terminals not found in store!', {
+        topPane: topPane.terminalId.slice(-8),
+        bottomPane: bottomPane.terminalId.slice(-8),
+        topTerminal: !!topTerminal,
+        bottomTerminal: !!bottomTerminal,
+        allTerminalIds: terminals.map(t => t.id.slice(-8))
+      });
+      return null;
+    }
+
+    // If agents aren't connected yet, show loading state (race condition during reconnection)
+    if (!topAgent || !bottomAgent) {
+      console.warn('[SplitLayout] Waiting for agents in horizontal split:', {
+        topPane: topPane.terminalId.slice(-8),
+        bottomPane: bottomPane.terminalId.slice(-8),
+        topTerminal: topTerminal.name,
+        bottomTerminal: bottomTerminal.name,
+        topAgent: !!topAgent,
+        bottomAgent: !!bottomAgent,
+        topAgentId: topTerminal.agentId?.slice(-8),
+        bottomAgentId: bottomTerminal.agentId?.slice(-8),
+        availableAgents: agents.map(a => a.id.slice(-8))
+      });
+
+      // Show loading state for the split (instead of hiding it completely)
+      return (
+        <div ref={containerRef} style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div className="loading-spinner"></div>
+            <div style={{ marginTop: '10px', color: '#888' }}>
+              Connecting split panes...
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     const topHeight = (topPane.size / 100) * containerHeight;
 
@@ -216,8 +372,19 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
             window.dispatchEvent(new Event('terminal-container-resized'));
           }}
           resizeHandles={['s']}
-          className="split-pane split-pane-top"
+          className={`split-pane split-pane-top ${topTerminal.id === focusedTerminalId ? 'focused' : ''}`}
+          onClick={() => setFocusedTerminal(topTerminal.id)}
         >
+          <button
+            className="pane-close-button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClosePane(topTerminal.id);
+            }}
+            title={`Close ${topTerminal.name}`}
+          >
+            ✕
+          </button>
           <div style={{ width: '100%', height: '100%' }}>
             <Terminal
               key={`term-${topTerminal.id}`}
@@ -233,11 +400,26 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
               initialFontSize={topTerminal.fontSize}
               initialFontFamily={topTerminal.fontFamily}
               isSelected={topTerminal.id === activeTerminalId}
+              isFocused={topTerminal.id === focusedTerminalId}
             />
           </div>
         </ResizableBox>
 
-        <div className="split-pane split-pane-bottom" style={{ flex: 1 }}>
+        <div
+          className={`split-pane split-pane-bottom ${bottomTerminal.id === focusedTerminalId ? 'focused' : ''}`}
+          style={{ flex: 1 }}
+          onClick={() => setFocusedTerminal(bottomTerminal.id)}
+        >
+          <button
+            className="pane-close-button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClosePane(bottomTerminal.id);
+            }}
+            title={`Close ${bottomTerminal.name}`}
+          >
+            ✕
+          </button>
           <Terminal
             key={`term-${bottomTerminal.id}`}
             ref={bottomTerminal.id === activeTerminalId ? terminalRef : null}
@@ -252,6 +434,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
             initialFontSize={bottomTerminal.fontSize}
             initialFontFamily={bottomTerminal.fontFamily}
             isSelected={bottomTerminal.id === activeTerminalId}
+            isFocused={bottomTerminal.id === focusedTerminalId}
           />
         </div>
       </div>

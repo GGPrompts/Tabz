@@ -238,7 +238,11 @@ class UnifiedSpawnSystem {
       }
 
       // 7. Check for duplicate spawns
-      const spawnKey = `${options.terminalType}_${options.name}`;
+      // CRITICAL FIX: Include sessionName for tmux terminals to avoid false duplicates during reconnection
+      const spawnKey = options.sessionName
+        ? `${options.terminalType}_${options.name}_${options.sessionName}`
+        : `${options.terminalType}_${options.name}`;
+
       if (this.activeSpawns.has(spawnKey)) {
         console.log('[UnifiedSpawn] Duplicate spawn prevented:', spawnKey);
         return {

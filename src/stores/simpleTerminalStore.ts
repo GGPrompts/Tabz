@@ -30,6 +30,7 @@ export interface Terminal {
   createdAt: number;
   status?: 'spawning' | 'active' | 'closed' | 'error';
   requestId?: string; // For matching placeholder with WebSocket response
+  isHidden?: boolean; // Hide from tab bar (e.g., when part of a split)
 
   // Split layout data (Phase 1 of split layout system)
   splitLayout?: SplitLayout;
@@ -38,6 +39,7 @@ export interface Terminal {
 interface SimpleTerminalState {
   terminals: Terminal[];
   activeTerminalId: string | null;
+  focusedTerminalId: string | null; // Track focused pane in splits
 
   // Actions
   addTerminal: (terminal: Terminal) => void;
@@ -45,6 +47,8 @@ interface SimpleTerminalState {
   updateTerminal: (id: string, updates: Partial<Terminal>) => void;
   setActiveTerminal: (id: string | null) => void;
   clearAllTerminals: () => void;
+  reorderTerminals: (newOrder: Terminal[]) => void;
+  setFocusedTerminal: (id: string | null) => void;
 }
 
 export const useSimpleTerminalStore = create<SimpleTerminalState>()(
@@ -52,6 +56,7 @@ export const useSimpleTerminalStore = create<SimpleTerminalState>()(
     (set) => ({
       terminals: [],
       activeTerminalId: null,
+      focusedTerminalId: null,
 
       addTerminal: (terminal) =>
         set((state) => ({
@@ -84,7 +89,13 @@ export const useSimpleTerminalStore = create<SimpleTerminalState>()(
         set({ activeTerminalId: id }),
 
       clearAllTerminals: () =>
-        set({ terminals: [], activeTerminalId: null }),
+        set({ terminals: [], activeTerminalId: null, focusedTerminalId: null }),
+
+      reorderTerminals: (newOrder) =>
+        set({ terminals: newOrder }),
+
+      setFocusedTerminal: (id) =>
+        set({ focusedTerminalId: id }),
     }),
     {
       name: "simple-terminal-storage",

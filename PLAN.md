@@ -4,16 +4,20 @@
 
 **Status**: ✅ **CORE FUNCTIONALITY COMPLETE** - All major features working!
 
-**Date**: November 8, 2025 (Updated - Evening)
-**Version**: v1.1.0
+**Date**: November 9, 2025 (Updated - Morning)
+**Version**: v1.2.0
 
 ### What's Working 🎉
 - ✅ Terminal persistence (all tabs render after refresh)
 - ✅ Tmux integration (sessions survive refresh)
+- ✅ **Session reconnection working** (terminals properly reconnect to tmux sessions)
 - ✅ Per-tab customization (theme, transparency, font)
 - ✅ Beautiful logging (Consola)
 - ✅ All spawning bugs fixed
 - ✅ Conditional scrollbar (tmux vs non-tmux)
+- ✅ **Tab clicking & dragging working** (8px activation threshold)
+- ✅ **Tab reordering** (drag & drop with dnd-kit)
+- ✅ **Split layout infrastructure** (Phase 1 - focus tracking, state management)
 
 ### What's Left
 See "Remaining Tasks" section below - all optional enhancements!
@@ -1088,7 +1092,205 @@ e83df49 - fix: update GitHub repo link to capital Tabz
 
 ---
 
-**Cleanup Completed By:** Claude Code (Sonnet 4.5)  
-**Date:** November 8, 2025  
-**Duration:** Single session (~2 hours)  
+**Cleanup Completed By:** Claude Code (Sonnet 4.5)
+**Date:** November 8, 2025
+**Duration:** Single session (~2 hours)
 **Repository:** https://github.com/GGPrompts/Tabz
+
+---
+
+## 🔧 November 9, 2025 Session - Tab Functionality & Session Persistence Fixes
+
+**Status:** ✅ **COMPLETED**
+
+### Critical Bugs Fixed
+
+#### 1. Tab Clicking Not Working ✅
+**Problem**: Tabs couldn't be clicked to switch between them - drag detection started instantly with 0 movement.
+
+**Root Cause**: `PointerSensor` in dnd-kit had no `activationConstraint`, so drag started immediately on pointer down, preventing clicks from registering.
+
+**Fix** (src/SimpleTerminalApp.tsx:178-181):
+```typescript
+useSensor(PointerSensor, {
+  activationConstraint: {
+    distance: 8, // Require 8px movement before drag starts (allows clicks to work)
+  },
+})
+```
+
+**Result**:
+- ✅ Tabs are clickable to switch
+- ✅ Dragging still works (after 8px movement)
+- ✅ Close button works
+
+---
+
+#### 2. Session Reconnection Creating Duplicates ✅
+**Problem**: On page refresh, backend created duplicate terminals (TFE, TFE-2, TFE-3) all pointing to the same tmux session, causing "Connecting to terminal..." stuck state.
+
+**Root Cause**: `registerTerminal()` always created new terminal entries instead of reusing existing ones when reconnecting to tmux sessions.
+
+**Fix** (backend/modules/terminal-registry.js:143-191):
+```javascript
+// Check if we're reconnecting to an existing tmux session
+const sessionName = config.sessionName || config.sessionId;
+if (sessionName) {
+  const existingTerminal = Array.from(this.terminals.values()).find(t =>
+    (t.sessionId === sessionName || t.sessionName === sessionName)
+  );
+
+  if (existingTerminal) {
+    // Reuse existing terminal entry, kill old PTY, create new attachment
+    return existingTerminal;
+  }
+}
+```
+
+**Result**:
+- ✅ Reconnection reuses existing registry entries
+- ✅ Terminal names stay consistent (no TFE-2, TFE-3)
+- ✅ Customizations (font size, theme) persist through refresh
+
+---
+
+#### 3. Tmux Terminals Auto-Deleted on PTY Close ✅
+**Problem**: When reconnecting, killing the old PTY triggered the `pty-closed` event which automatically deleted the terminal from the registry before the new PTY could be created.
+
+**Fix** (backend/modules/terminal-registry.js:128-146):
+```javascript
+ptyHandler.on('pty-closed', ({ terminalId, exitCode, signal }) => {
+  const terminal = this.terminals.get(terminalId);
+  if (terminal) {
+    // Don't auto-delete tmux terminals - they might be reconnecting
+    if (terminal.sessionId || terminal.sessionName) {
+      console.log(`[TerminalRegistry] PTY closed for tmux terminal ${terminal.name}, keeping in registry for reconnection`);
+      terminal.state = 'disconnected'; // Mark as disconnected instead of closed
+    } else {
+      // Non-tmux terminals can be safely deleted when PTY closes
+      this.terminals.delete(terminalId);
+      this.emit('closed', terminalId);
+    }
+  }
+});
+```
+
+**Result**:
+- ✅ Tmux terminals persist in registry for reconnection
+- ✅ No premature deletion during reconnection process
+
+---
+
+#### 4. Frontend Sending Messages to Stale Backend IDs ✅
+**Problem**: Frontend kept old agent IDs after WebSocket disconnect, causing "Terminal not found" errors when backend restarted.
+
+**Fix** (src/SimpleTerminalApp.tsx:463-480):
+```typescript
+ws.onclose = (evt) => {
+  setConnectionStatus('disconnected')
+
+  // Clear old agents when disconnecting
+  setWebSocketAgents([])
+  processedAgentIds.current.clear()
+
+  // Clear agentIds from all terminals (will be re-assigned on reconnect)
+  storedTerminals.forEach(terminal => {
+    if (terminal.agentId || terminal.status === 'active') {
+      updateTerminal(terminal.id, {
+        agentId: undefined,
+        status: 'spawning', // Will be updated to 'active' after reconnection
+      })
+    }
+  })
+}
+```
+
+**Result**:
+- ✅ No "Terminal not found" errors
+- ✅ Clean reconnection with new agent IDs
+
+---
+
+#### 5. Duplicate Spawn Prevention Blocking Reconnection ✅
+**Problem**: Multiple terminals with same name (e.g., two "TFE" terminals in different tmux sessions) were blocked as duplicates during reconnection.
+
+**Root Cause**: Duplicate detection key used only `terminalType_name`, ignoring session uniqueness.
+
+**Fix** (backend/modules/unified-spawn.js:242-244):
+```javascript
+// Include sessionName for tmux terminals to avoid false duplicates
+const spawnKey = options.sessionName
+  ? `${options.terminalType}_${options.name}_${options.sessionName}`
+  : `${options.terminalType}_${options.name}`;
+```
+
+**Result**:
+- ✅ Multiple terminals with same name but different sessions can reconnect
+- ✅ No false "Duplicate spawn prevented" errors
+
+---
+
+### Split Layout Infrastructure (Phase 1) ✅
+
+**Completed Features**:
+- ✅ `focusedTerminalId` in simpleTerminalStore (tracks which pane in a split is active)
+- ✅ Footer displays focused terminal info when in splits
+- ✅ Visual focus indicators (glowing divider on focused pane)
+- ✅ Split layout state persists through refresh (splitLayout property on terminals)
+- ✅ `isHidden` flag hides child terminals from tab bar when merged into splits
+
+**State Management**:
+- ✅ `splitLayout` property on terminals (type: 'single' | 'vertical' | 'horizontal')
+- ✅ `panes` array with terminalId references
+- ✅ All split state persists to localStorage
+- ✅ SplitLayout component handles rendering based on terminal.splitLayout
+
+**Files Implemented**:
+- `src/stores/simpleTerminalStore.ts` - Split layout types, focus tracking
+- `src/components/SplitLayout.tsx` - Split rendering with ResizableBox
+- `src/components/SplitLayout.css` - Split styling, focus indicators
+- `src/SimpleTerminalApp.tsx` - Footer logic for focused pane display
+
+**What's Working**:
+- ✅ Split UI renders properly
+- ✅ Focus tracking works
+- ✅ Footer updates based on focused pane
+- ✅ Split state persists through refresh
+
+**What Needs Implementation** (Phase 2):
+- ⚠️ Drag & drop to create splits (currently splits are created programmatically)
+- ⚠️ Tmux footer controls (split buttons don't work - see NEXT_SESSION_PROMPT.md)
+- ⚠️ Merge/unsplit functionality
+- ⚠️ Max 4 panes per tab limit
+
+---
+
+### Files Modified This Session
+
+**Backend:**
+- `backend/modules/terminal-registry.js` - Reconnection reuse logic, PTY close handling
+- `backend/modules/unified-spawn.js` - Duplicate prevention fix (include sessionName)
+
+**Frontend:**
+- `src/SimpleTerminalApp.tsx` - Tab drag threshold, WebSocket cleanup, agent ID management
+
+---
+
+### Testing Results
+
+**Tested Scenarios** (All Passing ✅):
+1. ✅ Tab clicking switches between terminals
+2. ✅ Tab dragging reorders tabs (requires 8px movement)
+3. ✅ Close button works on tabs
+4. ✅ Page refresh reconnects to existing tmux sessions
+5. ✅ Multiple terminals with same name reconnect properly
+6. ✅ Customizations persist through refresh
+7. ✅ No duplicate terminals created
+8. ✅ No "Terminal not found" errors
+9. ✅ Split layout focus tracking works
+10. ✅ Footer displays correct focused terminal in splits
+
+**Session Completed By:** Claude Code (Sonnet 4.5)
+**Date:** November 9, 2025
+**Duration:** ~1 hour
+**Focus:** Critical bug fixes for tab interaction and session persistence

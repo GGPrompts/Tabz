@@ -1,5 +1,30 @@
 # Split Layout Design for Tabz
 
+## Implementation Status (November 9, 2025)
+
+**Phase 1 & 2: ✅ COMPLETE**
+
+### What's Implemented:
+- ✅ Basic split infrastructure (vertical & horizontal)
+- ✅ Drag-and-drop tab merge to create splits
+- ✅ Resizable dividers with react-resizable
+- ✅ Focus management (focused pane tracking)
+- ✅ Visual focus indicators (glowing divider edges)
+- ✅ Split persistence across page refresh
+- ✅ Individual pane close buttons (X on hover)
+- ✅ Exit command handling (closes panes properly)
+- ✅ Race condition handling (loading state during reconnection)
+
+### What's Next (Phase 3 & 4):
+- ⏳ Tab context menu (right-click to split/merge/pop-out)
+- ⏳ Keyboard shortcuts (Ctrl+Shift+\ for split, etc.)
+- ⏳ Polish & animations
+- ⏳ Mobile responsiveness
+
+**See REMAINING_PHASES.md for detailed roadmap.**
+
+---
+
 ## Overview
 
 Implement app-level split panes (NOT tmux splits) where each pane contains a separate terminal with its own tmux session. This avoids tmux horizontal split corruption issues and provides simpler session management.

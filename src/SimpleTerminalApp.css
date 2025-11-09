@@ -328,6 +328,74 @@
   color: #ef4444;
 }
 
+/* Drop Zone Styles - for drag-and-drop merge */
+.tab.drag-over {
+  position: relative;
+}
+
+.drop-zone-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.drop-zone-left {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 20%;
+  background: rgba(59, 130, 246, 0.3);
+  border-left: 3px solid rgba(59, 130, 246, 0.8);
+  animation: dropZonePulse 1s ease-in-out infinite;
+}
+
+.drop-zone-right {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 20%;
+  background: rgba(59, 130, 246, 0.3);
+  border-right: 3px solid rgba(59, 130, 246, 0.8);
+  animation: dropZonePulse 1s ease-in-out infinite;
+}
+
+.drop-zone-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 20%;
+  background: rgba(59, 130, 246, 0.3);
+  border-top: 3px solid rgba(59, 130, 246, 0.8);
+  animation: dropZonePulse 1s ease-in-out infinite;
+}
+
+.drop-zone-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 20%;
+  background: rgba(59, 130, 246, 0.3);
+  border-bottom: 3px solid rgba(59, 130, 246, 0.8);
+  animation: dropZonePulse 1s ease-in-out infinite;
+}
+
+@keyframes dropZonePulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .tab-add {
   display: flex;
   align-items: center;
