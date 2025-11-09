@@ -40,6 +40,31 @@
   line-height: 1;
 }
 
+/* Header Collapse Button - Absolutely centered in header */
+.header-collapse-button {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: #f59e0b;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.header-collapse-button:hover {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.5);
+  transform: translateX(-50%) translateY(-1px);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
+}
+
 /* Header - Auto-hide after 10s */
 .app-header {
   position: fixed;
@@ -421,11 +446,42 @@
   z-index: 10;
 }
 
-/* Center zone overlay for reordering (shows when in center, not on edges) */
-.drop-zone-overlay.center-reorder {
-  background: rgba(34, 197, 94, 0.15);
-  border: 2px dashed rgba(34, 197, 94, 0.6);
-  animation: dropZonePulse 1s ease-in-out infinite;
+/* Reorder indicator - vertical line showing insertion point between tabs */
+.reorder-indicator {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(
+    to bottom,
+    rgba(59, 130, 246, 0.8),  /* blue-500 */
+    rgba(34, 197, 94, 0.8)     /* green-500 */
+  );
+  box-shadow:
+    0 0 8px rgba(59, 130, 246, 0.6),
+    0 0 12px rgba(34, 197, 94, 0.4);
+  animation: reorderPulse 1s ease-in-out infinite;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.reorder-indicator.left {
+  left: -2px;
+}
+
+.reorder-indicator.right {
+  right: -2px;
+}
+
+@keyframes reorderPulse {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scaleX(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1.3);
+  }
 }
 
 /* Merge Blocked Overlay - shows when trying to merge into a split tab */

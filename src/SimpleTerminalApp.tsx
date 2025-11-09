@@ -167,18 +167,19 @@ function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDrag
         ✕
       </button>
 
-      {/* Drop Zone Overlay - shows when dragging over this tab */}
-      {isDraggedOver && dropZone && !isBlocked && (
-        <div className={`drop-zone-overlay ${!isEdgeZone ? 'center-reorder' : ''}`}>
-          {isEdgeZone && (
-            <>
-              {dropZone === 'left' && <div className="drop-zone-left"></div>}
-              {dropZone === 'right' && <div className="drop-zone-right"></div>}
-              {dropZone === 'top' && <div className="drop-zone-top"></div>}
-              {dropZone === 'bottom' && <div className="drop-zone-bottom"></div>}
-            </>
-          )}
+      {/* Drop Zone Overlay - shows when dragging over this tab for splits */}
+      {isDraggedOver && dropZone && !isBlocked && isEdgeZone && (
+        <div className="drop-zone-overlay">
+          {dropZone === 'left' && <div className="drop-zone-left"></div>}
+          {dropZone === 'right' && <div className="drop-zone-right"></div>}
+          {dropZone === 'top' && <div className="drop-zone-top"></div>}
+          {dropZone === 'bottom' && <div className="drop-zone-bottom"></div>}
         </div>
+      )}
+
+      {/* Reorder Indicator - vertical line showing insertion point for reordering */}
+      {isDraggedOver && dropZone && !isBlocked && !isEdgeZone && (
+        <div className={`reorder-indicator ${dropZone}`}></div>
       )}
 
       {/* Blocked Overlay - shows when trying to split into a split tab */}
@@ -1566,13 +1567,6 @@ function SimpleTerminalApp() {
           </button>
           <button
             className="settings-button"
-            onClick={toggleHeader}
-            title="Hide header"
-          >
-            ⌃
-          </button>
-          <button
-            className="settings-button"
             onClick={() => setShowSettings(true)}
             title="Settings"
           >
@@ -1583,6 +1577,15 @@ function SimpleTerminalApp() {
             {connectionStatus}
           </div>
         </div>
+
+        {/* Header Collapse Button - absolutely centered in header */}
+        <button
+          className="header-collapse-button"
+          onClick={toggleHeader}
+          title="Hide header"
+        >
+          ▲
+        </button>
       </div>
 
       {/* Tab Bar */}
@@ -1763,57 +1766,6 @@ function SimpleTerminalApp() {
             >
               ↺
             </button>
-
-            {/* Tmux Controls - only show for tmux sessions */}
-            {displayTerminal.sessionName && terminalRef.current && (
-              <>
-                <span style={{ marginLeft: '12px', marginRight: '6px', opacity: 0.6, fontSize: '0.85em' }}>
-                  tmux:
-                </span>
-                <button
-                  className="footer-control-btn"
-                  onClick={() => terminalRef.current?.sendKeys('\x02%')}
-                  title="Split Vertical (Ctrl+B %)"
-                >
-                  ⊞
-                </button>
-                <button
-                  className="footer-control-btn"
-                  onClick={() => terminalRef.current?.sendKeys('\x02"')}
-                  title="Split Horizontal (Ctrl+B &quot;)"
-                >
-                  ⊟
-                </button>
-                <button
-                  className="footer-control-btn"
-                  onClick={() => terminalRef.current?.sendKeys('\x02z')}
-                  title="Zoom Pane (Ctrl+B z)"
-                >
-                  🔍
-                </button>
-                <button
-                  className="footer-control-btn"
-                  onClick={() => terminalRef.current?.sendKeys('\x02c')}
-                  title="New Window (Ctrl+B c)"
-                >
-                  ➕
-                </button>
-                <button
-                  className="footer-control-btn"
-                  onClick={() => terminalRef.current?.sendKeys('\x02p')}
-                  title="Previous Window (Ctrl+B p)"
-                >
-                  ◀
-                </button>
-                <button
-                  className="footer-control-btn"
-                  onClick={() => terminalRef.current?.sendKeys('\x02n')}
-                  title="Next Window (Ctrl+B n)"
-                >
-                  ▶
-                </button>
-              </>
-            )}
 
             {/* Customize Panel Toggle */}
             <button

@@ -253,7 +253,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
           <div style={{ width: '100%', height: '100%' }}>
             <Terminal
               key={`term-${leftTerminal.id}`}
-              ref={leftTerminal.id === activeTerminalId ? terminalRef : null}
+              ref={leftTerminal.id === focusedTerminalId ? terminalRef : null}
               agent={leftAgent}
               onClose={() => onClose(leftTerminal.id)}
               onCommand={(cmd) => onCommand(cmd, leftTerminal.id)}
@@ -299,7 +299,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
           </div>
           <Terminal
             key={`term-${rightTerminal.id}`}
-            ref={rightTerminal.id === activeTerminalId ? terminalRef : null}
+            ref={rightTerminal.id === focusedTerminalId ? terminalRef : null}
             agent={rightAgent}
             onClose={() => onClose(rightTerminal.id)}
             onCommand={(cmd) => onCommand(cmd, rightTerminal.id)}
@@ -426,7 +426,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
           <div style={{ width: '100%', height: '100%' }}>
             <Terminal
               key={`term-${topTerminal.id}`}
-              ref={topTerminal.id === activeTerminalId ? terminalRef : null}
+              ref={topTerminal.id === focusedTerminalId ? terminalRef : null}
               agent={topAgent}
               onClose={() => onClose(topTerminal.id)}
               onCommand={(cmd) => onCommand(cmd, topTerminal.id)}
@@ -472,7 +472,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
           </div>
           <Terminal
             key={`term-${bottomTerminal.id}`}
-            ref={bottomTerminal.id === activeTerminalId ? terminalRef : null}
+            ref={bottomTerminal.id === focusedTerminalId ? terminalRef : null}
             agent={bottomAgent}
             onClose={() => onClose(bottomTerminal.id)}
             onCommand={(cmd) => onCommand(cmd, bottomTerminal.id)}

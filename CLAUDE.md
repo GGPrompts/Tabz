@@ -145,10 +145,33 @@ Use intuitive aliases in spawn-options:
 
 ## 🐛 Known Issues
 
-1. **Tmux Footer Controls** - Split/window buttons in footer don't work (see NEXT_SESSION_PROMPT.md)
-2. **No Keyboard Shortcuts** - Missing Ctrl+T, Ctrl+W, etc.
-3. **Mobile Untested** - May need responsive CSS work
-4. **Single Window** - Can't pop out tabs (future: window.open())
+1. **No Keyboard Shortcuts** - Missing Ctrl+T, Ctrl+W, etc.
+2. **Mobile Untested** - May need responsive CSS work
+3. **Single Window** - Can't pop out tabs (future: window.open())
+
+## ✅ Recently Fixed (Nov 9, 2025)
+
+### Split Terminal Customization
+**Problem:** Font size and other customization controls in the footer only affected one pane in split terminals, not the currently focused pane.
+
+**Root Cause:** The `terminalRef` was being assigned based on `activeTerminalId` instead of `focusedTerminalId` in split panes. This meant the ref always pointed to the same pane (whichever matched the active tab), not the focused one.
+
+**Solution:**
+```tsx
+// OLD (broken - all panes):
+ref={leftTerminal.id === activeTerminalId ? terminalRef : null}
+
+// NEW (working):
+ref={leftTerminal.id === focusedTerminalId ? terminalRef : null}
+```
+
+**Files Modified:**
+- `src/components/SplitLayout.tsx` (lines 256, 302, 429, 475) - Updated all 4 split pane refs
+- `src/SimpleTerminalApp.tsx` (lines 1768-1816) - Removed non-functional tmux buttons
+
+**Impact:** Footer customization controls (font size, theme, transparency, etc.) now correctly target the focused pane in split terminals. Removed tmux split/window buttons since the app now uses native split layouts instead of tmux splits.
+
+---
 
 ## ✅ Recently Fixed (Nov 8, 2025)
 
