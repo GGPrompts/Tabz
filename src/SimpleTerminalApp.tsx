@@ -539,7 +539,7 @@ function SimpleTerminalApp() {
     'default': 'term',
   }
 
-  // Generate short session name like "tt-cc-a3k" (Terminal Tabs - Claude Code - random suffix)
+  // Generate short session name like "tt-cc-a3k" (Tabz - Claude Code - random suffix)
   const generateSessionName = (terminalType: string, label?: string, command?: string): string => {
     // Special cases: TFE, LazyGit, etc. use their command as abbreviation
     let abbrev: string
@@ -977,7 +977,7 @@ function SimpleTerminalApp() {
         onMouseEnter={handleHeaderHover}
         onMouseMove={handleHeaderHover}
       >
-        <div className="app-title">Terminal Tabs</div>
+        <div className="app-title">Tabz</div>
 
         {/* Tmux Toggle */}
         <div className="tmux-toggle-container">

@@ -1,7 +1,7 @@
 {
-  "name": "Terminal Tabs",
-  "short_name": "TermTabs",
-  "description": "Tab-based terminal interface with tmux sessions",
+  "name": "Tabz",
+  "short_name": "Tabz",
+  "description": "Lightweight tab-based terminal interface with tmux sessions",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0f",
