@@ -895,6 +895,33 @@ function SimpleTerminalApp() {
 
             // Remove the terminal from store
             removeTerminal(terminal.id)
+
+            // After removal, check if we need to switch active terminal or close window
+            // Note: We check visibleTerminals AFTER removal, so it won't include the just-removed terminal
+            setTimeout(() => {
+              const currentVisibleTerminals = storedTerminals.filter(t => {
+                const terminalWindow = t.windowId || 'main'
+                return terminalWindow === currentWindowId && !t.isHidden
+              })
+
+              if (activeTerminalId === terminal.id) {
+                if (currentVisibleTerminals.length > 0) {
+                  console.log(`[SimpleTerminalApp] Switching to next terminal: ${currentVisibleTerminals[0].name}`)
+                  setActiveTerminal(currentVisibleTerminals[0].id)
+                } else {
+                  console.log(`[SimpleTerminalApp] No remaining terminals in this window`)
+                  setActiveTerminal(null)
+
+                  // Only close popped-out windows, not the main window
+                  if (currentWindowId !== 'main') {
+                    console.log(`[SimpleTerminalApp] Closing empty popped-out window in 1 second...`)
+                    setTimeout(() => {
+                      window.close()
+                    }, 1000) // Give user time to see what happened
+                  }
+                }
+              }
+            }, 100) // Small delay to ensure state has updated
           }
         }
         break
