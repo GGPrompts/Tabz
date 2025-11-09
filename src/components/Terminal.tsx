@@ -300,16 +300,10 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       const MAX_RETRIES = 10;
       const RETRY_DELAY = 50;
 
-      const attemptOpen = async () => {
+      const attemptOpen = () => {
         if (terminalRef.current && terminalRef.current.offsetWidth > 0 && terminalRef.current.offsetHeight > 0) {
           xterm.open(terminalRef.current);
-
-          // Wait for fonts to load
-          try {
-            await document.fonts.ready;
-          } catch {}
-
-          console.log(`[Terminal] xterm opened for ${agent.name}, fontSize: ${xterm.options.fontSize}, fontFamily: ${xterm.options.fontFamily}`);
+          console.log(`[Terminal] xterm opened successfully for ${agent.name} (attempt ${retryCount + 1})`);
         } else if (retryCount < MAX_RETRIES) {
           retryCount++;
           console.log(`[Terminal] Element not ready (0x0 dimensions), retrying... (${retryCount}/${MAX_RETRIES})`);
@@ -385,58 +379,56 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       fitAddonRef.current = fitAddon;
 
       // Delay initial fit and send dimensions to backend
-      // CRITICAL: Use multiple retries with increasing delays to ensure container has dimensions
-      const attemptFit = (retryCount = 0) => {
+      // Using longer delay to ensure terminal is fully initialized for proper mouse support and scrollback
+      setTimeout(() => {
         try {
-          if (!xtermRef.current || !fitAddonRef.current || !terminalRef.current) {
-            if (retryCount < 5) {
-              setTimeout(() => attemptFit(retryCount + 1), 200);
-            }
+          // Ensure terminal is opened before fitting
+          if (!xtermRef.current || !fitAddonRef.current) {
+            // Retry after a short delay
+            setTimeout(() => {
+              if (xtermRef.current && fitAddonRef.current && terminalRef.current?.parentElement) {
+                const containerWidth = terminalRef.current.parentElement.clientWidth;
+                const containerHeight = terminalRef.current.parentElement.clientHeight;
+                if (containerWidth > 0 && containerHeight > 0) {
+                  fitAddonRef.current.fit();
+                }
+              }
+            }, 500);
             return;
           }
+          // Calculate dimensions manually to ensure proper fit
+          if (terminalRef.current && terminalRef.current.parentElement) {
+            const containerWidth =
+              terminalRef.current.parentElement.clientWidth;
+            const containerHeight =
+              terminalRef.current.parentElement.clientHeight;
 
-          // Call fit() which will calculate cols/rows from container dimensions
-          fitAddon.fit();
+            // Ensure container has valid dimensions before fitting
+            if (containerWidth > 0 && containerHeight > 0) {
+              fitAddon.fit();
 
-          const containerRect = terminalRef.current?.getBoundingClientRect();
-          console.log(`[Terminal] Initial fit attempt ${retryCount + 1}: ${xterm.cols}x${xterm.rows} for ${agent.name}`, {
-            isSelected,
-            containerWidth: containerRect?.width,
-            containerHeight: containerRect?.height,
-          });
-
-          // Send initial dimensions to backend
-          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            console.log(`[Terminal] Sending resize to backend: ${xterm.cols}x${xterm.rows} for ${agent.name}`);
-            wsRef.current.send(
-              JSON.stringify({
-                type: "resize",
-                terminalId: agent.id,
-                cols: xterm.cols,
-                rows: xterm.rows,
-              }),
-            );
-          } else {
-            console.warn(`[Terminal] Cannot send resize - WebSocket not open for ${agent.name}`);
-          }
-
-          // If cols/rows are still at defaults (80x30 or close), retry
-          if ((xterm.cols === 80 || xterm.cols < 100) && retryCount < 5) {
-            console.log(`[Terminal] Cols still small (${xterm.cols}), retrying fit...`);
-            setTimeout(() => attemptFit(retryCount + 1), 300);
+              // Send initial dimensions to backend
+              if (
+                wsRef.current &&
+                wsRef.current.readyState === WebSocket.OPEN
+              ) {
+                wsRef.current.send(
+                  JSON.stringify({
+                    type: "resize",
+                    terminalId: agent.id,
+                    cols: xterm.cols,
+                    rows: xterm.rows,
+                  }),
+                );
+              }
+            }
           }
         } catch (err) {
           if (import.meta.env.DEV) {
-            console.debug('[Terminal] Fit error, will retry:', err);
-          }
-          if (retryCount < 5) {
-            setTimeout(() => attemptFit(retryCount + 1), 200);
+            console.debug('[Terminal] Initial fit error (normal during initialization):', err);
           }
         }
-      };
-
-      // Start first attempt after initial delay
-      setTimeout(() => attemptFit(0), 500);
+      }, 800); // Consistent delay for proper terminal initialization
 
       // Handle terminal input - send directly to backend via WebSocket
       // NOTE: We attach this immediately, but filter out data during "spawning" status
