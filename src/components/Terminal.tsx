@@ -93,7 +93,9 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
                       agent.name?.toLowerCase().includes('pyradio') ||
                       agent.name?.toLowerCase().includes('lazygit') ||
                       agent.name?.toLowerCase().includes('bottom') ||
-                      agent.name?.toLowerCase().includes('micro');
+                      agent.name?.toLowerCase().includes('micro') ||
+                      agent.name?.toLowerCase().includes('tfe') ||
+                      agent.toolName?.toLowerCase().includes('tfe');
 
     // Create debounced resize handler that only sends if dimensions actually changed
     // Use shorter debounce for TUI tools to prevent rendering issues
