@@ -392,7 +392,12 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
           // Call fit() which will calculate cols/rows from container dimensions
           fitAddon.fit();
 
-          console.log(`[Terminal] Initial fit attempt ${retryCount + 1}: ${xterm.cols}x${xterm.rows} for ${agent.name}`);
+          const containerRect = terminalRef.current?.getBoundingClientRect();
+          console.log(`[Terminal] Initial fit attempt ${retryCount + 1}: ${xterm.cols}x${xterm.rows} for ${agent.name}`, {
+            isSelected,
+            containerWidth: containerRect?.width,
+            containerHeight: containerRect?.height,
+          });
 
           // Send initial dimensions to backend
           if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
