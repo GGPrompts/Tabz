@@ -33,146 +33,52 @@ export function useTerminalTheme(
       const newTheme = getThemeForTerminalType(themeName);
       xtermRef.current.options.theme = newTheme.xterm;
 
-      // For WebGL terminals, be more conservative with refitting
-      const usesWebGL = !["opencode", "bash", "gemini"].includes(terminalType);
+      // Use the resize trick for ALL terminals to force complete redraw
+      // This is the most reliable way to refresh the display after theme change
+      setTimeout(() => {
+        if (xtermRef.current && fitAddonRef.current) {
+          // First refresh the content
+          xtermRef.current.refresh(0, xtermRef.current.rows - 1);
 
-      if (usesWebGL) {
-        // For WebGL terminals, just do a simple refresh and single refit
-        // Increased delay to ensure theme is fully applied before refresh
-        setTimeout(() => {
-          if (xtermRef.current && fitAddonRef.current) {
-            // Refresh the terminal content
-            xtermRef.current.refresh(0, xtermRef.current.rows - 1);
+          // Then do the resize trick to force complete redraw
+          setTimeout(() => {
+            if (fitAddonRef.current && xtermRef.current && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              const currentCols = xtermRef.current.cols;
+              const currentRows = xtermRef.current.rows;
 
-            // Single refit after a longer delay to let WebGL settle
-            setTimeout(() => {
-              if (fitAddonRef.current && xtermRef.current) {
-                // For TUI apps, do a "real" resize to force complete redraw
-                if (isTUITool) {
-                  const currentCols = xtermRef.current.cols;
-                  const currentRows = xtermRef.current.rows;
+              // Resize xterm itself to trigger complete redraw
+              xtermRef.current.resize(currentCols - 1, currentRows);
 
-                  // Resize xterm itself to trigger complete redraw
-                  xtermRef.current.resize(currentCols - 1, currentRows);
+              // Send resize to PTY
+              wsRef.current.send(
+                JSON.stringify({
+                  type: "resize",
+                  terminalId: agentId,
+                  cols: currentCols - 1,
+                  rows: currentRows,
+                }),
+              );
 
-                  // Send resize to PTY
-                  if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                    wsRef.current.send(
-                      JSON.stringify({
-                        type: "resize",
-                        terminalId: agentId,
-                        cols: currentCols - 1,
-                        rows: currentRows,
-                      }),
-                    );
-                  }
-
-                  // Wait a moment, then resize back to correct size
-                  setTimeout(() => {
-                    if (xtermRef.current && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                      xtermRef.current.resize(currentCols, currentRows);
-                      wsRef.current.send(
-                        JSON.stringify({
-                          type: "resize",
-                          terminalId: agentId,
-                          cols: currentCols,
-                          rows: currentRows,
-                        }),
-                      );
-                    }
-                  }, 100);
-                } else {
-                  // For non-TUI, just fit and send resize with Ctrl+L
-                  fitAddonRef.current.fit();
-                  debouncedResize(
-                    agentId,
-                    xtermRef.current.cols,
-                    xtermRef.current.rows,
+              // Wait a moment, then resize back to correct size
+              setTimeout(() => {
+                if (xtermRef.current && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                  xtermRef.current.resize(currentCols, currentRows);
+                  wsRef.current.send(
+                    JSON.stringify({
+                      type: "resize",
+                      terminalId: agentId,
+                      cols: currentCols,
+                      rows: currentRows,
+                    }),
                   );
                 }
-              }
-            }, 200);
-          }
-        }, 150);
-      } else {
-        // For non-WebGL terminals, use the more aggressive refitting
-        // Increased initial delay to ensure theme is fully applied
-        setTimeout(() => {
-          if (xtermRef.current && fitAddonRef.current) {
-            // Strategy 1: Fit the terminal
-            fitAddonRef.current.fit();
-
-            // Strategy 2: Force a full refresh
-            xtermRef.current.refresh(0, xtermRef.current.rows - 1);
-
-            // Strategy 3: Trigger resize event
-            const resizeEvent = new Event("resize");
-            window.dispatchEvent(resizeEvent);
-
-            // Strategy 4: Additional refit after animation starts
-            setTimeout(() => {
-              if (xtermRef.current && fitAddonRef.current) {
-                // Scroll to bottom to ensure content is visible
-                xtermRef.current.scrollToBottom();
-                fitAddonRef.current.fit();
-                xtermRef.current.refresh(0, xtermRef.current.rows - 1);
-              }
-            }, 100);
-
-            // Strategy 5: Final refit after CSS animations settle
-            setTimeout(() => {
-              if (xtermRef.current && fitAddonRef.current) {
-                // For TUI apps, do a "real" resize to force complete redraw
-                if (isTUITool) {
-                  const currentCols = xtermRef.current.cols;
-                  const currentRows = xtermRef.current.rows;
-
-                  // Resize xterm itself to trigger complete redraw
-                  xtermRef.current.resize(currentCols - 1, currentRows);
-
-                  // Send resize to PTY
-                  if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                    wsRef.current.send(
-                      JSON.stringify({
-                        type: "resize",
-                        terminalId: agentId,
-                        cols: currentCols - 1,
-                        rows: currentRows,
-                      }),
-                    );
-                  }
-
-                  // Wait a moment, then resize back to correct size
-                  setTimeout(() => {
-                    if (xtermRef.current && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                      xtermRef.current.resize(currentCols, currentRows);
-                      wsRef.current.send(
-                        JSON.stringify({
-                          type: "resize",
-                          terminalId: agentId,
-                          cols: currentCols,
-                          rows: currentRows,
-                        }),
-                      );
-                    }
-                  }, 100);
-                } else {
-                  // For non-TUI, fit and use debounced resize with Ctrl+L (fixes stuck terminals)
-                  fitAddonRef.current.fit();
-                  xtermRef.current.refresh(0, xtermRef.current.rows - 1);
-                  debouncedResize(
-                    agentId,
-                    xtermRef.current.cols,
-                    xtermRef.current.rows,
-                  );
-                }
-              }
-            }, 300);
-          }
-        }, 10);
-      }
+              }, 100);
+            }
+          }, 150);
+        }
+      }, 50);
     }
-  }, [xtermRef, fitAddonRef, wsRef, agentId, terminalType, isTUITool, debouncedResize]);
+  }, [xtermRef, fitAddonRef, wsRef, agentId, debouncedResize]);
 
   return applyTheme;
 }
