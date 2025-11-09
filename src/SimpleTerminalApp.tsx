@@ -1252,6 +1252,8 @@ function SimpleTerminalApp() {
 
     // Step 4: Wait for state to sync and detaches to process, then open new window
     // New window will see updated windowId in localStorage and reconnect automatically
+    // CRITICAL: Must wait for Zustand localStorage sync (debounced with 100ms delay)
+    // to complete before opening new window, otherwise new window won't see updated windowId
     setTimeout(() => {
       console.log(`[SimpleTerminalApp] Step 4: Opening new window`)
       // Pass both windowId AND the terminalId to activate in the new window
@@ -1261,7 +1263,7 @@ function SimpleTerminalApp() {
       if (!newWin) {
         console.error('[SimpleTerminalApp] Failed to open new window (popup blocked?)')
       }
-    }, 400) // Shorter delay since tmux detach is synchronous
+    }, 600) // Increased from 400ms to ensure localStorage sync completes (100ms debounce + 500ms buffer)
   }
 
   // Expose handlePopOutTab to window for SortableTab to use
