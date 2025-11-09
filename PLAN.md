@@ -4,7 +4,7 @@
 
 **Status**: ✅ **CORE FUNCTIONALITY COMPLETE** - All major features working!
 
-**Date**: November 9, 2025 (Updated - Morning)
+**Date**: November 9, 2025 (Updated - Evening)
 **Version**: v1.2.0
 
 ### What's Working 🎉
@@ -18,11 +18,308 @@
 - ✅ **Tab clicking & dragging working** (8px activation threshold)
 - ✅ **Tab reordering** (drag & drop with dnd-kit)
 - ✅ **Split layout infrastructure** (Phase 1 - focus tracking, state management)
+- ✅ **Popout feature** (move tabs to new browser windows)
 
 ### What's Left
-See "Remaining Tasks" section below - all optional enhancements!
+See "Code Quality & Refactoring" and "Remaining Tasks" sections below!
 
 **For completed features, see [CHANGELOG.md](CHANGELOG.md)**
+
+---
+
+## 🔧 CODE QUALITY & REFACTORING RECOMMENDATIONS
+
+**Date**: November 9, 2025
+**Overall Health Score**: 7.5/10
+
+### Executive Summary
+The codebase is **functionally excellent** but has **two massively oversized components** that need refactoring for maintainability. Core functionality works well, but component sizes are 10-30x larger than recommended.
+
+---
+
+### 🚨 CRITICAL: Component Sizes
+
+#### SimpleTerminalApp.tsx - 2,207 LINES (MUST REFACTOR)
+
+**Problem**: 30x larger than recommended (90-200 line guideline)
+
+**Contains 8+ separate responsibilities**:
+1. Tab Bar Rendering & Management (1954-1992)
+2. WebSocket Connection Handling (541-730)
+3. WebSocket Message Handler (732-996) - 265 lines
+4. Terminal Spawning Logic (1029-1107) - 78 lines
+5. Terminal Reconnection (1109-1195) - 86 lines
+6. Multi-Window Popout Feature (1198-1318) - 120 lines
+7. Keyboard Shortcuts (564-649) - 85 lines
+8. Drag-and-Drop Handlers (1475-1683) - 208 lines
+9. Footer Controls & Customization (1705-1862) - 157 lines
+
+**Recommended Extraction**:
+```
+src/hooks/
+├── useWebSocketManager.ts (265 lines)
+├── useTerminalSpawning.ts (164 lines)
+├── useDragDrop.ts (208 lines)
+├── useKeyboardShortcuts.ts (85 lines)
+├── usePopout.ts (120 lines)
+└── useCustomization.ts (157 lines)
+
+Result: SimpleTerminalApp.tsx → 600-700 lines (66% reduction)
+```
+
+**Benefits**:
+- Each feature independently testable
+- Easier to understand control flow
+- Reduced risk of introducing bugs
+- Better code reusability
+
+---
+
+#### Terminal.tsx - 1,385 LINES (NEEDS REFACTORING)
+
+**Problem**: 2x larger than recommended (700 line max)
+
+**Main Sections**:
+- xterm.js initialization (141-681) - 540 lines
+- Mouse coordinate transformation (342-459) - 117 lines
+- Theme handling (902-1052) - 150 lines
+- Font customization (1097-1137) - 40 lines
+- Reference forwarding (1054-1224) - 170 lines
+
+**Recommended Extraction**:
+```
+src/hooks/
+├── useTerminalMouse.ts (117 lines)
+├── useTerminalTheme.ts (150 lines)
+├── useTerminalResize.ts (120 lines)
+└── useTerminalFont.ts (100 lines)
+
+Result: Terminal.tsx → 700-800 lines (43% reduction)
+```
+
+---
+
+### 📋 CODE DUPLICATION ISSUES
+
+#### HIGH PRIORITY: Dropdown Components (~280 lines duplicated)
+
+**Problem**: Four dropdown components share 80% identical structure
+
+**Affected Files**:
+- `BackgroundGradientDropdown.tsx` (90 lines)
+- `TextColorThemeDropdown.tsx` (100 lines)
+- `FontFamilyDropdown.tsx` (85 lines)
+- `ThemeDropdown.tsx` (225 lines)
+
+**Duplicated Patterns**:
+1. Click-outside handler (18 lines, identical in all 4)
+2. Dropdown structure (40 lines, nearly identical)
+3. Select handler (5 lines, identical)
+
+**Solution**: Create `GenericDropdown.tsx` component (90 lines)
+- Each dropdown reduces to ~20 lines
+- **Total savings**: 280-300 lines
+
+**Implementation**:
+```tsx
+// src/components/GenericDropdown.tsx
+interface GenericDropdownProps<T> {
+  value: T
+  onChange: (value: T) => void
+  options: T[]
+  renderTrigger: (selected: T, isOpen: boolean) => React.ReactNode
+  renderOption: (option: T, isSelected: boolean) => React.ReactNode
+  openUpward?: boolean
+  className?: string
+}
+```
+
+---
+
+#### MEDIUM PRIORITY: Terminal Configuration Duplication
+
+**Problem**: `THEME_BACKGROUNDS` mapping exists in 3 files:
+- SimpleTerminalApp.tsx (lines 217-232)
+- SplitLayout.tsx (lines 11-20)
+- Terminal.tsx (inline in lines 149-174)
+
+**Solution**: Create `src/constants/terminalConfig.ts`
+```tsx
+export const THEME_BACKGROUNDS: Record<string, string> = {
+  'default': 'dark-neutral',
+  'amber': 'amber-warmth',
+  'matrix': 'matrix-depths',
+  // ...
+}
+
+export const DEFAULT_TERMINAL_CONFIG = {
+  TRANSPARENCY: 100,
+  FONT_SIZE: 14,
+  FONT_FAMILY: 'monospace',
+  BACKGROUND: 'dark-neutral',
+}
+```
+
+**Savings**: ~50 lines
+
+---
+
+### 🎯 POPOUT FEATURE REVIEW (↗ Button)
+
+**Overall Quality**: 7/10
+
+**What Works Well**:
+- ✅ Proper window ID assignment and tracking
+- ✅ Preserves terminal sessions via tmux
+- ✅ URL parameters for window targeting
+- ✅ Multi-step cleanup prevents orphaned terminals
+
+**Issues**:
+- ❌ 120-line function is too complex
+- ❌ No rollback if any step fails
+- ❌ Timing assumptions (400ms delay might be fragile)
+- ❌ Limited error handling
+- ❌ No user feedback if popout fails
+
+**Recommended Improvements**:
+1. Extract to `usePopout.ts` hook
+2. Add error rollback logic
+3. Add user feedback for blocked popups
+4. Document the 4-step flow with JSDoc
+5. Add loading state during popout
+
+---
+
+### ⚡ QUICK WINS (Low Effort, High Impact)
+
+#### 1. Extract Constants (15 minutes)
+```tsx
+// src/constants/terminalConfig.ts
+export const THEME_BACKGROUNDS = { /* ... */ }
+export const TERMINAL_TYPE_ABBREVIATIONS = { /* ... */ }
+```
+
+#### 2. Extract Window Utilities (10 minutes)
+```tsx
+// src/utils/windowUtils.ts
+export const generateWindowId = () =>
+  `window-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+```
+
+#### 3. Add Memoization (10 minutes)
+```tsx
+const visibleTerminals = useMemo(() =>
+  storedTerminals.filter(t =>
+    !t.isHidden && (t.windowId || 'main') === currentWindowId
+  ),
+  [storedTerminals, currentWindowId]
+)
+```
+
+#### 4. Add JSDoc Comments (30 minutes)
+- Document popout 4-step flow
+- Explain complex WebSocket logic
+- Document major functions
+
+---
+
+### 📅 REFACTORING ROADMAP
+
+#### Phase 1: Setup (1-2 hours)
+- [ ] Create `src/hooks/`, `src/utils/`, `src/constants/` directories
+- [ ] Create `GenericDropdown.tsx`
+- [ ] Create constants files
+
+#### Phase 2: Dropdown Unification (2-3 hours)
+- [ ] Implement `GenericDropdown.tsx` (90 lines)
+- [ ] Refactor 4 dropdown components (280 lines saved)
+- [ ] Test all dropdowns
+
+#### Phase 3: Terminal Hooks (6-8 hours)
+- [ ] Extract `useTerminalMouse` (117 lines)
+- [ ] Extract `useTerminalTheme` (150 lines)
+- [ ] Extract `useTerminalResize` (120 lines)
+- [ ] Extract `useTerminalFont` (100 lines)
+- [ ] Refactor Terminal.tsx to 700-800 lines
+- [ ] Comprehensive testing
+
+#### Phase 4: SimpleTerminalApp Decomposition (8-10 hours)
+- [ ] Extract WebSocket manager (265 lines)
+- [ ] Extract keyboard shortcuts (85 lines)
+- [ ] Extract drag-drop logic (208 lines)
+- [ ] Extract spawning logic (164 lines)
+- [ ] Extract popout logic (120 lines)
+- [ ] Reduce SimpleTerminalApp to 600-700 lines
+
+#### Phase 5: Split Layout (4-5 hours)
+- [ ] Create `SplitPane.tsx`
+- [ ] Create `SplitContainer.tsx`
+- [ ] Reduce duplication
+
+#### Phase 6: Testing & Polish (4-6 hours)
+- [ ] Add unit tests
+- [ ] Add component tests
+- [ ] Update documentation
+
+**Total Estimated Time**: 25-35 hours (3-4 weeks at 8-10 hrs/week)
+
+---
+
+### 📊 COMPONENT ANALYSIS TABLE
+
+| File | Lines | Grade | Issue | Action |
+|------|-------|-------|-------|--------|
+| SimpleTerminalApp.tsx | 2,207 | D | Too large | REFACTOR - Extract hooks |
+| Terminal.tsx | 1,385 | C+ | Large | REFACTOR - Extract hooks |
+| SettingsModal.tsx | 532 | B | Dense | Extract form + icon picker |
+| SplitLayout.tsx | 507 | B | Duplicated | Consolidate splits |
+| ThemeDropdown.tsx | 225 | B+ | Duplicated | Use GenericDropdown |
+| useRuntimeStore.ts | 383 | B | Large | Review state reduction |
+| terminal-themes.ts | 478 | A | Good | Keep as-is |
+| BackgroundGradientDropdown.tsx | 90 | C | Duplicated | Use GenericDropdown |
+| TextColorThemeDropdown.tsx | 100 | C | Duplicated | Use GenericDropdown |
+| FontFamilyDropdown.tsx | 85 | C | Duplicated | Use GenericDropdown |
+| useSettingsStore.ts | 151 | A | Focused | Keep as-is |
+| simpleTerminalStore.ts | 115 | A | Minimal | Keep as-is |
+
+---
+
+### 🎯 PRIORITY ACTIONS
+
+#### Immediate (This Week)
+1. ✅ Add JSDoc comments to SimpleTerminalApp (explains intent)
+2. ✅ Create `constants/terminalConfig.ts` (eliminates duplication)
+3. ✅ Extract window utility functions (reusability)
+4. ✅ Add memoization for visibleTerminals (performance)
+
+#### Short-term (Next 2 Weeks)
+5. Create GenericDropdown and refactor 4 dropdowns
+6. Extract Terminal.tsx hooks
+7. Begin SimpleTerminalApp decomposition
+
+#### Medium-term (Weeks 3-4)
+8. Complete SimpleTerminalApp extraction
+9. Consolidate SplitLayout
+10. Add unit and component tests
+
+---
+
+### 💡 FINAL ASSESSMENT
+
+**Bottom Line**: The Tabz codebase is **production-ready but not scalable** in its current form. The foundation is solid (Zustand, TypeScript, proper architecture), but rapid development has resulted in two monolithic components that need refactoring.
+
+**Strengths**:
+- ✓ Functionally complete and working well
+- ✓ Good error handling in most places
+- ✓ Modern React patterns used correctly
+- ✓ WebSocket integration is robust
+
+**Weaknesses**:
+- ✗ Component sizes are unmanageable
+- ✗ Code duplication slowing development
+- ✗ No test suite means risky changes
+
+**Recommended Action**: Schedule refactoring sprint (3-4 weeks) to extract components and hooks. This investment will pay dividends in maintenance velocity and feature development.
 
 ---
 
