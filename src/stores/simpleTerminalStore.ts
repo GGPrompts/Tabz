@@ -1,6 +1,18 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
+export interface SplitPane {
+  id: string;
+  terminalId: string; // References another terminal in the store
+  size: number; // Percentage (0-100)
+  position: 'left' | 'right' | 'top' | 'bottom';
+}
+
+export interface SplitLayout {
+  type: 'single' | 'vertical' | 'horizontal';
+  panes: SplitPane[];
+}
+
 export interface Terminal {
   id: string;
   name: string;
@@ -18,6 +30,9 @@ export interface Terminal {
   createdAt: number;
   status?: 'spawning' | 'active' | 'closed' | 'error';
   requestId?: string; // For matching placeholder with WebSocket response
+
+  // Split layout data (Phase 1 of split layout system)
+  splitLayout?: SplitLayout;
 }
 
 interface SimpleTerminalState {

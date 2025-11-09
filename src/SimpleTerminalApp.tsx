@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import './SimpleTerminalApp.css'
 import { Terminal } from './components/Terminal'
+import { SplitLayout } from './components/SplitLayout'
 import { SettingsModal } from './components/SettingsModal'
 import { Agent, TERMINAL_TYPES } from './types'
 import { useSimpleTerminalStore, Terminal as StoredTerminal } from './stores/simpleTerminalStore'
@@ -95,6 +96,14 @@ function SimpleTerminalApp() {
 
     return result
   }, [webSocketAgents, storedTerminals])
+
+  // Expose store to window for testing (development only)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      (window as any).terminalStore = useSimpleTerminalStore;
+      console.log('[Dev] Terminal store exposed to window.terminalStore');
+    }
+  }, []);
 
   // Load spawn options from JSON file
   const loadSpawnOptions = () => {
@@ -1122,20 +1131,15 @@ function SimpleTerminalApp() {
                   }}
                   className="terminal-wrapper"
                 >
-                  <Terminal
-                    key={`term-${terminal.id}`}
-                    ref={terminal.id === activeTerminalId ? terminalRef : null}
-                    agent={agent}
-                    onClose={() => handleCloseTerminal(terminal.id)}
-                    onCommand={(cmd) => handleCommand(cmd, terminal.id)}
+                  <SplitLayout
+                    terminal={terminal}
+                    terminals={storedTerminals}
+                    agents={webSocketAgents}
+                    onClose={handleCloseTerminal}
+                    onCommand={handleCommand}
                     wsRef={wsRef}
-                    embedded={true}
-                    initialTheme={terminal.theme}
-                    initialBackground={terminal.background || THEME_BACKGROUNDS[terminal.theme || 'default'] || 'dark-neutral'}
-                    initialOpacity={terminal.transparency !== undefined ? terminal.transparency / 100 : 1}
-                    initialFontSize={terminal.fontSize}
-                    initialFontFamily={terminal.fontFamily}
-                    isSelected={terminal.id === activeTerminalId}
+                    terminalRef={terminalRef}
+                    activeTerminalId={activeTerminalId}
                   />
                 </div>
               )
