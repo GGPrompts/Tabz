@@ -713,32 +713,8 @@ function SimpleTerminalApp() {
     terminalRef.current.updateTheme(theme)
     // Save to this terminal's state (persisted in localStorage)
     updateTerminal(displayTerminal.id, { theme })
-
-    // Send Ctrl+L to refresh the terminal display via tmux API
-    // ONLY for utility terminals - agent terminals (codex, claude-code, etc.) don't need/want Ctrl+L
-    const agentTypes = ['claude-code', 'opencode', 'codex', 'orchestrator', 'gemini']
-    const isAgentTerminal = agentTypes.includes(displayTerminal.terminalType)
-
-    if (displayTerminal.sessionName && !isAgentTerminal) {
-      setTimeout(async () => {
-        try {
-          // Use tmux send-keys with C-l (Ctrl+L) which is more reliable than typing "clear"
-          const response = await fetch(`/api/tmux/refresh/${displayTerminal.sessionName}`, {
-            method: 'POST',
-          })
-          const result = await response.json()
-          if (result.success) {
-            console.log('[SimpleTerminalApp] Sent Ctrl+L refresh to tmux session after theme change')
-          } else {
-            console.warn('[SimpleTerminalApp] Failed to send Ctrl+L:', result.error)
-          }
-        } catch (error) {
-          console.error('[SimpleTerminalApp] Error sending tmux refresh:', error)
-        }
-      }, 700) // Wait for theme change to complete
-    } else if (isAgentTerminal) {
-      console.log('[SimpleTerminalApp] Skipping Ctrl+L for agent terminal:', displayTerminal.terminalType)
-    }
+    // Note: Theme refresh is handled by useTerminalTheme hook in Terminal.tsx
+    // No tmux-level refresh needed - it would interfere with running applications
   }
 
   const handleBackgroundChange = (background: string) => {
@@ -785,34 +761,8 @@ function SimpleTerminalApp() {
     // Save to this terminal's state (persisted in localStorage)
     updateTerminal(displayTerminal.id, { fontFamily })
     console.log('[SimpleTerminalApp] ✓ Saved to localStorage')
-
-    // Send Ctrl+L to refresh the terminal display via tmux API
-    // ONLY for utility terminals - agent terminals don't need/want Ctrl+L
-    const agentTypes = ['claude-code', 'opencode', 'codex', 'orchestrator', 'gemini']
-    const isAgentTerminal = agentTypes.includes(displayTerminal.terminalType)
-
-    if (displayTerminal.sessionName && !isAgentTerminal) {
-      setTimeout(async () => {
-        try {
-          console.log('[SimpleTerminalApp] Sending Ctrl+L to session:', displayTerminal.sessionName)
-          const response = await fetch(`/api/tmux/refresh/${displayTerminal.sessionName}`, {
-            method: 'POST',
-          })
-          const result = await response.json()
-          if (result.success) {
-            console.log('[SimpleTerminalApp] ✓ Sent Ctrl+L refresh to tmux session')
-          } else {
-            console.warn('[SimpleTerminalApp] ✗ Failed to send Ctrl+L:', result.error)
-          }
-        } catch (error) {
-          console.error('[SimpleTerminalApp] ✗ Error sending tmux refresh:', error)
-        }
-      }, 300)
-    } else if (isAgentTerminal) {
-      console.log('[SimpleTerminalApp] Skipping Ctrl+L for agent terminal:', displayTerminal.terminalType)
-    } else if (!displayTerminal.sessionName) {
-      console.warn('[SimpleTerminalApp] No sessionName, cannot send Ctrl+L')
-    }
+    // Note: Font refresh is handled by useTerminalFont hook in Terminal.tsx
+    // No tmux-level refresh needed - it would interfere with running applications
   }
 
   // Compute dynamic background based on active terminal's background setting
