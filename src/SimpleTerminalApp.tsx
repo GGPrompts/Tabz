@@ -977,7 +977,7 @@ function SimpleTerminalApp() {
         onMouseEnter={handleHeaderHover}
         onMouseMove={handleHeaderHover}
       >
-        <div className="app-title">Tabz</div>
+        <div className="app-title">Tab<span style={{ fontFamily: 'monospace', fontSize: '0.9em' }}>&gt;_</span></div>
 
         {/* Tmux Toggle */}
         <div className="tmux-toggle-container">
