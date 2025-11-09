@@ -6,12 +6,15 @@ import { Terminal as StoredTerminal } from '../stores/simpleTerminalStore'
  *
  * Manages global keyboard event listeners for:
  * - Escape: Close spawn menu
- * - Ctrl+T: Spawn first option (default) or toggle spawn menu
- * - Ctrl+W: Close active tab
- * - Ctrl+Tab: Next tab
- * - Ctrl+Shift+Tab: Previous tab
- * - Ctrl+Shift+T: Reopen last closed tab
- * - Ctrl+1-9: Jump to tab N
+ * - Alt+T: Spawn first option (default) or toggle spawn menu
+ * - Alt+W: Close active tab
+ * - Alt+Tab: Next tab
+ * - Alt+Shift+Tab: Previous tab
+ * - Ctrl+Shift+T: Reopen last closed tab (matches browser behavior)
+ * - Alt+1-9: Jump to tab N
+ *
+ * NOTE: Uses Alt modifier instead of Ctrl to avoid conflicts with browser shortcuts
+ * (Ctrl+1-9 switches browser tabs, Ctrl+T opens new browser tab, etc.)
  *
  * @param showSpawnMenu - Whether spawn menu is currently visible
  * @param activeTerminalId - ID of currently active terminal
@@ -43,8 +46,8 @@ export function useKeyboardShortcuts(
         return
       }
 
-      // Ctrl+T - Spawn first option (default)
-      if (e.ctrlKey && e.key === 't') {
+      // Alt+T - Spawn first option (default)
+      if (e.altKey && e.key === 't') {
         e.preventDefault()
         if (spawnOptions.length > 0) {
           handleSpawnTerminal(spawnOptions[0])
@@ -54,8 +57,8 @@ export function useKeyboardShortcuts(
         return
       }
 
-      // Ctrl+W - Close active tab
-      if (e.ctrlKey && e.key === 'w') {
+      // Alt+W - Close active tab
+      if (e.altKey && e.key === 'w') {
         e.preventDefault()
         if (activeTerminalId) {
           const terminal = visibleTerminals.find(t => t.id === activeTerminalId)
@@ -71,8 +74,8 @@ export function useKeyboardShortcuts(
         return
       }
 
-      // Ctrl+Tab - Next tab
-      if (e.ctrlKey && e.key === 'Tab' && !e.shiftKey) {
+      // Alt+Tab - Next tab
+      if (e.altKey && e.key === 'Tab' && !e.shiftKey) {
         e.preventDefault()
         if (visibleTerminals.length > 0) {
           const currentIndex = visibleTerminals.findIndex(t => t.id === activeTerminalId)
@@ -82,8 +85,8 @@ export function useKeyboardShortcuts(
         return
       }
 
-      // Ctrl+Shift+Tab - Previous tab
-      if (e.ctrlKey && e.shiftKey && e.key === 'Tab') {
+      // Alt+Shift+Tab - Previous tab
+      if (e.altKey && e.shiftKey && e.key === 'Tab') {
         e.preventDefault()
         if (visibleTerminals.length > 0) {
           const currentIndex = visibleTerminals.findIndex(t => t.id === activeTerminalId)
@@ -93,7 +96,7 @@ export function useKeyboardShortcuts(
         return
       }
 
-      // Ctrl+Shift+T - Reopen last closed tab
+      // Ctrl+Shift+T - Reopen last closed tab (matches browser "reopen closed tab" behavior)
       if (e.ctrlKey && e.shiftKey && e.key === 'T') {
         e.preventDefault()
         if (lastClosedTerminalRef.current) {
@@ -107,8 +110,8 @@ export function useKeyboardShortcuts(
         return
       }
 
-      // Ctrl+1-9 - Jump to tab N
-      if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
+      // Alt+1-9 - Jump to tab N
+      if (e.altKey && e.key >= '1' && e.key <= '9') {
         e.preventDefault()
         const tabIndex = parseInt(e.key) - 1
         if (tabIndex < visibleTerminals.length) {
