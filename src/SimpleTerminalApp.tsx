@@ -1045,6 +1045,18 @@ function SimpleTerminalApp() {
     }
   }
 
+  // Pop out tab to new browser tab
+  const handlePopOutTab = (terminalId: string) => {
+    const terminal = storedTerminals.find(t => t.id === terminalId)
+    if (!terminal) return
+
+    // Open new browser tab with just this terminal
+    const url = `${window.location.origin}${window.location.pathname}?terminal=${terminalId}`
+    window.open(url, `terminal-${terminalId}`)
+
+    console.log(`[SimpleTerminalApp] Popped out ${terminal.name} to new browser tab`)
+  }
+
   const handleCloseTerminal = (terminalId: string) => {
     const terminal = storedTerminals.find(t => t.id === terminalId)
     if (terminal && terminal.agentId) {
@@ -1647,8 +1659,8 @@ function SimpleTerminalApp() {
         </button>
       </div>
 
-      {/* Tab Bar */}
-      <DndContext
+      {/* Tab Bar (hidden in single terminal view) */}
+      {!isSingleTerminalView && <DndContext
         sensors={sensors}
         collisionDetection={customCollisionDetection}
         onDragStart={handleDragStart}

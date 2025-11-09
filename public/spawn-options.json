@@ -1,19 +1,6 @@
 {
   "spawnOptions": [
     {
-      "label": "TFE",
-      "command": "tfe",
-      "terminalType": "bash",
-      "workingDir": "~/projects",
-      "icon": "📁",
-      "description": "Terminal File Explorer",
-      "defaultTheme": "default",
-      "defaultTransparency": 95,
-      "defaultFontSize": 20,
-      "defaultFontFamily": "'Fira Code', monospace",
-      "defaultBackground": "dark-neutral"
-    },
-    {
       "label": "Bash",
       "command": "",
       "terminalType": "bash",
@@ -21,6 +8,19 @@
       "description": "Plain bash terminal",
       "defaultTheme": "matrix",
       "defaultTransparency": 90
+    },
+    {
+      "label": "TFE",
+      "command": "tfe",
+      "terminalType": "bash",
+      "workingDir": "~/projects",
+      "icon": "📁",
+      "description": "Terminal File Explorer",
+      "defaultTheme": "vaporwave",
+      "defaultTransparency": 95,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "'Fira Code', monospace",
+      "defaultBackground": "matrix-depths"
     },
     {
       "label": "Claude (skip permissions)",
@@ -35,6 +35,15 @@
       "defaultBackground": "dark-neutral"
     },
     {
+      "label": "Codex",
+      "command": "codex",
+      "terminalType": "codex",
+      "icon": "📚",
+      "description": "Codex AI assistant",
+      "defaultTheme": "amber",
+      "defaultTransparency": 100
+    },
+    {
       "label": "TUI Classic Games",
       "command": "./classics",
       "terminalType": "bash",
@@ -46,15 +55,6 @@
       "defaultTransparency": 100,
       "defaultFontFamily": "monospace",
       "defaultFontSize": 18
-    },
-    {
-      "label": "Codex",
-      "command": "codex",
-      "terminalType": "codex",
-      "icon": "📚",
-      "description": "Codex AI assistant",
-      "defaultTheme": "amber",
-      "defaultTransparency": 100
     },
     {
       "label": "Tmuxplexer",
