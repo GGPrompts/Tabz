@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import './SettingsModal.css'
 import { backgroundGradients } from '../styles/terminal-backgrounds'
+import { FontFamilyDropdown } from './FontFamilyDropdown'
+import { BackgroundGradientDropdown } from './BackgroundGradientDropdown'
+import { TextColorThemeDropdown } from './TextColorThemeDropdown'
 
 interface SpawnOption {
   label: string
@@ -337,7 +340,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                         onClick={() => handleEditOption(index)}
                         title="Edit"
                       >
-                        ✏️
+                        🎨
                       </button>
                       <button
                         className="delete-btn"
@@ -457,37 +460,17 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
               <div className="form-row">
                 <label>
                   Text Color Theme
-                  <select
+                  <TextColorThemeDropdown
                     value={formData.defaultTheme}
-                    onChange={(e) => setFormData({ ...formData, defaultTheme: e.target.value })}
-                  >
-                    <option value="default">Default</option>
-                    <option value="amber">Amber</option>
-                    <option value="matrix">Matrix Green</option>
-                    <option value="dracula">Dracula</option>
-                    <option value="monokai">Monokai</option>
-                    <option value="solarized-dark">Solarized Dark</option>
-                    <option value="github-dark">GitHub Dark</option>
-                    <option value="cyberpunk">Cyberpunk Neon</option>
-                    <option value="holographic">Holographic</option>
-                    <option value="vaporwave">Vaporwave</option>
-                    <option value="retro">Retro Amber</option>
-                    <option value="synthwave">Synthwave</option>
-                    <option value="aurora">Aurora Borealis</option>
-                  </select>
+                    onChange={(value) => setFormData({ ...formData, defaultTheme: value })}
+                  />
                 </label>
                 <label>
                   Background Gradient
-                  <select
+                  <BackgroundGradientDropdown
                     value={formData.defaultBackground}
-                    onChange={(e) => setFormData({ ...formData, defaultBackground: e.target.value })}
-                  >
-                    {Object.entries(backgroundGradients).map(([key, bg]) => (
-                      <option key={key} value={key}>
-                        {bg.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => setFormData({ ...formData, defaultBackground: value })}
+                  />
                 </label>
               </div>
 
@@ -509,18 +492,10 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
               <div className="form-row">
                 <label>
                   Font Family
-                  <select
+                  <FontFamilyDropdown
                     value={formData.defaultFontFamily}
-                    onChange={(e) => setFormData({ ...formData, defaultFontFamily: e.target.value })}
-                  >
-                    <option value="monospace">Monospace (Default)</option>
-                    <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
-                    <option value="'Fira Code', monospace">Fira Code</option>
-                    <option value="'Source Code Pro', monospace">Source Code Pro</option>
-                    <option value="'Menlo', monospace">Menlo</option>
-                    <option value="'Consolas', monospace">Consolas</option>
-                    <option value="'Monaco', monospace">Monaco</option>
-                  </select>
+                    onChange={(value) => setFormData({ ...formData, defaultFontFamily: value })}
+                  />
                 </label>
                 <label>
                   Font Size (px)

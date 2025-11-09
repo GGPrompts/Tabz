@@ -1050,6 +1050,17 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
     React.useImperativeHandle(ref, () => ({
       updateTheme: (themeName: string) => {
         handleThemeChange(themeName);
+        // After theme change completes, do a final cleanup to ensure canvas is properly rendered
+        setTimeout(() => {
+          if (xtermRef.current && fitAddonRef.current) {
+            // Scroll to bottom to ensure content is visible
+            xtermRef.current.scrollToBottom();
+            // Final fit to ensure everything is sized correctly
+            fitAddonRef.current.fit();
+            // Send resize to backend to ensure PTY is in sync
+            debouncedResize(agent.id, xtermRef.current.cols, xtermRef.current.rows);
+          }
+        }, 600);
       },
       updateBackground: (backgroundKey: string) => {
         setCurrentBackground(backgroundKey);
@@ -1080,15 +1091,31 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       },
       updateFontFamily: (newFontFamily: string) => {
         if (xtermRef.current && fitAddonRef.current) {
-          xtermRef.current.options.fontFamily = newFontFamily;
+          console.log('[Terminal] updateFontFamily called with:', newFontFamily);
+          console.log('[Terminal] Current font:', xtermRef.current.options.fontFamily);
 
-          // Refresh and refit terminal after font family change
+          // Store current scroll position
+          const currentScrollPos = xtermRef.current.buffer.active.viewportY;
+
+          xtermRef.current.options.fontFamily = newFontFamily;
+          console.log('[Terminal] Set new font:', xtermRef.current.options.fontFamily);
+
+          // Force complete redraw by clearing renderer cache
+          // This is necessary because the canvas renderer caches glyphs
           setTimeout(() => {
             if (xtermRef.current && fitAddonRef.current) {
-              // Refresh the terminal content to redraw with new font
+              console.log('[Terminal] Clearing and refitting after font change');
+
+              // Clear the screen (forces renderer to redraw everything)
+              xtermRef.current.clear();
+
+              // Restore viewport position
+              xtermRef.current.scrollToLine(currentScrollPos);
+
+              // Full refresh
               xtermRef.current.refresh(0, xtermRef.current.rows - 1);
 
-              // Refit to adjust dimensions
+              // Refit
               fitAddonRef.current.fit();
 
               // Send new dimensions to backend PTY
@@ -1097,6 +1124,8 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
                 xtermRef.current.cols,
                 xtermRef.current.rows,
               );
+
+              console.log('[Terminal] Font change complete');
             }
           }, 100);
         }

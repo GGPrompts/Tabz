@@ -3,6 +3,9 @@ import './SimpleTerminalApp.css'
 import { Terminal } from './components/Terminal'
 import { SplitLayout } from './components/SplitLayout'
 import { SettingsModal } from './components/SettingsModal'
+import { FontFamilyDropdown } from './components/FontFamilyDropdown'
+import { BackgroundGradientDropdown } from './components/BackgroundGradientDropdown'
+import { TextColorThemeDropdown } from './components/TextColorThemeDropdown'
 import { Agent, TERMINAL_TYPES } from './types'
 import { useSimpleTerminalStore, Terminal as StoredTerminal } from './stores/simpleTerminalStore'
 import { useSettingsStore } from './stores/useSettingsStore'
@@ -1456,16 +1459,34 @@ function SimpleTerminalApp() {
   }
 
   const handleThemeChange = (theme: string) => {
-    if (!displayTerminal || !terminalRef.current) return
+    if (!displayTerminal || !terminalRef.current) {
+      console.warn('[SimpleTerminalApp] handleThemeChange called but displayTerminal or terminalRef.current is null', { displayTerminal: displayTerminal?.id, hasRef: !!terminalRef.current })
+      return
+    }
+    console.log('[SimpleTerminalApp] Changing theme to:', theme, 'for terminal:', displayTerminal.id)
     terminalRef.current.updateTheme(theme)
     // Save to this terminal's state (persisted in localStorage)
     updateTerminal(displayTerminal.id, { theme })
-    // Give theme change time to apply, then refit
-    setTimeout(() => {
-      if (terminalRef.current) {
-        terminalRef.current.refit()
-      }
-    }, 350)
+
+    // Send Ctrl+L to refresh the terminal display via tmux API
+    if (displayTerminal.sessionName) {
+      setTimeout(async () => {
+        try {
+          // Use tmux send-keys with C-l (Ctrl+L) which is more reliable than typing "clear"
+          const response = await fetch(`/api/tmux/refresh/${displayTerminal.sessionName}`, {
+            method: 'POST',
+          })
+          const result = await response.json()
+          if (result.success) {
+            console.log('[SimpleTerminalApp] Sent Ctrl+L refresh to tmux session after theme change')
+          } else {
+            console.warn('[SimpleTerminalApp] Failed to send Ctrl+L:', result.error)
+          }
+        } catch (error) {
+          console.error('[SimpleTerminalApp] Error sending tmux refresh:', error)
+        }
+      }, 700) // Wait for theme change to complete
+    }
   }
 
   const handleBackgroundChange = (background: string) => {
@@ -1486,16 +1507,54 @@ function SimpleTerminalApp() {
   }
 
   const handleFontFamilyChange = (fontFamily: string) => {
-    if (!displayTerminal || !terminalRef.current) return
-    terminalRef.current.updateFontFamily(fontFamily)
+    if (!displayTerminal || !terminalRef.current) {
+      console.warn('[SimpleTerminalApp] handleFontFamilyChange called but displayTerminal or terminalRef.current is null', {
+        displayTerminal: displayTerminal?.id,
+        hasRef: !!terminalRef.current,
+        focusedTerminalId,
+        activeTerminalId
+      })
+      return
+    }
+    console.log('[SimpleTerminalApp] ===== FONT FAMILY CHANGE =====')
+    console.log('[SimpleTerminalApp] Changing font family to:', fontFamily)
+    console.log('[SimpleTerminalApp] For terminal:', displayTerminal.id, displayTerminal.name)
+    console.log('[SimpleTerminalApp] Session name:', displayTerminal.sessionName)
+    console.log('[SimpleTerminalApp] terminalRef exists:', !!terminalRef.current)
+
+    // Try to update font
+    try {
+      terminalRef.current.updateFontFamily(fontFamily)
+      console.log('[SimpleTerminalApp] ✓ updateFontFamily called successfully')
+    } catch (error) {
+      console.error('[SimpleTerminalApp] ✗ Error calling updateFontFamily:', error)
+    }
+
     // Save to this terminal's state (persisted in localStorage)
     updateTerminal(displayTerminal.id, { fontFamily })
-    // Refit after font family change (especially important for Claude Code/TUI apps)
-    setTimeout(() => {
-      if (terminalRef.current) {
-        terminalRef.current.refit()
-      }
-    }, 350)
+    console.log('[SimpleTerminalApp] ✓ Saved to localStorage')
+
+    // Send Ctrl+L to refresh the terminal display via tmux API
+    if (displayTerminal.sessionName) {
+      setTimeout(async () => {
+        try {
+          console.log('[SimpleTerminalApp] Sending Ctrl+L to session:', displayTerminal.sessionName)
+          const response = await fetch(`/api/tmux/refresh/${displayTerminal.sessionName}`, {
+            method: 'POST',
+          })
+          const result = await response.json()
+          if (result.success) {
+            console.log('[SimpleTerminalApp] ✓ Sent Ctrl+L refresh to tmux session')
+          } else {
+            console.warn('[SimpleTerminalApp] ✗ Failed to send Ctrl+L:', result.error)
+          }
+        } catch (error) {
+          console.error('[SimpleTerminalApp] ✗ Error sending tmux refresh:', error)
+        }
+      }, 300)
+    } else {
+      console.warn('[SimpleTerminalApp] No sessionName, cannot send Ctrl+L')
+    }
   }
 
   // Compute dynamic background based on active terminal's background setting
@@ -1795,38 +1854,20 @@ function SimpleTerminalApp() {
             <div className="customize-modal-body">
               <label>
                 Text Color Theme
-                <select
+                <TextColorThemeDropdown
                   value={displayTerminal.theme || 'default'}
-                  onChange={(e) => handleThemeChange(e.target.value)}
-                >
-                  <option value="default">Default</option>
-                  <option value="amber">Amber</option>
-                  <option value="matrix">Matrix Green</option>
-                  <option value="dracula">Dracula</option>
-                  <option value="monokai">Monokai</option>
-                  <option value="solarized-dark">Solarized Dark</option>
-                  <option value="github-dark">GitHub Dark</option>
-                  <option value="cyberpunk">Cyberpunk Neon</option>
-                  <option value="holographic">Holographic</option>
-                  <option value="vaporwave">Vaporwave</option>
-                  <option value="retro">Retro Amber</option>
-                  <option value="synthwave">Synthwave</option>
-                  <option value="aurora">Aurora Borealis</option>
-                </select>
+                  onChange={handleThemeChange}
+                  openUpward={true}
+                />
               </label>
 
               <label>
                 Background Gradient
-                <select
+                <BackgroundGradientDropdown
                   value={displayTerminal.background || 'dark-neutral'}
-                  onChange={(e) => handleBackgroundChange(e.target.value)}
-                >
-                  {Object.entries(backgroundGradients).map(([key, bg]) => (
-                    <option key={key} value={key}>
-                      {bg.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={handleBackgroundChange}
+                  openUpward={true}
+                />
               </label>
 
               <label>
@@ -1842,18 +1883,11 @@ function SimpleTerminalApp() {
 
               <label>
                 Font Family
-                <select
+                <FontFamilyDropdown
                   value={displayTerminal.fontFamily || 'monospace'}
-                  onChange={(e) => handleFontFamilyChange(e.target.value)}
-                >
-                  <option value="monospace">Monospace (Default)</option>
-                  <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
-                  <option value="'Fira Code', monospace">Fira Code</option>
-                  <option value="'Source Code Pro', monospace">Source Code Pro</option>
-                  <option value="'Menlo', monospace">Menlo</option>
-                  <option value="'Consolas', monospace">Consolas</option>
-                  <option value="'Monaco', monospace">Monaco</option>
-                </select>
+                  onChange={handleFontFamilyChange}
+                  openUpward={true}
+                />
               </label>
             </div>
           </div>

@@ -650,6 +650,29 @@ router.post('/tmux/sessions/:name/command', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * POST /api/tmux/refresh/:name - Send Ctrl+L to refresh terminal
+ */
+router.post('/tmux/refresh/:name', asyncHandler(async (req, res) => {
+  const { name } = req.params;
+  const { execSync } = require('child_process');
+
+  try {
+    // Send Ctrl+L using tmux send-keys
+    execSync(`tmux send-keys -t "${name}" C-l`);
+
+    res.json({
+      success: true,
+      message: `Sent Ctrl+L to session ${name}`
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}));
+
+/**
  * DELETE /api/tmux/sessions/:name - Kill a tmux session
  * WARNING: This is destructive and cannot be undone
  */
