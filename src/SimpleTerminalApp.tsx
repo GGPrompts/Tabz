@@ -715,7 +715,11 @@ function SimpleTerminalApp() {
     updateTerminal(displayTerminal.id, { theme })
 
     // Send Ctrl+L to refresh the terminal display via tmux API
-    if (displayTerminal.sessionName) {
+    // ONLY for utility terminals - agent terminals (codex, claude-code, etc.) don't need/want Ctrl+L
+    const agentTypes = ['claude-code', 'opencode', 'codex', 'orchestrator', 'gemini']
+    const isAgentTerminal = agentTypes.includes(displayTerminal.terminalType)
+
+    if (displayTerminal.sessionName && !isAgentTerminal) {
       setTimeout(async () => {
         try {
           // Use tmux send-keys with C-l (Ctrl+L) which is more reliable than typing "clear"
@@ -732,6 +736,8 @@ function SimpleTerminalApp() {
           console.error('[SimpleTerminalApp] Error sending tmux refresh:', error)
         }
       }, 700) // Wait for theme change to complete
+    } else if (isAgentTerminal) {
+      console.log('[SimpleTerminalApp] Skipping Ctrl+L for agent terminal:', displayTerminal.terminalType)
     }
   }
 
@@ -781,7 +787,11 @@ function SimpleTerminalApp() {
     console.log('[SimpleTerminalApp] ✓ Saved to localStorage')
 
     // Send Ctrl+L to refresh the terminal display via tmux API
-    if (displayTerminal.sessionName) {
+    // ONLY for utility terminals - agent terminals don't need/want Ctrl+L
+    const agentTypes = ['claude-code', 'opencode', 'codex', 'orchestrator', 'gemini']
+    const isAgentTerminal = agentTypes.includes(displayTerminal.terminalType)
+
+    if (displayTerminal.sessionName && !isAgentTerminal) {
       setTimeout(async () => {
         try {
           console.log('[SimpleTerminalApp] Sending Ctrl+L to session:', displayTerminal.sessionName)
@@ -798,7 +808,9 @@ function SimpleTerminalApp() {
           console.error('[SimpleTerminalApp] ✗ Error sending tmux refresh:', error)
         }
       }, 300)
-    } else {
+    } else if (isAgentTerminal) {
+      console.log('[SimpleTerminalApp] Skipping Ctrl+L for agent terminal:', displayTerminal.terminalType)
+    } else if (!displayTerminal.sessionName) {
       console.warn('[SimpleTerminalApp] No sessionName, cannot send Ctrl+L')
     }
   }
