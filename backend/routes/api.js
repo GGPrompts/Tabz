@@ -561,6 +561,62 @@ router.get('/tmux/sessions/:name/info', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * GET /api/tmux/sessions/:name/metadata - Get Tabz metadata from session variables
+ * Returns metadata stored in @tabz-* tmux session variables
+ */
+router.get('/tmux/sessions/:name/metadata', asyncHandler(async (req, res) => {
+  const { execSync } = require('child_process');
+  const { name: sessionName } = req.params;
+
+  try {
+    // Check if session exists
+    try {
+      execSync(`tmux has-session -t "${sessionName}" 2>/dev/null`);
+    } catch {
+      return res.status(404).json({
+        success: false,
+        error: `Session ${sessionName} not found`
+      });
+    }
+
+    // Helper function to safely read a tmux option
+    const getOption = (key) => {
+      try {
+        const value = execSync(`tmux show-options -t "${sessionName}" -v ${key} 2>/dev/null`, { encoding: 'utf8' }).trim();
+        return value || null;
+      } catch {
+        return null; // Option doesn't exist
+      }
+    };
+
+    // Read all Tabz metadata
+    const metadata = {
+      terminalType: getOption('@tabz-terminal-type') || 'bash',
+      name: getOption('@tabz-name') || null,
+      icon: getOption('@tabz-icon') || '❓',
+      command: getOption('@tabz-command') || '',
+      theme: getOption('@tabz-theme') || 'amber',
+      background: getOption('@tabz-background') || 'dark-neutral',
+      fontSize: parseInt(getOption('@tabz-font-size') || '16', 10),
+    };
+
+    // Check if this session has ANY Tabz metadata
+    const hasMetadata = getOption('@tabz-terminal-type') !== null;
+
+    res.json({
+      success: true,
+      hasMetadata, // True if session was spawned by Tabz
+      data: metadata
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: `Failed to get metadata for session ${sessionName}: ${error.message}`
+    });
+  }
+}));
+
+/**
  * GET /api/terminals/:id/cwd - Get current working directory for a terminal
  */
 router.get('/terminals/:id/cwd', asyncHandler(async (req, res) => {

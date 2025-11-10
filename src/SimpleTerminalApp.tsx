@@ -1009,18 +1009,50 @@ function SimpleTerminalApp() {
     }
 
     try {
-      const response = await fetch(`/api/tmux/sessions/${agent.sessionName}/info`)
-      const result = await response.json()
+      // Fetch both pane title and Tabz metadata from tmux
+      const [infoResponse, metadataResponse] = await Promise.all([
+        fetch(`/api/tmux/sessions/${agent.sessionName}/info`),
+        fetch(`/api/tmux/sessions/${agent.sessionName}/metadata`)
+      ])
 
-      if (result.success && result.data.paneTitle) {
-        updateTerminal(contextMenu.terminalId, { name: result.data.paneTitle })
-        console.log(`[SimpleTerminalApp] Updated tab name from tmux: ${result.data.paneTitle}`)
-      } else {
-        alert('Failed to fetch pane title from tmux')
+      const infoResult = await infoResponse.json()
+      const metadataResult = await metadataResponse.json()
+
+      if (!infoResult.success) {
+        alert('Failed to fetch pane info from tmux')
+        return
       }
+
+      // Build update object with pane title + metadata (if available)
+      const updates: Partial<Terminal> = {
+        name: infoResult.data.paneTitle
+      }
+
+      // If session has Tabz metadata, restore it
+      if (metadataResult.success && metadataResult.hasMetadata) {
+        const metadata = metadataResult.data
+
+        // Only update metadata fields if they exist in tmux
+        if (metadata.terminalType) updates.terminalType = metadata.terminalType
+        if (metadata.icon) updates.icon = metadata.icon
+        if (metadata.command) updates.command = metadata.command
+        if (metadata.theme) updates.theme = metadata.theme
+        if (metadata.background) updates.background = metadata.background
+        if (metadata.fontSize) updates.fontSize = metadata.fontSize
+
+        // If metadata.name exists, prefer it over paneTitle
+        if (metadata.name) updates.name = metadata.name
+
+        console.log(`✅ Restored full metadata from tmux:`, metadata)
+      } else {
+        console.log(`ℹ️ No Tabz metadata found, updated name only`)
+      }
+
+      updateTerminal(contextMenu.terminalId, updates)
+      console.log(`[SimpleTerminalApp] Updated terminal from tmux:`, updates)
     } catch (error) {
       console.error('[SimpleTerminalApp] Error fetching tmux info:', error)
-      alert('Error fetching pane title from tmux')
+      alert('Error fetching terminal info from tmux')
     }
   }
 

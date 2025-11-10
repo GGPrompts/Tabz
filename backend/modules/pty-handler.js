@@ -194,6 +194,33 @@ class PTYHandler extends EventEmitter {
             // This allows tabs to auto-close when you type 'exit' or Ctrl+D
             execSync(`tmux set-option -t "${sessionName}" remain-on-exit off`);
 
+            // Store Tabz metadata in tmux session variables (@tabz-* prefix)
+            // This allows external tools and Tabz to restore terminal metadata after crashes/detaches
+            try {
+              const metadata = {
+                '@tabz-terminal-type': terminalType || 'bash',
+                '@tabz-name': name || 'Terminal',
+                '@tabz-icon': terminalConfig.icon || '🖥️',
+                '@tabz-command': terminalConfig.command || '',
+                '@tabz-theme': terminalConfig.theme || 'amber',
+                '@tabz-background': terminalConfig.background || 'dark-neutral',
+                '@tabz-font-size': (terminalConfig.fontSize || 16).toString(),
+              };
+
+              for (const [key, value] of Object.entries(metadata)) {
+                if (value) {
+                  // Escape double quotes in value to prevent command injection
+                  const escapedValue = value.toString().replace(/"/g, '\\"');
+                  execSync(`tmux set-option -t "${sessionName}" ${key} "${escapedValue}"`);
+                }
+              }
+
+              log.debug(`Stored Tabz metadata in session ${sessionName}:`, metadata);
+            } catch (metadataError) {
+              log.warn(`Failed to store metadata for ${sessionName}:`, metadataError.message);
+              // Non-fatal - session still works without metadata
+            }
+
             log.success(`Tmux session created: ${sessionName}`);
           } catch (tmuxError) {
             log.error('Failed to create tmux session:', tmuxError);
