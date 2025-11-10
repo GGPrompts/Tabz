@@ -42,7 +42,7 @@ export function useTerminalSpawning(
   wsRef: React.RefObject<WebSocket | null>,
   pendingSpawns: React.MutableRefObject<Map<string, StoredTerminal>>
 ) {
-  const { addTerminal, updateTerminal, setActiveTerminal } = useSimpleTerminalStore()
+  const { terminals: storedTerminals, addTerminal, updateTerminal, setActiveTerminal } = useSimpleTerminalStore()
 
   /**
    * Generate short session name like "tt-cc-a3k" (Tabz - Claude Code - random suffix)
@@ -80,11 +80,32 @@ export function useTerminalSpawning(
       // Generate short session name (e.g., "tt-cc-1", "tt-tfe-1")
       const sessionName = useTmux ? generateSessionName(option.terminalType, option.label, option.command) : undefined
 
+      // Generate unique name if there are existing terminals with same label
+      // Critical for fast-spawning terminals like Bash to avoid race conditions
+      // Only check terminals in CURRENT window for proper numbering after popouts
+      const terminalsInCurrentWindow = storedTerminals.filter(t =>
+        (t.windowId || 'main') === currentWindowId
+      )
+
+      // Check if base name is taken in this window
+      const baseNameTaken = terminalsInCurrentWindow.some(t => t.name === option.label)
+
+      let uniqueName = option.label
+      if (baseNameTaken) {
+        // Find lowest available number (Bash-2, Bash-3, etc.)
+        // After popout, this ensures we fill gaps (e.g., Bash-2, Bash-4 → next is Bash-3)
+        let counter = 2
+        while (terminalsInCurrentWindow.some(t => t.name === `${option.label}-${counter}`)) {
+          counter++
+        }
+        uniqueName = `${option.label}-${counter}`
+      }
+
       // Create placeholder terminal IMMEDIATELY (before spawn)
       const globalWorkingDir = useSettingsStore.getState().workingDirectory || '~'
       const newTerminal: StoredTerminal = {
         id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        name: option.label,
+        name: uniqueName,
         terminalType: option.terminalType,
         command: option.command, // Store original command for matching during reconnection
         icon: option.icon,

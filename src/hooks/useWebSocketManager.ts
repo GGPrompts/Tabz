@@ -158,12 +158,14 @@ export function useWebSocketManager(
                 const updated = [...prev]
                 updated[existingIndex] = {
                   ...message.data,
+                  name: existingTerminal.name,  // Use frontend's unique name, not backend's
                   status: message.data.state || message.data.status || 'active',
                 }
                 return updated
               }
               return [...prev, {
                 ...message.data,
+                name: existingTerminal.name,  // Use frontend's unique name, not backend's
                 status: message.data.state || message.data.status || 'active',
               }]
             })

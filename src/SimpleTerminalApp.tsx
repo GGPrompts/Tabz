@@ -101,24 +101,44 @@ function SortableTab({ terminal, isActive, onActivate, onClose, onContextMenu, d
 
   // Determine if we're in an edge zone or center zone for visual feedback
   const [isEdgeZone, setIsEdgeZone] = React.useState(false)
+
+  // Update edge zone continuously during drag using requestAnimationFrame
   React.useEffect(() => {
     if (isDraggedOver && dropZone) {
-      const tabElement = document.querySelector(`[data-tab-id="${terminal.id}"]`)
-      if (tabElement) {
-        const rect = tabElement.getBoundingClientRect()
-        // Use current mouse position from parent
-        const xPercent = (mousePosition.current.x - rect.left) / rect.width
-        const yPercent = (mousePosition.current.y - rect.top) / rect.height
-        const edgeThreshold = 0.20
+      let rafId: number
 
-        const inEdge =
-          yPercent < edgeThreshold ||
-          yPercent > 1 - edgeThreshold ||
-          xPercent < edgeThreshold ||
-          xPercent > 1 - edgeThreshold
+      const updateEdgeZone = () => {
+        const tabElement = document.querySelector(`[data-tab-id="${terminal.id}"]`)
+        if (tabElement) {
+          const rect = tabElement.getBoundingClientRect()
+          // Use current mouse position from parent
+          const xPercent = (mousePosition.current.x - rect.left) / rect.width
+          const yPercent = (mousePosition.current.y - rect.top) / rect.height
+          const edgeThreshold = 0.15
 
-        setIsEdgeZone(inEdge)
+          const inEdge =
+            yPercent < edgeThreshold ||
+            yPercent > 1 - edgeThreshold ||
+            xPercent < edgeThreshold ||
+            xPercent > 1 - edgeThreshold
+
+          setIsEdgeZone(inEdge)
+        }
+
+        // Continue updating while dragging
+        if (isDraggedOver) {
+          rafId = requestAnimationFrame(updateEdgeZone)
+        }
       }
+
+      rafId = requestAnimationFrame(updateEdgeZone)
+
+      return () => {
+        if (rafId) cancelAnimationFrame(rafId)
+      }
+    } else {
+      // Clear edge zone when not being dragged over
+      setIsEdgeZone(false)
     }
   }, [isDraggedOver, dropZone, terminal.id])
 

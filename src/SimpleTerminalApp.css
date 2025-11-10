@@ -396,14 +396,14 @@
   z-index: 100;
 }
 
-/* NEW MODEL: All 4 edges = split (blue), center = reorder (green) */
+/* NEW MODEL: Edges 15% = split (blue), center 70% = reorder (green) */
 
 .drop-zone-left {
   position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
-  width: 20%;
+  width: 15%;
   background: rgba(59, 130, 246, 0.3);
   border-left: 3px solid rgba(59, 130, 246, 0.8);
   animation: dropZonePulse 1s ease-in-out infinite;
@@ -415,7 +415,7 @@
   right: 0;
   top: 0;
   bottom: 0;
-  width: 20%;
+  width: 15%;
   background: rgba(59, 130, 246, 0.3);
   border-right: 3px solid rgba(59, 130, 246, 0.8);
   animation: dropZonePulse 1s ease-in-out infinite;
@@ -427,7 +427,7 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 20%;
+  height: 15%;
   background: rgba(59, 130, 246, 0.3);
   border-top: 3px solid rgba(59, 130, 246, 0.8);
   animation: dropZonePulse 1s ease-in-out infinite;
@@ -439,7 +439,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 20%;
+  height: 15%;
   background: rgba(59, 130, 246, 0.3);
   border-bottom: 3px solid rgba(59, 130, 246, 0.8);
   animation: dropZonePulse 1s ease-in-out infinite;
@@ -452,14 +452,10 @@
   top: 0;
   bottom: 0;
   width: 3px;
-  background: linear-gradient(
-    to bottom,
-    rgba(59, 130, 246, 0.8),  /* blue-500 */
-    rgba(34, 197, 94, 0.8)     /* green-500 */
-  );
+  background: rgba(34, 197, 94, 0.9);  /* Solid green - clear reorder signal */
   box-shadow:
-    0 0 8px rgba(59, 130, 246, 0.6),
-    0 0 12px rgba(34, 197, 94, 0.4);
+    0 0 8px rgba(34, 197, 94, 0.6),
+    0 0 16px rgba(34, 197, 94, 0.5);
   animation: reorderPulse 1s ease-in-out infinite;
   z-index: 100;
   pointer-events: none;
@@ -564,7 +560,7 @@
   font-weight: 600;
   transition: all 0.2s ease;
   padding: 0;
-  margin-left: 4px;
+  margin-left: auto; /* Push to far right, leaving space for tab reordering */
 }
 
 .tab-add:hover {
