@@ -90,12 +90,12 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
 
     // Check if this is a TUI tool that needs special handling
     const isTUITool = agent.terminalType === 'tui-tool' ||
-                      agent.name?.toLowerCase().includes('pyradio') ||
-                      agent.name?.toLowerCase().includes('lazygit') ||
-                      agent.name?.toLowerCase().includes('bottom') ||
-                      agent.name?.toLowerCase().includes('micro') ||
-                      agent.name?.toLowerCase().includes('tfe') ||
-                      agent.toolName?.toLowerCase().includes('tfe');
+                      agent.name?.toLowerCase().includes('pyradio') === true ||
+                      agent.name?.toLowerCase().includes('lazygit') === true ||
+                      agent.name?.toLowerCase().includes('bottom') === true ||
+                      agent.name?.toLowerCase().includes('micro') === true ||
+                      agent.name?.toLowerCase().includes('tfe') === true ||
+                      agent.toolName?.toLowerCase().includes('tfe') === true;
 
     // Create debounced resize handler that only sends if dimensions actually changed
     // Use shorter debounce for TUI tools to prevent rendering issues

@@ -179,9 +179,20 @@ export function useWebSocketManager(
               sessionName: message.data.sessionName,
               status: 'active',
               requestId: undefined,
+              // CRITICAL: Preserve frontend properties (user may have renamed, etc.)
+              name: existingTerminal.name,
+              terminalType: existingTerminal.terminalType,
+              command: existingTerminal.command,
+              icon: existingTerminal.icon,
+              theme: existingTerminal.theme,
+              background: existingTerminal.background,
+              transparency: existingTerminal.transparency,
+              fontSize: existingTerminal.fontSize,
+              fontFamily: existingTerminal.fontFamily,
+              // CRITICAL: Preserve split/window properties
               splitLayout: existingTerminal.splitLayout,
               isHidden: existingTerminal.isHidden,
-              windowId: existingTerminal.windowId, // CRITICAL: Preserve window assignment
+              windowId: existingTerminal.windowId,
             })
           } else {
             // CRITICAL: Do NOT create terminal for unmatched spawns
@@ -280,6 +291,12 @@ export function useWebSocketManager(
           // Process stored terminals
           storedTerminals.forEach(terminal => {
             if (terminal.sessionName && activeSessions.has(terminal.sessionName)) {
+              // Skip split containers - they don't have actual sessions, only their panes do
+              if (terminal.splitLayout && terminal.splitLayout.type !== 'single') {
+                console.log(`[useWebSocketManager] ⏭️ Skipping split container (panes will reconnect separately):`, terminal.sessionName)
+                return
+              }
+
               // Skip duplicates
               if (reconnectingSessionsSet.has(terminal.sessionName)) {
                 return

@@ -228,7 +228,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
               key={`term-${leftTerminal.id}`}
               ref={leftTerminal.id === focusedTerminalId ? terminalRef : null}
               agent={leftAgent}
-              onClose={() => onClose(leftTerminal.id)}
+              onClose={() => handleClosePane(leftTerminal.id)}
               onCommand={(cmd) => onCommand(cmd, leftTerminal.id)}
               wsRef={wsRef}
               embedded={true}
@@ -251,7 +251,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
             key={`term-${rightTerminal.id}`}
             ref={rightTerminal.id === focusedTerminalId ? terminalRef : null}
             agent={rightAgent}
-            onClose={() => onClose(rightTerminal.id)}
+            onClose={() => handleClosePane(rightTerminal.id)}
             onCommand={(cmd) => onCommand(cmd, rightTerminal.id)}
             wsRef={wsRef}
             embedded={true}
@@ -360,7 +360,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
               key={`term-${topTerminal.id}`}
               ref={topTerminal.id === focusedTerminalId ? terminalRef : null}
               agent={topAgent}
-              onClose={() => onClose(topTerminal.id)}
+              onClose={() => handleClosePane(topTerminal.id)}
               onCommand={(cmd) => onCommand(cmd, topTerminal.id)}
               wsRef={wsRef}
               embedded={true}
@@ -383,7 +383,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
             key={`term-${bottomTerminal.id}`}
             ref={bottomTerminal.id === focusedTerminalId ? terminalRef : null}
             agent={bottomAgent}
-            onClose={() => onClose(bottomTerminal.id)}
+            onClose={() => handleClosePane(bottomTerminal.id)}
             onCommand={(cmd) => onCommand(cmd, bottomTerminal.id)}
             wsRef={wsRef}
             embedded={true}

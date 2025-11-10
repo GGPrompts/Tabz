@@ -567,9 +567,9 @@ router.get('/terminals/:id/cwd', asyncHandler(async (req, res) => {
   const { execSync } = require('child_process');
   const fs = require('fs');
   const { id } = req.params;
-  const agent = terminalRegistry.agents.get(id);
+  const terminal = terminalRegistry.getTerminal(id);
 
-  if (!agent) {
+  if (!terminal) {
     return res.status(404).json({
       success: false,
       error: `Terminal ${id} not found`
@@ -580,14 +580,15 @@ router.get('/terminals/:id/cwd', asyncHandler(async (req, res) => {
     let cwd = '~';
 
     // For tmux sessions, use tmux display-message to get current path
-    if (agent.tmuxSessionName) {
-      const cmd = `tmux display-message -p -t "${agent.tmuxSessionName}" "#{pane_current_path}"`;
+    if (terminal.sessionName || terminal.sessionId) {
+      const sessionName = terminal.sessionName || terminal.sessionId;
+      const cmd = `tmux display-message -p -t "${sessionName}" "#{pane_current_path}"`;
       cwd = execSync(cmd, { encoding: 'utf8' }).trim();
     }
     // For non-tmux terminals, read from /proc/{pid}/cwd
-    else if (agent.pid) {
+    else if (terminal.pid) {
       try {
-        cwd = fs.readlinkSync(`/proc/${agent.pid}/cwd`);
+        cwd = fs.readlinkSync(`/proc/${terminal.pid}/cwd`);
       } catch (err) {
         // Fallback to home directory if /proc is not available
         cwd = process.env.HOME || '~';
@@ -799,7 +800,7 @@ router.post('/tmux/detach/:name', asyncHandler(async (req, res) => {
     // This doesn't kill the session, just detaches clients
     execSync(`tmux detach-client -s "${name}" 2>/dev/null || true`);
 
-    log.info(`Detached from tmux session: ${name}`);
+    console.log(`Detached from tmux session: ${name}`);
 
     res.json({
       success: true,
@@ -807,7 +808,7 @@ router.post('/tmux/detach/:name', asyncHandler(async (req, res) => {
       session: name
     });
   } catch (err) {
-    log.error(`Failed to detach from tmux session ${name}:`, err.message);
+    console.error(`Failed to detach from tmux session ${name}:`, err.message);
     res.status(500).json({
       success: false,
       error: err.message

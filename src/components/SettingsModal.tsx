@@ -153,8 +153,8 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
   }
 
   const handleAddOption = () => {
-    if (!formData.label || !formData.command) {
-      alert('Label and Command are required')
+    if (!formData.label || formData.command === undefined) {
+      alert('Label is required (Command can be empty for plain bash)')
       return
     }
     setSpawnOptions([...spawnOptions, formData])
@@ -163,8 +163,8 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
 
   const handleUpdateOption = () => {
     if (editingIndex === null) return
-    if (!formData.label || !formData.command) {
-      alert('Label and Command are required')
+    if (!formData.label || formData.command === undefined) {
+      alert('Label is required (Command can be empty for plain bash)')
       return
     }
     const updated = [...spawnOptions]
@@ -488,14 +488,14 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                 <label>
                   Text Color Theme
                   <TextColorThemeDropdown
-                    value={formData.defaultTheme}
+                    value={formData.defaultTheme ?? 'default'}
                     onChange={(value) => setFormData({ ...formData, defaultTheme: value })}
                   />
                 </label>
                 <label>
                   Background Gradient
                   <BackgroundGradientDropdown
-                    value={formData.defaultBackground}
+                    value={formData.defaultBackground ?? 'none'}
                     onChange={(value) => setFormData({ ...formData, defaultBackground: value })}
                   />
                 </label>
@@ -520,7 +520,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                 <label>
                   Font Family
                   <FontFamilyDropdown
-                    value={formData.defaultFontFamily}
+                    value={formData.defaultFontFamily ?? 'monospace'}
                     onChange={(value) => setFormData({ ...formData, defaultFontFamily: value })}
                   />
                 </label>

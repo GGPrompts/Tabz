@@ -5,7 +5,7 @@
 
 const BACKEND_URL = 'http://localhost:8127';
 let logBuffer: Array<{ level: string; message: string; timestamp: number; source?: string }> = [];
-let flushTimer: NodeJS.Timeout | null = null;
+let flushTimer: number | null = null;
 
 // Extract source file/line from stack trace
 function getSource(): string | undefined {

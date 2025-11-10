@@ -236,6 +236,14 @@ function SimpleTerminalApp() {
   const [spawnOptions, setSpawnOptions] = useState<SpawnOption[]>([])
   const spawnOptionsRef = useRef<SpawnOption[]>([]) // Ref to avoid closure issues
 
+  // Split mode state - tracks when creating a split from context menu
+  const [splitMode, setSplitMode] = useState<{
+    active: boolean
+    direction?: 'vertical' | 'horizontal'
+    terminalId?: string
+    detectedCwd?: string
+  }>({ active: false })
+
   // Context Menu state
   const [contextMenu, setContextMenu] = useState<{
     show: boolean
@@ -450,7 +458,77 @@ function SimpleTerminalApp() {
   // Wrapper to close spawn menu before spawning
   const handleSpawnTerminal = async (option: SpawnOption) => {
     setShowSpawnMenu(false)
-    await spawnTerminal(option)
+
+    // If in split mode, inject detected cwd and create split after spawning
+    if (splitMode.active && splitMode.terminalId && splitMode.direction) {
+      const targetTerminal = storedTerminals.find(t => t.id === splitMode.terminalId)
+      if (!targetTerminal) {
+        console.error('[SimpleTerminalApp] Split target terminal not found')
+        setSplitMode({ active: false })
+        return
+      }
+
+      // Create modified option with detected cwd (if option doesn't already have one)
+      const modifiedOption = {
+        ...option,
+        workingDir: option.workingDir || splitMode.detectedCwd
+      }
+
+      // Spawn the terminal
+      await spawnTerminal(modifiedOption)
+
+      // Wait for the new terminal to be added and get its ID
+      // The terminal is added immediately with status 'spawning'
+      // We need to wait a bit and find the most recently added terminal
+      setTimeout(() => {
+        const newTerminals = useSimpleTerminalStore.getState().terminals
+        const newTerminal = newTerminals[newTerminals.length - 1]
+
+        if (newTerminal && splitMode.terminalId && splitMode.direction) {
+          // Create the split layout (similar to handleMerge in useDragDrop.ts)
+          const splitType = splitMode.direction
+          const sourcePosition = splitMode.direction === 'vertical' ? 'right' : 'bottom'
+          const targetPosition = splitMode.direction === 'vertical' ? 'left' : 'top'
+
+          updateTerminal(splitMode.terminalId, {
+            splitLayout: {
+              type: splitType,
+              panes: [
+                {
+                  id: `pane-${Date.now()}-1`,
+                  terminalId: splitMode.terminalId,
+                  size: 50,
+                  position: targetPosition,
+                },
+                {
+                  id: `pane-${Date.now()}-2`,
+                  terminalId: newTerminal.id,
+                  size: 50,
+                  position: sourcePosition,
+                },
+              ],
+            },
+          })
+
+          // Mark new terminal as hidden (part of split)
+          updateTerminal(newTerminal.id, {
+            isHidden: true,
+          })
+
+          // Keep focus on the parent terminal (the tab with the split layout)
+          // This prevents showing a blank screen since the new terminal is hidden
+          setActiveTerminal(splitMode.terminalId)
+
+          console.log(`[SimpleTerminalApp] Created ${splitType} split: ${splitMode.terminalId} + ${newTerminal.id}`)
+        }
+
+        // Clear split mode
+        setSplitMode({ active: false })
+      }, 100)
+    } else {
+      // Normal spawn (not in split mode)
+      await spawnTerminal(option)
+    }
   }
 
   // Multi-window popout logic (extracted to custom hook)
@@ -651,6 +729,17 @@ function SimpleTerminalApp() {
   }, [focusedTerminalId, activeTerminalId, storedTerminals])
 
   const activeTerminal = storedTerminals.find(t => t.id === activeTerminalId)
+
+  // Check if the focused terminal is part of a split (find parent terminal with splitLayout)
+  const parentSplitTerminal = useMemo(() => {
+    if (!focusedTerminalId) return null
+    return storedTerminals.find(t =>
+      t.splitLayout &&
+      t.splitLayout.type !== 'single' &&
+      t.splitLayout.panes.some(p => p.terminalId === focusedTerminalId)
+    )
+  }, [focusedTerminalId, storedTerminals])
+
   const displayAgent = displayTerminal?.agentId
     ? agents.find(a => a.id === displayTerminal.agentId)
     : null
@@ -790,13 +879,71 @@ function SimpleTerminalApp() {
   }
 
   const handleSplitVertical = async () => {
-    // TODO: Implement split vertical - fetch cwd, open spawn menu
-    console.log('[SimpleTerminalApp] Split Vertical not yet implemented')
+    if (!contextMenu.terminalId) return
+    const terminal = storedTerminals.find(t => t.id === contextMenu.terminalId)
+    if (!terminal) return
+
+    // Fetch current working directory
+    let detectedCwd = '~'
+    if (terminal.agentId) {
+      try {
+        console.log(`[SimpleTerminalApp] Fetching cwd for agentId: ${terminal.agentId}`)
+        const response = await fetch(`/api/terminals/${terminal.agentId}/cwd`)
+        const result = await response.json()
+        console.log(`[SimpleTerminalApp] CWD API response:`, result)
+        if (result.success && result.data && result.data.cwd) {
+          detectedCwd = result.data.cwd
+        }
+      } catch (error) {
+        console.warn('[SimpleTerminalApp] Failed to fetch cwd, using default:', error)
+      }
+    } else {
+      console.warn('[SimpleTerminalApp] Terminal has no agentId, cannot fetch cwd')
+    }
+
+    // Set split mode and open spawn menu
+    setSplitMode({
+      active: true,
+      direction: 'vertical',
+      terminalId: contextMenu.terminalId,
+      detectedCwd,
+    })
+    setShowSpawnMenu(true)
+    handleContextMenuClose()
   }
 
   const handleSplitHorizontal = async () => {
-    // TODO: Implement split horizontal - fetch cwd, open spawn menu
-    console.log('[SimpleTerminalApp] Split Horizontal not yet implemented')
+    if (!contextMenu.terminalId) return
+    const terminal = storedTerminals.find(t => t.id === contextMenu.terminalId)
+    if (!terminal) return
+
+    // Fetch current working directory
+    let detectedCwd = '~'
+    if (terminal.agentId) {
+      try {
+        console.log(`[SimpleTerminalApp] Fetching cwd for agentId: ${terminal.agentId}`)
+        const response = await fetch(`/api/terminals/${terminal.agentId}/cwd`)
+        const result = await response.json()
+        console.log(`[SimpleTerminalApp] CWD API response:`, result)
+        if (result.success && result.data && result.data.cwd) {
+          detectedCwd = result.data.cwd
+        }
+      } catch (error) {
+        console.warn('[SimpleTerminalApp] Failed to fetch cwd, using default:', error)
+      }
+    } else {
+      console.warn('[SimpleTerminalApp] Terminal has no agentId, cannot fetch cwd')
+    }
+
+    // Set split mode and open spawn menu
+    setSplitMode({
+      active: true,
+      direction: 'horizontal',
+      terminalId: contextMenu.terminalId,
+      detectedCwd,
+    })
+    setShowSpawnMenu(true)
+    handleContextMenuClose()
   }
 
   const handleRenameTab = () => {
@@ -1041,14 +1188,28 @@ function SimpleTerminalApp() {
       {showSpawnMenu && (
         <div className="spawn-menu">
           <div className="spawn-menu-header">
-            <span>Spawn Terminal</span>
-            <button onClick={() => setShowSpawnMenu(false)}>✕</button>
+            <span>
+              {splitMode.active && splitMode.terminalId
+                ? `Split ${splitMode.direction === 'vertical' ? '→' : '↓'} (${
+                    storedTerminals.find(t => t.id === splitMode.terminalId)?.name || 'Terminal'
+                  })`
+                : 'Spawn Terminal'
+              }
+            </span>
+            <button onClick={() => {
+              setShowSpawnMenu(false)
+              setSplitMode({ active: false })
+            }}>✕</button>
           </div>
           <div className="spawn-menu-list">
             {spawnOptions.map((option, idx) => {
               const globalWorkingDir = useSettingsStore.getState().workingDirectory || '~'
-              const effectiveWorkingDir = option.workingDir || globalWorkingDir
-              const isUsingDefault = !option.workingDir
+              // When in split mode, use detected cwd as fallback before global default
+              const effectiveWorkingDir = option.workingDir ||
+                                         (splitMode.active ? splitMode.detectedCwd : undefined) ||
+                                         globalWorkingDir
+              const isUsingDefault = !option.workingDir && !splitMode.active
+              const isDetected = !option.workingDir && splitMode.active && splitMode.detectedCwd
 
               return (
                 <div
@@ -1063,6 +1224,7 @@ function SimpleTerminalApp() {
                     <div className="spawn-workingdir">
                       📁 {effectiveWorkingDir}
                       {isUsingDefault && <span className="workingdir-default"> (default)</span>}
+                      {isDetected && <span className="workingdir-default"> (detected from {storedTerminals.find(t => t.id === splitMode.terminalId)?.name || 'terminal'})</span>}
                     </div>
                   </div>
                 </div>
@@ -1193,13 +1355,13 @@ function SimpleTerminalApp() {
                 🔄
               </button>
 
-              {/* Split Pane Controls - Only show when focused terminal is in a split */}
-              {focusedTerminalId && displayTerminal.splitLayout && displayTerminal.splitLayout.type !== 'single' && (
+              {/* Split Pane Controls - Only show when focused terminal is part of a split */}
+              {focusedTerminalId && parentSplitTerminal && (
                 <>
                   <span className="footer-separator">│</span>
                   <button
                     className="footer-control-btn"
-                    onClick={() => handlePopOutTab(focusedTerminalId)}
+                    onClick={() => handlePopOutPane(focusedTerminalId)}
                     title="Pop out focused pane to new tab"
                   >
                     ↗

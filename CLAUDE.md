@@ -481,6 +481,101 @@ handlePopOutTab(terminalId) {
 
 ---
 
+## ✅ Recently Fixed (Nov 10, 2025) - Split Terminal & Multi-Window Stability
+
+### Critical Split Terminal Bugs Fixed
+
+**1. Split Container Reconnection Bug** ✅
+**Problem:** Split container terminals were reconnecting to tmux sessions during page refresh, stealing sessions from their pane terminals. This caused terminals to lose their identity (Bash becoming TFE, etc.).
+
+**Root Cause:** The reconnection logic in `useWebSocketManager` was treating split containers (which hold panes) as if they were real terminals with sessions.
+
+**Fix:** Added check to skip split containers during reconnection:
+```typescript
+// Skip split containers - they don't have actual sessions, only their panes do
+if (terminal.splitLayout && terminal.splitLayout.type !== 'single') {
+  console.log('⏭️ Skipping split container (panes will reconnect separately)')
+  return
+}
+```
+
+**Files Modified:**
+- `src/hooks/useWebSocketManager.ts` (lines 283-287) - Skip split containers in reconnection
+
+**2. Terminal Property Overwrite Bug** ✅
+**Problem:** When backend sent `terminal-spawned` messages, it could overwrite frontend properties like `name`, `terminalType`, `theme`, etc., causing terminals to lose user customizations and identity.
+
+**Fix:** Explicitly preserve all frontend properties during spawn updates:
+```typescript
+updateTerminal(existingTerminal.id, {
+  agentId: message.data.id,
+  sessionName: message.data.sessionName,
+  status: 'active',
+  // Preserve ALL frontend properties
+  name: existingTerminal.name,
+  terminalType: existingTerminal.terminalType,
+  command: existingTerminal.command,
+  icon: existingTerminal.icon,
+  theme: existingTerminal.theme,
+  background: existingTerminal.background,
+  // ... etc
+})
+```
+
+**Files Modified:**
+- `src/hooks/useWebSocketManager.ts` (lines 176-196) - Preserve properties
+
+**3. Footer Pop-Out Button Bug** ✅
+**Problem:** The ↗ button in split terminal footers was calling `handlePopOutTab` (opens new browser window) instead of `handlePopOutPane` (pops pane to new tab in same window).
+
+**Fix:** Changed button handler to correct function.
+
+**Files Modified:**
+- `src/SimpleTerminalApp.tsx` (line 1364) - Fixed onClick handler
+
+**4. Popout Split Unpacking Bug** ✅
+**Problem:** When popping out a split tab to a new browser window, the split wasn't being unpacked. The container terminal kept its `splitLayout` and panes stayed hidden, causing reconnection to fail and terminals to be lost.
+
+**Fix:** Unpack split when moving to new window - clear `splitLayout` on container and unhide panes:
+```typescript
+// Clear split layout so it becomes a normal tab
+splitLayout: { type: 'single', panes: [] }
+
+// Unhide panes so they appear as tabs
+panes.forEach(pane => {
+  updateTerminal(pane.terminalId, {
+    isHidden: false,
+    windowId: newWindowId
+  })
+})
+```
+
+**Files Modified:**
+- `src/hooks/usePopout.ts` (lines 68-90) - Unpack splits during popout
+
+**5. Tmux Detach API Error** ✅
+**Problem:** `/api/tmux/detach/:name` endpoint was crashing with 500 error due to undefined `log` variable.
+
+**Fix:** Changed `log.info()` and `log.error()` to `console.log()` and `console.error()`.
+
+**Files Modified:**
+- `backend/routes/api.js` (lines 803, 811) - Fixed logging
+
+**6. Settings Validation for Empty Commands** ✅
+**Problem:** Couldn't save Bash terminal settings because validation rejected empty command strings (Bash uses `command: ""`).
+
+**Fix:** Changed validation to allow empty strings, only reject `undefined`:
+```typescript
+if (!formData.label || formData.command === undefined)  // ✅ Allows ""
+```
+
+**Files Modified:**
+- `src/components/SettingsModal.tsx` (lines 156, 166) - Fixed validation
+
+**Impact:** Split terminals now maintain their identity through refresh, customizations are preserved, popout to new windows works correctly, and all terminals reconnect properly.
+
+---
+
 ## ✅ Recently Fixed (Nov 9, 2025) - Split Terminals
 
 ### Split Terminal Customization

@@ -64,19 +64,27 @@ export function usePopout(
 
     // Step 1: Update state - move to new window and clear agent IDs
     console.log(`[usePopout] Step 1: Updating state (windowId=${newWindowId}, detaching ${sessionsToDetach.length} sessions)`)
+
+    // If this is a split container, unpack it: clear splitLayout and unhide panes
+    const isSplitContainer = terminal.splitLayout && terminal.splitLayout.type !== 'single'
+
     updateTerminal(terminalId, {
       agentId: undefined,
       status: 'spawning',
       windowId: newWindowId,
+      // Clear split layout so it becomes a normal tab in the new window
+      splitLayout: isSplitContainer ? { type: 'single', panes: [] } : terminal.splitLayout,
     })
 
-    // Update split panes
-    if (terminal.splitLayout && terminal.splitLayout.panes.length > 0) {
+    // Update split panes - move to new window and unhide them
+    if (isSplitContainer && terminal.splitLayout.panes.length > 0) {
+      console.log(`[usePopout] Unpacking split: converting to ${terminal.splitLayout.panes.length} independent tabs`)
       terminal.splitLayout.panes.forEach(pane => {
         updateTerminal(pane.terminalId, {
           agentId: undefined,
           status: 'spawning',
           windowId: newWindowId,
+          isHidden: false, // Unhide so they appear as tabs in new window
         })
       })
     }
