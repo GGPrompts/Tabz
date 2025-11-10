@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.2] - 2025-11-10
+
+### ✨ Detached Sessions Management (polish branch)
+
+**Major UX improvement for session management with global detached sessions and health monitoring!**
+
+#### Detached Sessions Modal
+- **Global detached sessions** - Accessible from any browser window (not window-scoped)
+- **Header stats** - Shows "A: X D: Y" (Active/Detached counts) with yellow highlight when D > 0
+- **Click stats to open modal** - Quick access to detached sessions list
+- **Bulk operations** - Checkbox selection for reattach/kill multiple sessions
+- **Relative time** - Shows "5m ago", "2h ago" for detach timestamps
+- **Empty state** - Clean UI when no detached sessions
+- **Keyboard shortcuts** - Escape to close modal
+- **Files Created**:
+  - `src/components/DetachedSessionsModal.tsx` (185 lines)
+  - `src/components/DetachedSessionsModal.css` (216 lines)
+
+#### Spawn Menu Integration
+- **Detached sessions option** - Appears as first option when D > 0
+- Shows "📂 Detached Sessions (N)" for quick access during spawning
+
+#### Tmux Health Check
+- **15-second interval monitoring** - Automatically detects session changes
+- **Manual kill detection** - Removes zombie tabs when sessions killed via Ctrl+B & or `tmux kill-session`
+- **Cleanup for both active and detached** - Keeps UI in sync with tmux reality
+- **Critical fix**: Health check now cleanup-only, no unnecessary reconnections
+- **Mode distinction**: Initial load reconnects, health checks only clean up
+
+#### Backend API
+- **POST /api/tmux/kill/:name** - Kill individual tmux session
+- Validates session exists before killing
+- Returns 404 if session not found
+
+#### Bug Fixes
+- **Fixed TypeScript errors** - `windowId: null` → `undefined` (2 locations)
+- **Fixed Terminal type** → `StoredTerminal` in SimpleTerminalApp.tsx
+- **Fixed health check flashing** - Added `isInitialLoad` flag to prevent reconnection spam
+- **Fixed 15-second refresh bug** - Health checks no longer trigger terminal reconnections
+
+#### Technical Details
+- DetachedSessionsModal: Modal component with bulk operations and relative timestamps
+- useWebSocketManager: Enhanced tmux-sessions-list handler with initial load vs health check modes
+- localStorage sync: Detached sessions persist across windows/refresh
+- Window isolation: Each window independently manages its terminals
+
+**Files Modified**:
+- `src/SimpleTerminalApp.tsx` - Stats, modal state, handlers, filtering
+- `src/SimpleTerminalApp.css` - Header stats styling
+- `src/hooks/useWebSocketManager.ts` - Health check logic with mode distinction
+- `backend/routes/api.js` - Kill endpoint
+
+**Impact**: Clean separation between detached and active sessions, multi-window friendly, automatic cleanup!
+
+---
+
 ## [1.2.1] - 2025-11-10
 
 ### 🏗️ Major Refactoring - Code Quality Sprint (COMPLETE) 🎉
