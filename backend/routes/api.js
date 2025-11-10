@@ -780,6 +780,7 @@ router.delete('/tmux/sessions/:name', asyncHandler(async (req, res) => {
 /**
  * POST /api/tmux/detach/:name - Detach from a tmux session (keep session alive)
  * Used when moving terminals between browser windows
+ * CRITICAL: Also removes terminal from backend registry to prevent reconnection conflicts
  */
 router.post('/tmux/detach/:name', asyncHandler(async (req, res) => {
   const { name } = req.params;
@@ -796,11 +797,26 @@ router.post('/tmux/detach/:name', asyncHandler(async (req, res) => {
       });
     }
 
+    // CRITICAL FIX: Remove terminal from backend registry to prevent reconnection to stale entry
+    // Find terminal by sessionName and remove it from registry
+    const terminalRegistry = require('../modules/terminal-registry');
+    const allTerminals = Array.from(terminalRegistry.terminals.values());
+    const terminalToRemove = allTerminals.find(t =>
+      t.sessionId === name || t.sessionName === name
+    );
+
+    if (terminalToRemove) {
+      console.log(`[API] Removing terminal ${terminalToRemove.name} from registry (session: ${name})`);
+      await terminalRegistry.closeTerminal(terminalToRemove.id, false); // false = don't kill tmux session
+    } else {
+      console.log(`[API] No terminal found in registry for session ${name}`);
+    }
+
     // Detach all clients from this session (non-destructive)
     // This doesn't kill the session, just detaches clients
     execSync(`tmux detach-client -s "${name}" 2>/dev/null || true`);
 
-    console.log(`Detached from tmux session: ${name}`);
+    console.log(`[API] Detached from tmux session: ${name}`);
 
     res.json({
       success: true,

@@ -288,6 +288,14 @@ export function useWebSocketManager(
           // Track which sessions we've started reconnecting (prevent duplicates)
           const reconnectingSessionsSet = new Set<string>()
 
+          // Fix split containers stuck in 'spawning' status
+          storedTerminals.forEach(terminal => {
+            if (terminal.splitLayout && terminal.splitLayout.type !== 'single' && terminal.status !== 'active') {
+              console.log(`[useWebSocketManager] ✅ Setting split container to active:`, terminal.name)
+              updateTerminal(terminal.id, { status: 'active' })
+            }
+          })
+
           // Process stored terminals
           storedTerminals.forEach(terminal => {
             if (terminal.sessionName && activeSessions.has(terminal.sessionName)) {

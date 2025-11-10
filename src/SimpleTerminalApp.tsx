@@ -236,6 +236,10 @@ function SimpleTerminalApp() {
   const [spawnOptions, setSpawnOptions] = useState<SpawnOption[]>([])
   const spawnOptionsRef = useRef<SpawnOption[]>([]) // Ref to avoid closure issues
 
+  // Spawn menu search and multi-select
+  const [spawnSearchText, setSpawnSearchText] = useState('')
+  const [selectedSpawnOptions, setSelectedSpawnOptions] = useState<Set<number>>(new Set())
+
   // Split mode state - tracks when creating a split from context menu
   const [splitMode, setSplitMode] = useState<{
     active: boolean
@@ -474,29 +478,42 @@ function SimpleTerminalApp() {
         workingDir: option.workingDir || splitMode.detectedCwd
       }
 
+      // Get current terminal count to identify the new terminal reliably
+      const terminalCountBefore = useSimpleTerminalStore.getState().terminals.length
+
       // Spawn the terminal
       await spawnTerminal(modifiedOption)
 
-      // Wait for the new terminal to be added and get its ID
-      // The terminal is added immediately with status 'spawning'
-      // We need to wait a bit and find the most recently added terminal
+      // The new terminal is added immediately to the store
+      // Find it by comparing before/after counts
       setTimeout(() => {
-        const newTerminals = useSimpleTerminalStore.getState().terminals
-        const newTerminal = newTerminals[newTerminals.length - 1]
+        const currentTerminals = useSimpleTerminalStore.getState().terminals
 
-        if (newTerminal && splitMode.terminalId && splitMode.direction) {
+        // Find the newly added terminal (should be the one that wasn't there before)
+        const newTerminal = currentTerminals.find((t, idx) => idx >= terminalCountBefore)
+
+        if (!newTerminal) {
+          console.error('[SimpleTerminalApp] Could not find newly spawned terminal for split')
+          setSplitMode({ active: false })
+          return
+        }
+
+        if (splitMode.terminalId && splitMode.direction) {
           // Create the split layout (similar to handleMerge in useDragDrop.ts)
           const splitType = splitMode.direction
           const sourcePosition = splitMode.direction === 'vertical' ? 'right' : 'bottom'
           const targetPosition = splitMode.direction === 'vertical' ? 'left' : 'top'
 
+          // CRITICAL: Keep the agentId and sessionName on the container!
+          // The container won't reconnect (we skip it in useWebSocketManager), but it keeps
+          // its agent alive so the first pane (which references the container) can find it
           updateTerminal(splitMode.terminalId, {
             splitLayout: {
               type: splitType,
               panes: [
                 {
                   id: `pane-${Date.now()}-1`,
-                  terminalId: splitMode.terminalId,
+                  terminalId: splitMode.terminalId, // Reference container itself (it keeps its agent)
                   size: 50,
                   position: targetPosition,
                 },
@@ -508,6 +525,8 @@ function SimpleTerminalApp() {
                 },
               ],
             },
+            status: 'active', // Container is active (has split layout)
+            // DON'T clear sessionName or agentId - keep them for the first pane to use
           })
 
           // Mark new terminal as hidden (part of split)
@@ -518,8 +537,10 @@ function SimpleTerminalApp() {
           // Keep focus on the parent terminal (the tab with the split layout)
           // This prevents showing a blank screen since the new terminal is hidden
           setActiveTerminal(splitMode.terminalId)
+          // Focus the newly spawned terminal
+          setFocusedTerminal(newTerminal.id)
 
-          console.log(`[SimpleTerminalApp] Created ${splitType} split: ${splitMode.terminalId} + ${newTerminal.id}`)
+          console.log(`[SimpleTerminalApp] Created ${splitType} split: ${splitMode.terminalId} (container keeps agent) with panes ${splitMode.terminalId} (${targetPosition}) + ${newTerminal.id} (${sourcePosition})`)
         }
 
         // Clear split mode
@@ -908,6 +929,7 @@ function SimpleTerminalApp() {
       terminalId: contextMenu.terminalId,
       detectedCwd,
     })
+    setSelectedSpawnOptions(new Set()) // Clear any multi-select state
     setShowSpawnMenu(true)
     handleContextMenuClose()
   }
@@ -942,6 +964,7 @@ function SimpleTerminalApp() {
       terminalId: contextMenu.terminalId,
       detectedCwd,
     })
+    setSelectedSpawnOptions(new Set()) // Clear any multi-select state
     setShowSpawnMenu(true)
     handleContextMenuClose()
   }
@@ -1199,10 +1222,35 @@ function SimpleTerminalApp() {
             <button onClick={() => {
               setShowSpawnMenu(false)
               setSplitMode({ active: false })
+              setSpawnSearchText('')
+              setSelectedSpawnOptions(new Set())
             }}>✕</button>
           </div>
+
+          {/* Search Filter */}
+          <div className="spawn-menu-search">
+            <input
+              type="text"
+              placeholder="Search terminals... (filter by name, description, or project)"
+              value={spawnSearchText}
+              onChange={(e) => setSpawnSearchText(e.target.value)}
+              autoFocus
+            />
+          </div>
+
           <div className="spawn-menu-list">
-            {spawnOptions.map((option, idx) => {
+            {spawnOptions
+              .map((option, originalIdx) => ({ option, originalIdx }))
+              .filter(({ option }) => {
+                if (!spawnSearchText) return true
+                const searchLower = spawnSearchText.toLowerCase()
+                return (
+                  option.label.toLowerCase().includes(searchLower) ||
+                  option.description?.toLowerCase().includes(searchLower) ||
+                  option.command?.toLowerCase().includes(searchLower)
+                )
+              })
+              .map(({ option, originalIdx }) => {
               const globalWorkingDir = useSettingsStore.getState().workingDirectory || '~'
               // When in split mode, use detected cwd as fallback before global default
               const effectiveWorkingDir = option.workingDir ||
@@ -1210,27 +1258,86 @@ function SimpleTerminalApp() {
                                          globalWorkingDir
               const isUsingDefault = !option.workingDir && !splitMode.active
               const isDetected = !option.workingDir && splitMode.active && splitMode.detectedCwd
+              const isSelected = selectedSpawnOptions.has(originalIdx)
 
               return (
                 <div
-                  key={idx}
-                  className="spawn-option"
-                  onClick={() => handleSpawnTerminal(option)}
+                  key={originalIdx}
+                  className={`spawn-option ${isSelected ? 'selected' : ''}`}
                 >
-                  <span className="spawn-icon">{option.icon}</span>
-                  <div className="spawn-info">
-                    <div className="spawn-label">{option.label}</div>
-                    <div className="spawn-description">{option.description}</div>
-                    <div className="spawn-workingdir">
-                      📁 {effectiveWorkingDir}
-                      {isUsingDefault && <span className="workingdir-default"> (default)</span>}
-                      {isDetected && <span className="workingdir-default"> (detected from {storedTerminals.find(t => t.id === splitMode.terminalId)?.name || 'terminal'})</span>}
+                  {/* Only show checkboxes when NOT in split mode */}
+                  {!splitMode.active && (
+                    <input
+                      type="checkbox"
+                      className="spawn-checkbox"
+                      checked={isSelected}
+                      onChange={(e) => {
+                        e.stopPropagation()
+                        const newSelected = new Set(selectedSpawnOptions)
+                        if (isSelected) {
+                          newSelected.delete(originalIdx)
+                        } else {
+                          newSelected.add(originalIdx)
+                        }
+                        setSelectedSpawnOptions(newSelected)
+                      }}
+                    />
+                  )}
+                  <div
+                    className="spawn-option-content"
+                    onClick={() => {
+                      if (splitMode.active || selectedSpawnOptions.size === 0) {
+                        // Split mode OR no selections - spawn single terminal immediately
+                        handleSpawnTerminal(option)
+                      } else {
+                        // Has selections - toggle this one
+                        const newSelected = new Set(selectedSpawnOptions)
+                        if (isSelected) {
+                          newSelected.delete(originalIdx)
+                        } else {
+                          newSelected.add(originalIdx)
+                        }
+                        setSelectedSpawnOptions(newSelected)
+                      }
+                    }}
+                  >
+                    <span className="spawn-icon">{option.icon}</span>
+                    <div className="spawn-info">
+                      <div className="spawn-label">{option.label}</div>
+                      <div className="spawn-description">{option.description}</div>
+                      <div className="spawn-workingdir">
+                        📁 {effectiveWorkingDir}
+                        {isUsingDefault && <span className="workingdir-default"> (default)</span>}
+                        {isDetected && <span className="workingdir-default"> (detected from {storedTerminals.find(t => t.id === splitMode.terminalId)?.name || 'terminal'})</span>}
+                      </div>
                     </div>
                   </div>
                 </div>
               )
             })}
           </div>
+
+          {/* Bulk Spawn Button - only show when NOT in split mode */}
+          {!splitMode.active && selectedSpawnOptions.size > 0 && (
+            <div className="spawn-menu-footer">
+              <button
+                className="spawn-selected-btn"
+                onClick={() => {
+                  // Spawn all selected terminals
+                  selectedSpawnOptions.forEach(idx => {
+                    handleSpawnTerminal(spawnOptions[idx])
+                  })
+                  // Close menu and clear selections
+                  setShowSpawnMenu(false)
+                  setSplitMode({ active: false })
+                  setSpawnSearchText('')
+                  setSelectedSpawnOptions(new Set())
+                }}
+              >
+                Spawn {selectedSpawnOptions.size} Terminal{selectedSpawnOptions.size > 1 ? 's' : ''}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

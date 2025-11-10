@@ -68,16 +68,23 @@ export function usePopout(
     // If this is a split container, unpack it: clear splitLayout and unhide panes
     const isSplitContainer = terminal.splitLayout && terminal.splitLayout.type !== 'single'
 
+    if (isSplitContainer) {
+      console.log(`[usePopout] 🔓 Clearing sessionName on split container (was: ${terminal.sessionName}) to prevent reconnection collision`)
+    }
+
     updateTerminal(terminalId, {
       agentId: undefined,
       status: 'spawning',
       windowId: newWindowId,
       // Clear split layout so it becomes a normal tab in the new window
       splitLayout: isSplitContainer ? { type: 'single', panes: [] } : terminal.splitLayout,
+      // CRITICAL: Clear sessionName to prevent collision with pane terminals during reconnection
+      // The container was just a UI placeholder for the split - it shouldn't reconnect to any session
+      sessionName: isSplitContainer ? undefined : terminal.sessionName,
     })
 
     // Update split panes - move to new window and unhide them
-    if (isSplitContainer && terminal.splitLayout.panes.length > 0) {
+    if (isSplitContainer && terminal.splitLayout && terminal.splitLayout.panes.length > 0) {
       console.log(`[usePopout] Unpacking split: converting to ${terminal.splitLayout.panes.length} independent tabs`)
       terminal.splitLayout.panes.forEach(pane => {
         updateTerminal(pane.terminalId, {

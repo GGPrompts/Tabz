@@ -12,7 +12,7 @@
     {
       "label": "TFE",
       "command": "tfe",
-      "terminalType": "bash",
+      "terminalType": "tui-tool",
       "workingDir": "~/projects",
       "icon": "📁",
       "description": "Terminal File Explorer",
@@ -32,7 +32,7 @@
       "defaultTransparency": 100,
       "defaultFontSize": 20,
       "defaultFontFamily": "'JetBrains Mono', monospace",
-      "defaultBackground": "dark-neutral"
+      "defaultBackground": "neon-city"
     },
     {
       "label": "Codex",
@@ -46,7 +46,7 @@
     {
       "label": "TUI Classic Games",
       "command": "./classics",
-      "terminalType": "bash",
+      "terminalType": "tui-tool",
       "icon": "🎮",
       "description": "",
       "workingDir": "~/projects/TUIClassics/bin",
@@ -99,20 +99,26 @@
     {
       "label": "Micro Editor",
       "command": "micro",
-      "terminalType": "bash",
+      "terminalType": "tui-tool",
       "icon": "📝",
       "description": "Modern terminal text editor",
       "defaultTheme": "solarized-dark",
-      "defaultTransparency": 85
+      "defaultTransparency": 85,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "monospace",
+      "defaultBackground": "dark-neutral"
     },
     {
       "label": "Vim",
       "command": "vim",
-      "terminalType": "bash",
+      "terminalType": "tui-tool",
       "icon": "✏️",
       "description": "Vim text editor",
       "defaultTheme": "monokai",
-      "defaultTransparency": 85
+      "defaultTransparency": 85,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "monospace",
+      "defaultBackground": "dark-neutral"
     },
     {
       "label": "Spotify Player",
@@ -126,11 +132,14 @@
     {
       "label": "Log Navigator",
       "command": "lnav",
-      "terminalType": "bash",
+      "terminalType": "tui-tool",
       "icon": "📜",
       "description": "Advanced log file viewer",
       "defaultTheme": "monokai",
-      "defaultTransparency": 90
+      "defaultTransparency": 90,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "monospace",
+      "defaultBackground": "dark-neutral"
     },
     {
       "label": "LazyGit",
@@ -145,11 +154,14 @@
     {
       "label": "AIChat",
       "command": "aichat",
-      "terminalType": "bash",
+      "terminalType": "tui-tool",
       "icon": "💬",
       "description": "All-in-one CLI for LLMs",
       "defaultTheme": "amber",
-      "defaultTransparency": 100
+      "defaultTransparency": 100,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "monospace",
+      "defaultBackground": "dark-neutral"
     },
     {
       "label": "Dev Logs",
@@ -164,20 +176,26 @@
     {
       "label": "Htop",
       "command": "htop",
-      "terminalType": "bash",
+      "terminalType": "tui-tool",
       "icon": "📊",
       "description": "Interactive process viewer",
       "defaultTheme": "matrix",
-      "defaultTransparency": 95
+      "defaultTransparency": 95,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "monospace",
+      "defaultBackground": "dark-neutral"
     },
     {
       "label": "Bottom",
       "command": "bottom",
-      "terminalType": "bash",
+      "terminalType": "tui-tool",
       "icon": "📈",
       "description": "System monitor (bottom)",
       "defaultTheme": "dracula",
-      "defaultTransparency": 95
+      "defaultTransparency": 95,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "monospace",
+      "defaultBackground": "dark-neutral"
     }
   ]
 }

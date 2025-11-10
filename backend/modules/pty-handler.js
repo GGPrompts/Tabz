@@ -183,7 +183,8 @@ class PTYHandler extends EventEmitter {
 
           try {
             // Use custom tmux config for optimal terminal experience
-            const tmuxCmd = `tmux -f "${this.tmuxConfigPath}" new-session -d -s "${sessionName}" -c "${validWorkingDir}" -x ${cols} -y ${rows}`;
+            // -n sets window name to terminal name instead of hostname
+            const tmuxCmd = `tmux -f "${this.tmuxConfigPath}" new-session -d -s "${sessionName}" -n "${name}" -c "${validWorkingDir}" -x ${cols} -y ${rows}`;
             log.debug(`Using tmux config: ${this.tmuxConfigPath}`);
             execSync(tmuxCmd, {
               env: enhancedEnv

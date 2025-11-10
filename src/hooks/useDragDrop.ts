@@ -205,7 +205,11 @@ export function useDragDrop(
 
     // PREVENT MERGE INTO EXISTING SPLITS: Check if target already has splits
     const targetTerminal = storedTerminals.find(t => t.id === targetTabId)
-    if (targetTerminal?.splitLayout && targetTerminal.splitLayout.type !== 'single') {
+    if (!targetTerminal) {
+      console.error('[useDragDrop] Target terminal not found:', targetTabId)
+      return
+    }
+    if (targetTerminal.splitLayout && targetTerminal.splitLayout.type !== 'single') {
       console.warn('[useDragDrop] Cannot merge into tab that already has splits:', targetTabId)
       console.log('[useDragDrop] 💡 Tip: Pop out panes to new tabs first, or drag to reorder tabs instead')
       return
@@ -223,13 +227,16 @@ export function useDragDrop(
       dropZone === 'top' ? 'bottom' : 'top'
 
     // Update target tab to have split layout
+    // CRITICAL: Keep the agentId and sessionName on the container!
+    // The container won't reconnect (we skip it in useWebSocketManager), but it keeps
+    // its agent alive so the first pane (which references the container) can find it
     updateTerminal(targetTabId, {
       splitLayout: {
         type: splitType,
         panes: [
           {
             id: `pane-${Date.now()}-1`,
-            terminalId: targetTabId,
+            terminalId: targetTabId, // Reference container itself (it keeps its agent)
             size: 50,
             position: targetPosition,
           },
@@ -241,6 +248,8 @@ export function useDragDrop(
           },
         ],
       },
+      status: 'active', // Container is active (has split layout)
+      // DON'T clear sessionName or agentId - keep them for the first pane to use
     })
 
     // Mark source terminal as hidden (part of split, don't show in tab bar)
@@ -250,10 +259,10 @@ export function useDragDrop(
     })
 
     setActiveTerminal(targetTabId)
-    // Focus the newly merged terminal
+    // Focus the newly merged terminal (the source pane)
     setFocusedTerminal(sourceTabId)
 
-    console.log(`[useDragDrop] ✅ Created ${splitType} split: ${targetTabId} (${targetPosition}) + ${sourceTabId} (${sourcePosition})`)
+    console.log(`[useDragDrop] ✅ Created ${splitType} split: ${targetTabId} (container keeps agent) with panes ${targetTabId} (${targetPosition}) + ${sourceTabId} (${sourcePosition})`)
   }
 
   /**
