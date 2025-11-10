@@ -162,12 +162,24 @@ wss.on('connection', (ws) => {
           }
           // Use UnifiedSpawn for better validation and rate limiting
           // Pass requestId from frontend if provided
+          console.log('[Server] 📥 Calling unifiedSpawn.spawn() with requestId:', data.requestId);
           const result = await unifiedSpawn.spawn({
             ...data.config,
             requestId: data.requestId
           });
+          console.log('[Server] 📤 unifiedSpawn.spawn() returned:', {
+            success: result?.success,
+            hasTerminal: !!result?.terminal,
+            terminalId: result?.terminal?.id,
+            requestId: result?.requestId,
+            error: result?.error
+          });
           if (result.success) {
+            console.log('[Server] ✅ result.success is true, processing...');
+            console.log('[Server] Terminal object:', result.terminal);
+
             // Track this terminal for this connection
+            console.log('[Server] Adding to connectionTerminals:', result.terminal.id);
             connectionTerminals.add(result.terminal.id);
 
             // Register this connection as owner of this terminal
@@ -176,18 +188,22 @@ wss.on('connection', (ws) => {
             }
             terminalOwners.get(result.terminal.id).add(ws);
 
+            console.log('[Server] About to log success...');
             log.success('Spawned terminal', {
               id: result.terminal.id,
               name: result.terminal.name,
               type: result.terminal.terminalType,
               platform: result.terminal.platform
             });
+
+            console.log('[Server] About to broadcast terminal-spawned...');
             // Include requestId if provided
             broadcast({
               type: 'terminal-spawned',
               data: result.terminal,
               requestId: data.requestId
             });
+            console.log('[Server] ✅ Broadcast complete!');
           } else {
             // Include requestId in error response for tracking
             ws.send(JSON.stringify({
@@ -324,6 +340,7 @@ wss.on('connection', (ws) => {
       }
     } catch (error) {
       console.error('WebSocket message error:', error);
+      console.error('Error stack:', error.stack);
 
       // Rate limit check for malformed messages
       const now = Date.now();

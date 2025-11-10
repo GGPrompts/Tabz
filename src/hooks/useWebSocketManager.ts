@@ -114,11 +114,14 @@ export function useWebSocketManager(
   const handleWebSocketMessage = (message: any) => {
     switch (message.type) {
       case 'terminal-spawned':
-        if (message.data) {
-          if (processedAgentIds.current.has(message.data.id)) {
-            return
-          }
+        console.log('[useWebSocketManager] 📨 Received terminal-spawned:', {
+          agentId: message.data?.id,
+          requestId: message.requestId,
+          name: message.data?.name,
+          sessionName: message.data?.sessionName
+        })
 
+        if (message.data) {
           // Find matching terminal - check pendingSpawns ref first (synchronous)
           let existingTerminal = pendingSpawns.current.get(message.requestId)
 
@@ -137,6 +140,21 @@ export function useWebSocketManager(
             existingTerminal = storedTerminals
               .filter(t => t.status === 'spawning' && t.terminalType === message.data.terminalType)
               .sort((a, b) => b.createdAt - a.createdAt)[0]
+          }
+
+          // Check if we should skip processing (duplicate detection)
+          // CRITICAL: Only skip if we've processed this agentId AND there's no matching terminal in 'spawning' state
+          // This allows reconnection to reprocess the same agentId when reattaching
+          if (processedAgentIds.current.has(message.data.id) && !existingTerminal) {
+            console.log('[useWebSocketManager] ⏭️ Skipping - agentId already processed and no matching terminal:', message.data.id)
+            return
+          }
+
+          // If we found a spawning terminal, allow reprocessing the agentId (reconnection case)
+          if (existingTerminal && existingTerminal.status === 'spawning') {
+            console.log('[useWebSocketManager] 🔄 Allowing reprocessing for reconnection:', message.data.id)
+            // Remove from processed set so we can update the terminal
+            processedAgentIds.current.delete(message.data.id)
           }
 
           // CRITICAL: Only update terminals that belong to THIS window

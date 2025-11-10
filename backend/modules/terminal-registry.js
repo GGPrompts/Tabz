@@ -576,10 +576,18 @@ class TerminalRegistry extends EventEmitter {
             console.log(`[TerminalRegistry] Tmux session ${sessionName} may not exist (already killed)`);
           }
           await ptyHandler.killPTY(id);
+
+          // Only delete from registry when force closing
+          this.terminals.delete(id);
+          console.log(`[TerminalRegistry] ✅ Terminal ${terminal.name} removed from registry`);
         } else {
-          // NORMAL CLOSE (power off): Just detach from tmux, leave session running for reconnection
-          console.log(`[TerminalRegistry] Power off - detaching from tmux session (session preserved): ${sessionName}`);
+          // DETACH (power off): Just detach from tmux, leave session running AND keep in registry for reconnection
+          console.log(`[TerminalRegistry] Detaching from tmux session (session + registry entry preserved): ${sessionName}`);
           await ptyHandler.killPTY(id); // This just kills the PTY attachment, not the tmux session
+
+          // CRITICAL FIX: Keep terminal in registry for reconnection!
+          terminal.state = 'disconnected';
+          console.log(`[TerminalRegistry] ✅ Terminal ${terminal.name} kept in registry for reconnection (state: disconnected)`);
         }
       } else {
         // Non-tmux terminals
@@ -588,10 +596,12 @@ class TerminalRegistry extends EventEmitter {
         } else {
           this.disconnectTerminal(id);
         }
+
+        // Always delete non-tmux terminals
+        this.terminals.delete(id);
+        console.log(`[TerminalRegistry] ✅ Terminal ${terminal.name} removed from registry`);
       }
 
-      this.terminals.delete(id);
-      console.log(`[TerminalRegistry] ✅ Terminal ${terminal.name} removed from registry`);
       return true;
     } catch (error) {
       console.error(`[TerminalRegistry] Error closing terminal ${id}:`, error);

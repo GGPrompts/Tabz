@@ -6,7 +6,188 @@ A living document capturing critical bugs, their root causes, and fixes to preve
 
 ## Table of Contents
 
+- [Detached Sessions Reattachment Bug (Nov 10, 2025)](#detached-sessions-reattachment-bug-nov-10-2025)
 - [Split Terminal & Reconnection Issues (Nov 10, 2025)](#split-terminal--reconnection-issues-nov-10-2025)
+
+---
+
+## Detached Sessions Reattachment Bug (Nov 10, 2025)
+
+### Context
+Implemented a detached sessions feature that allows users to detach terminals (keep tmux session running) and reattach them later. Detaching worked perfectly, but clicking a detached tab to reattach got stuck on "Connecting to terminal..." spinner indefinitely. Only a page refresh would reconnect successfully.
+
+### Root Cause Analysis
+
+There were **two critical bugs** preventing reattachment:
+
+#### Bug #1: Backend Removed Terminals from Registry on Detach
+
+```typescript
+// backend/modules/terminal-registry.js - closeTerminal()
+async closeTerminal(id, force = false) {
+  if (terminal.sessionId || terminal.sessionName) {
+    if (force) {
+      // Kill tmux session
+    } else {
+      // Just detach from tmux
+      await ptyHandler.killPTY(id)
+    }
+  }
+
+  this.terminals.delete(id)  // ❌ Always removed from registry!
+  // ❌ When reattaching, backend can't find terminal to reconnect
+}
+```
+
+The detach flow:
+1. User clicks "Detach" → backend calls `closeTerminal(id, false)`
+2. Backend kills PTY but keeps tmux session alive ✓
+3. Backend removes terminal from registry ✗
+4. User clicks detached tab → tries to reconnect → terminal not in registry → fails
+
+**Evidence from logs:**
+```
+[TerminalRegistry] Detaching from tmux session (session preserved): tt-bash-7zx
+[TerminalRegistry] ✅ Terminal Bash-4 removed from registry  ← Problem!
+[UnifiedSpawn] ✅ Returning result: { success: true, ... }
+[Server] 📤 unifiedSpawn.spawn() returned: { success: true, ... }
+[Server] ✅ Broadcast complete!  ← Backend sent message!
+```
+
+But no reconnection because the terminal was gone from registry.
+
+#### Bug #2: Frontend Blocked Duplicate AgentIds
+
+```typescript
+// src/hooks/useWebSocketManager.ts - handleWebSocketMessage
+case 'terminal-spawned':
+  if (message.data) {
+    if (processedAgentIds.current.has(message.data.id)) {
+      return  // ❌ Blocks ALL messages with same agentId!
+    }
+    // ... process message
+  }
+```
+
+The reconnection flow:
+1. Terminal spawns with `agentId: abc123` → added to `processedAgentIds`
+2. User detaches terminal
+3. User clicks to reattach → sends spawn request with **same** `sessionName`
+4. Backend reconnects to existing terminal → returns **same** `agentId: abc123`
+5. Frontend receives `terminal-spawned` → checks `processedAgentIds` → **blocks it!**
+
+**Evidence from logs:**
+```
+[useWebSocketManager] 📨 Received terminal-spawned: {
+  agentId: '61ea2f3c-35e8-4ea5-8fbb-0371e34249dd',
+  requestId: 'reconnect-1762804414324-g0w6gwead',
+  name: 'TFE',
+  sessionName: 'tt-tfe-i41'
+}
+[useWebSocketManager] ⏭️ Skipping - agentId already processed: 61ea2f3c-35e8-4ea5-8fbb-0371e34249dd
+```
+
+The message was received but rejected because the agentId was already in the set!
+
+### The Fixes
+
+#### Fix #1: Keep Detached Terminals in Backend Registry
+
+```typescript
+// backend/modules/terminal-registry.js
+async closeTerminal(id, force = false) {
+  if (terminal.sessionId || terminal.sessionName) {
+    if (force) {
+      // FORCE CLOSE (X button): Kill tmux and remove from registry
+      execSync(`tmux kill-session -t "${sessionName}"`)
+      await ptyHandler.killPTY(id)
+      this.terminals.delete(id)
+      console.log(`✅ Terminal ${terminal.name} removed from registry`)
+    } else {
+      // DETACH (power off): Keep session AND keep in registry
+      await ptyHandler.killPTY(id)
+      terminal.state = 'disconnected'
+      console.log(`✅ Terminal ${terminal.name} kept in registry for reconnection`)
+      // ✅ Don't delete! Let it reconnect later
+    }
+  }
+}
+```
+
+**File:** `backend/modules/terminal-registry.js:564-603`
+
+**Lesson:** Detached terminals must remain in backend registry with `state='disconnected'` so reconnection logic can find and reattach to them.
+
+#### Fix #2: Allow Reprocessing AgentIds During Reconnection
+
+```typescript
+// src/hooks/useWebSocketManager.ts
+case 'terminal-spawned':
+  if (message.data) {
+    // Find matching terminal first
+    let existingTerminal = pendingSpawns.current.get(message.requestId)
+    // ... other fallbacks ...
+
+    // Check if we should skip (moved AFTER finding terminal)
+    if (processedAgentIds.current.has(message.data.id) && !existingTerminal) {
+      console.log('⏭️ Skipping - agentId already processed and no matching terminal')
+      return
+    }
+
+    // Allow reprocessing for reconnection
+    if (existingTerminal && existingTerminal.status === 'spawning') {
+      console.log('🔄 Allowing reprocessing for reconnection:', message.data.id)
+      processedAgentIds.current.delete(message.data.id)  // ✅ Remove from set!
+    }
+    // ... process message normally ...
+  }
+```
+
+**File:** `src/hooks/useWebSocketManager.ts:124-158`
+
+**Lesson:** Duplicate detection must account for reconnection scenarios. Same agentId should be allowed to be processed again when a terminal is in 'spawning' state (reattaching).
+
+### Why Page Refresh Worked
+
+Page refresh worked because:
+1. Frontend cleared `processedAgentIds.current` (new page load)
+2. Frontend sent `query-tmux-sessions` and found orphaned session
+3. Backend still had terminal in registry (from before our fix)
+4. Reconnection succeeded because no agentId was blocked
+
+### Debugging Steps Used
+
+1. **Added debug logging to backend** to trace spawn flow:
+   ```typescript
+   console.log('[Server] 📥 Calling unifiedSpawn.spawn()')
+   console.log('[Server] 📤 unifiedSpawn.spawn() returned:', result)
+   console.log('[Server] ✅ Broadcast complete!')
+   ```
+
+2. **Added debug logging to frontend** to see message reception:
+   ```typescript
+   console.log('[useWebSocketManager] 📨 Received terminal-spawned:', message)
+   console.log('[useWebSocketManager] ⏭️ Skipping - agentId already processed')
+   ```
+
+3. **Checked backend logs** to verify message was sent:
+   ```bash
+   tmux capture-pane -t tabz:backend -p -S -100 | tail -50
+   ```
+
+4. **Checked browser console** to verify message was received but blocked.
+
+### Lesson Summary
+
+**When implementing detach/reattach functionality:**
+
+1. **Backend state:** Detached terminals must stay in registry with `state='disconnected'`. Only remove on force close.
+
+2. **Duplicate detection:** Must account for reconnection scenarios where the same agentId is reused. Move duplicate check after terminal matching.
+
+3. **Debug flow end-to-end:** If backend sends message but frontend doesn't respond, add logging to WebSocket message handler to trace where messages get filtered.
+
+4. **Test both paths:** Test manual reattach (clicking tab) AND automatic reconnect (page refresh). They use different code paths!
 
 ---
 
@@ -316,4 +497,4 @@ What did you change? Include before/after code.
 
 ---
 
-**Last Updated:** November 10, 2025
+**Last Updated:** November 10, 2025 (Added: Detached Sessions Reattachment Bug)

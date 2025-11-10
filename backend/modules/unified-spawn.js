@@ -265,6 +265,13 @@ class UnifiedSpawnSystem {
         resumable: handler.resumable
       });
 
+      console.log('[UnifiedSpawn] ✅ Handler returned terminal:', {
+        id: terminal?.id,
+        name: terminal?.name,
+        state: terminal?.state,
+        hasTerminal: !!terminal
+      });
+
       // 10. Record spawn in history
       this.recordSpawn({
         requestId,
@@ -278,11 +285,20 @@ class UnifiedSpawnSystem {
       // 11. Remove from in-progress
       this.spawnsInProgress.delete(requestId);
 
-      return {
+      const result = {
         success: true,
         terminal,
         requestId
       };
+
+      console.log('[UnifiedSpawn] ✅ Returning result:', {
+        success: result.success,
+        hasTerminal: !!result.terminal,
+        terminalId: result.terminal?.id,
+        requestId: result.requestId
+      });
+
+      return result;
 
     } catch (error) {
       console.error('[UnifiedSpawn] Spawn failed:', error);
