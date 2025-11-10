@@ -353,14 +353,9 @@ export function useWebSocketManager(
     processedAgentIds.current.clear()
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    let wsUrl: string
-    if (import.meta.env.DEV) {
-      wsUrl = `${protocol}//${window.location.host}/ws`
-    } else {
-      const backendPort = import.meta.env.VITE_BACKEND_PORT || '8127'
-      const host = window.location.hostname || 'localhost'
-      wsUrl = `${protocol}//${host}:${backendPort}/ws`
-    }
+    const backendPort = import.meta.env.VITE_BACKEND_PORT || '8127'
+    const host = window.location.hostname || 'localhost'
+    const wsUrl = `${protocol}//${host}:${backendPort}/ws`
 
     const ws = new WebSocket(wsUrl)
 
