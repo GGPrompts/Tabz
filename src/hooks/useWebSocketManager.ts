@@ -83,6 +83,9 @@ export function useWebSocketManager(
     }
   }, [storedTerminals.length])
 
+  // Track when page loaded to allow reconnection during initial load period
+  const pageLoadTime = useRef(Date.now())
+
   // Query for tmux sessions after both spawn options load AND WebSocket connects
   const hasQueriedSessions = useRef(false)
   useEffect(() => {
@@ -302,10 +305,14 @@ export function useWebSocketManager(
         if (message.data && message.data.sessions) {
           const activeSessions = new Set(message.data.sessions)
           const currentSpawnOptions = spawnOptionsRef.current
-          const isInitialLoad = !hasQueriedSessions.current
+
+          // Consider it "initial load" if within 30 seconds of page load
+          const timeSincePageLoad = Date.now() - pageLoadTime.current
+          const isInitialLoadPeriod = timeSincePageLoad < 30000
+          const isFirstQuery = !hasQueriedSessions.current
 
           console.log('[useWebSocketManager] 📋 Active tmux sessions:', Array.from(activeSessions))
-          console.log(`[useWebSocketManager] Mode: ${isInitialLoad ? 'INITIAL LOAD (will reconnect)' : 'HEALTH CHECK (cleanup only)'}`)
+          console.log(`[useWebSocketManager] Mode: ${isInitialLoadPeriod ? 'INITIAL LOAD PERIOD (will reconnect)' : 'HEALTH CHECK (cleanup only)'}, timeSincePageLoad: ${timeSincePageLoad}ms`)
 
           // Track which sessions we've started reconnecting (prevent duplicates)
           const reconnectingSessionsSet = new Set<string>()
@@ -313,12 +320,28 @@ export function useWebSocketManager(
           let removeCount = 0
 
           // Process stored terminals
+          console.log(`[useWebSocketManager] 🔍 Checking ${storedTerminals.length} stored terminals against ${activeSessions.size} tmux sessions`)
+
           storedTerminals.forEach(terminal => {
+            // Log each terminal we're checking
+            if (terminal.sessionName) {
+              const inTmux = activeSessions.has(terminal.sessionName)
+              const terminalWindow = terminal.windowId || 'main'
+              const isCurrentWindow = terminalWindow === currentWindowId
+
+              console.log(`[useWebSocketManager]   Terminal: ${terminal.name} (${terminal.sessionName}) - inTmux: ${inTmux}, window: ${terminalWindow}, current: ${isCurrentWindow}, status: ${terminal.status}, agentId: ${terminal.agentId}`)
+            }
+
             if (terminal.sessionName && activeSessions.has(terminal.sessionName)) {
               // Session exists in tmux
 
-              // ONLY reconnect during initial load, NOT during health checks
-              if (isInitialLoad) {
+              // Check if terminal needs connection
+              const hasActiveAgent = terminal.agentId && webSocketAgents.some(a => a.id === terminal.agentId)
+
+              // Reconnect if: within initial load period AND doesn't have active agent
+              const shouldReconnect = isInitialLoadPeriod && !hasActiveAgent
+
+              if (shouldReconnect) {
                 // Skip split containers ONLY if they're hidden (their session belongs to a pane)
                 // But allow them to reconnect if they're visible (they are the first pane)
                 if (terminal.splitLayout && terminal.splitLayout.type !== 'single' && terminal.isHidden) {
@@ -336,12 +359,14 @@ export function useWebSocketManager(
                   return
                 }
 
-                // ✅ CRITICAL FIX: Only reconnect if terminal is NOT already connected
-                // Check both localStorage agentId AND active WebSocket agents
-                const hasActiveAgent = terminal.agentId && webSocketAgents.some(a => a.id === terminal.agentId)
-                const needsReconnection = !hasActiveAgent && terminal.status !== 'active'
+                // Check if already connected (skip if so)
+                if (hasActiveAgent && terminal.status === 'active') {
+                  // Already connected, skip
+                  return
+                }
 
-                if (needsReconnection) {
+                // Need reconnection
+                if (true) {
                   reconnectingSessionsSet.add(terminal.sessionName)
                   reconnectCount++
                   console.log(`[useWebSocketManager] 🔄 Reconnecting to session: ${terminal.sessionName} (agentId: ${terminal.agentId}, hasActiveAgent: ${hasActiveAgent}, status: ${terminal.status})`)
@@ -378,7 +403,7 @@ export function useWebSocketManager(
           })
 
           // Summary log - should be 0/0 during health checks if everything is stable
-          console.log(`[useWebSocketManager] ✅ ${isInitialLoad ? 'Initial load' : 'Health check'} complete: ${reconnectCount} reconnected, ${removeCount} removed`)
+          console.log(`[useWebSocketManager] ✅ ${isInitialLoadPeriod ? 'Initial load' : 'Health check'} complete: ${reconnectCount} reconnected, ${removeCount} removed`)
         }
         break
     }

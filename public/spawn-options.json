@@ -7,7 +7,10 @@
       "icon": "💻",
       "description": "Plain bash terminal",
       "defaultTheme": "matrix",
-      "defaultTransparency": 90
+      "defaultTransparency": 90,
+      "defaultFontSize": 20,
+      "defaultFontFamily": "monospace",
+      "defaultBackground": "dark-neutral"
     },
     {
       "label": "TFE",
@@ -42,6 +45,19 @@
       "description": "Codex AI assistant",
       "defaultTheme": "amber",
       "defaultTransparency": 100
+    },
+    {
+      "label": "Pyradio",
+      "command": "pyradio",
+      "terminalType": "tui-tool",
+      "icon": "📡",
+      "description": "",
+      "workingDir": "~",
+      "defaultTheme": "default",
+      "defaultBackground": "dark-neutral",
+      "defaultTransparency": 100,
+      "defaultFontFamily": "'Hack Nerd Font', monospace",
+      "defaultFontSize": 18
     },
     {
       "label": "TUI Classic Games",
