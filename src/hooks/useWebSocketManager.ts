@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import SimpleSpawnService from '../services/SimpleSpawnService'
-import { Terminal as StoredTerminal } from '../stores/simpleTerminalStore'
+import { Terminal as StoredTerminal, useSimpleTerminalStore } from '../stores/simpleTerminalStore'
 import { Agent } from '../types'
 
 interface SpawnOption {
@@ -211,63 +211,125 @@ export function useWebSocketManager(
 
       case 'terminal-closed':
         if (message.data && message.data.id) {
+          console.log(`[useWebSocketManager] Received terminal-closed for agentId: ${message.data.id}`)
+
+          // Get fresh terminals from store (not closure variable which might be stale)
+          const freshTerminals = useSimpleTerminalStore.getState().terminals
+
+          console.log(`[useWebSocketManager] Current terminals:`, freshTerminals.map(t => ({
+            id: t.id,
+            name: t.name,
+            agentId: t.agentId,
+            status: t.status
+          })))
+
           setWebSocketAgents(prev => prev.filter(a => a.id !== message.data.id))
 
           // Find terminal with this agentId
-          const terminal = storedTerminals.find(t => t.agentId === message.data.id)
-          if (terminal) {
-            console.log(`[useWebSocketManager] Terminal exited: ${terminal.name}`)
+          const terminal = freshTerminals.find(t => t.agentId === message.data.id)
+          if (!terminal) {
+            console.warn(`[useWebSocketManager] Terminal not found for agentId: ${message.data.id}`)
+            console.warn(`[useWebSocketManager] Available agentIds:`, freshTerminals.map(t => t.agentId).filter(Boolean))
+            break
+          }
 
-            // Handle split terminal removal
-            if (terminal.isHidden) {
-              const splitContainer = storedTerminals.find(t =>
-                t.splitLayout?.panes?.some(p => p.terminalId === terminal.id)
-              )
+          console.log(`[useWebSocketManager] Terminal exited naturally (exit/Ctrl+D): ${terminal.name} (${terminal.id})`)
 
-              if (splitContainer && splitContainer.splitLayout) {
-                const remainingPanes = splitContainer.splitLayout.panes.filter(
-                  p => p.terminalId !== terminal.id
-                )
+          // Check if this terminal is part of a split
+          const splitContainer = freshTerminals.find(t =>
+            t.splitLayout?.panes?.some(p => p.terminalId === terminal.id)
+          )
 
-                if (remainingPanes.length === 1) {
-                  // Convert to single terminal
-                  updateTerminal(splitContainer.id, {
-                    splitLayout: { type: 'single', panes: [] }
-                  })
-                  updateTerminal(remainingPanes[0].terminalId, { isHidden: false })
-                } else if (remainingPanes.length > 1) {
-                  updateTerminal(splitContainer.id, {
-                    splitLayout: {
-                      ...splitContainer.splitLayout,
-                      panes: remainingPanes
-                    }
-                  })
-                }
-              }
-            }
+          if (splitContainer && splitContainer.splitLayout) {
+            // Terminal is part of a split - clean up the split
+            console.log(`[useWebSocketManager] Cleaning up split for exited terminal: ${terminal.id}`)
 
-            // Remove terminal
-            removeTerminal(terminal.id)
+            const remainingPanes = splitContainer.splitLayout.panes.filter(
+              p => p.terminalId !== terminal.id
+            )
 
-            // Switch active terminal or close window
-            setTimeout(() => {
-              const currentVisibleTerminals = storedTerminals.filter(t => {
-                const terminalWindow = t.windowId || 'main'
-                return terminalWindow === currentWindowId && !t.isHidden
+            if (remainingPanes.length === 1) {
+              // Only 1 pane left - convert split container back to single terminal
+              console.log(`[useWebSocketManager] Only 1 pane remaining, converting split to single terminal`)
+              updateTerminal(splitContainer.id, {
+                splitLayout: { type: 'single', panes: [] }
               })
 
-              if (activeTerminalId === terminal.id) {
-                if (currentVisibleTerminals.length > 0) {
-                  setActiveTerminal(currentVisibleTerminals[0].id)
-                } else {
-                  setActiveTerminal(null)
-                  // Close popped-out windows when empty
-                  if (currentWindowId !== 'main') {
-                    setTimeout(() => window.close(), 1000)
-                  }
+              // Unhide the remaining pane if it was hidden (backwards compatibility)
+              const remainingPaneTerminal = freshTerminals.find(t => t.id === remainingPanes[0].terminalId)
+              if (remainingPaneTerminal?.isHidden) {
+                updateTerminal(remainingPanes[0].terminalId, {
+                  isHidden: false
+                })
+              }
+
+              // Set the remaining pane as active
+              setActiveTerminal(remainingPanes[0].terminalId)
+            } else if (remainingPanes.length > 1) {
+              // Still have multiple panes
+              updateTerminal(splitContainer.id, {
+                splitLayout: {
+                  ...splitContainer.splitLayout,
+                  panes: remainingPanes
+                }
+              })
+
+              // Keep the split active, focus the first remaining pane
+              setActiveTerminal(splitContainer.id)
+              setFocusedTerminal(remainingPanes[0].terminalId)
+            } else {
+              // No panes left - remove the container too
+              removeTerminal(splitContainer.id)
+            }
+          }
+
+          console.log(`[useWebSocketManager] Removing terminal from store: ${terminal.id}`)
+
+          // Remove the exited terminal from store
+          removeTerminal(terminal.id)
+
+          // If this was the active terminal, we need to switch to another one
+          // Do this in the next tick to allow state to update
+          if (activeTerminalId === terminal.id) {
+            console.log(`[useWebSocketManager] Closed terminal was active, will switch to next available`)
+
+            // Use requestAnimationFrame to ensure state has updated
+            requestAnimationFrame(() => {
+              // Get fresh terminals from Zustand store instead of closure variable
+              const freshTerminals = useSimpleTerminalStore.getState().terminals
+              const currentVisibleTerminals = freshTerminals.filter(t => {
+                const terminalWindow = t.windowId || 'main'
+                if (terminalWindow !== currentWindowId) return false
+
+                // Filter out hidden terminals and split containers
+                const isHidden = t.isHidden === true
+                if (isHidden) return false
+
+                // Include panes (even if they also have splitLayout)
+                const isPane = freshTerminals.some(container =>
+                  container.splitLayout?.panes?.some(p => p.terminalId === t.id)
+                )
+                if (isPane) return true
+
+                // Exclude containers that are not also panes
+                const hasSplitLayout = t.splitLayout && t.splitLayout.type !== 'single'
+                if (hasSplitLayout) return false
+
+                return true
+              })
+
+              if (currentVisibleTerminals.length > 0) {
+                console.log(`[useWebSocketManager] Switching to next terminal: ${currentVisibleTerminals[0].name}`)
+                setActiveTerminal(currentVisibleTerminals[0].id)
+              } else {
+                console.log(`[useWebSocketManager] No more terminals, clearing active`)
+                setActiveTerminal(null)
+                // Close popped-out windows when empty
+                if (currentWindowId !== 'main') {
+                  setTimeout(() => window.close(), 1000)
                 }
               }
-            }, 100)
+            })
           }
         }
         break

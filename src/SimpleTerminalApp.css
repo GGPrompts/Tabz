@@ -318,6 +318,104 @@
   z-index: 1;
 }
 
+/* Detached terminal tab (grayed out, shows 📌 icon) */
+.tab.detached {
+  opacity: 0.5;
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(251, 191, 36, 0.3); /* Yellow tint */
+  cursor: pointer;
+}
+
+.tab.detached:hover {
+  opacity: 0.7;
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
+.tab.detached .tab-label {
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}
+
+.tab.detached:hover .tab-label {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Split tabs - merged appearance with orange arrow separator */
+.tab.split-left {
+  border-right: none;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  margin-right: 0;
+  position: relative;
+  padding-right: 24px; /* Extra space for arrow */
+}
+
+.tab.split-left::after {
+  content: '↔';
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #f59e0b;
+  font-size: 14px;
+  font-weight: bold;
+  pointer-events: none;
+}
+
+.tab.split-middle {
+  border-left: none;
+  border-right: none;
+  border-radius: 0;
+  margin-left: 0;
+  margin-right: 0;
+  position: relative;
+  padding-right: 24px; /* Extra space for arrow */
+}
+
+.tab.split-middle::after {
+  content: '↔';
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #f59e0b;
+  font-size: 14px;
+  font-weight: bold;
+  pointer-events: none;
+}
+
+.tab.split-right {
+  border-left: none;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  margin-left: 0;
+}
+
+/* All split tabs get orange border when any sibling is active */
+.tab.split-left.split-active,
+.tab.split-middle.split-active,
+.tab.split-right.split-active {
+  border-color: #f59e0b;
+  background: #1a1b26;
+}
+
+/* Focused tab within split gets orange text */
+.tab.split-left.focused .tab-label,
+.tab.split-middle.focused .tab-label,
+.tab.split-right.focused .tab-label {
+  color: #f59e0b;
+}
+
+/* Locked split panes - non-draggable */
+.tab.locked {
+  cursor: default !important;
+}
+
+.tab.locked:active {
+  cursor: default !important;
+}
+
 /* Single terminal icon (default) */
 .tab-icon-single {
   font-size: 16px;
@@ -1286,4 +1384,38 @@
   background: rgba(59, 130, 246, 0.4);
   border-color: rgba(59, 130, 246, 0.6);
   transform: scale(1.1);
+}
+
+/* Context Menu */
+.tab-context-menu {
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 4px;
+  min-width: 180px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+}
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: #e0e0e0;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.context-menu-item:hover {
+  background: rgba(59, 130, 246, 0.3);
+  color: white;
+}
+
+.context-menu-item:active {
+  background: rgba(59, 130, 246, 0.5);
 }

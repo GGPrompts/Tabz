@@ -717,7 +717,7 @@ router.post('/tmux/detach/:name', asyncHandler(async (req, res) => {
     // This doesn't kill the session, just detaches clients
     execSync(`tmux detach-client -s "${name}" 2>/dev/null || true`);
 
-    log.info(`Detached from tmux session: ${name}`);
+    console.log(`[API] Detached from tmux session: ${name}`);
 
     res.json({
       success: true,
@@ -725,7 +725,7 @@ router.post('/tmux/detach/:name', asyncHandler(async (req, res) => {
       session: name
     });
   } catch (err) {
-    log.error(`Failed to detach from tmux session ${name}:`, err.message);
+    console.error(`[API] Failed to detach from tmux session ${name}:`, err.message);
     res.status(500).json({
       success: false,
       error: err.message

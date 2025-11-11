@@ -132,11 +132,24 @@ class TerminalRegistry extends EventEmitter {
         terminal.exitCode = exitCode;
         terminal.signal = signal;
 
-        // CRITICAL FIX: Don't auto-delete tmux terminals - they might be reconnecting
-        // Tmux sessions persist even when PTY is killed, so keep terminal in registry
+        // Check if this is a tmux terminal
         if (terminal.sessionId || terminal.sessionName) {
-          console.log(`[TerminalRegistry] PTY closed for tmux terminal ${terminal.name}, keeping in registry for reconnection`);
-          terminal.state = 'disconnected'; // Mark as disconnected instead of closed
+          console.log(`[TerminalRegistry] PTY closed for tmux terminal ${terminal.name}`);
+
+          // Check if the tmux session still exists
+          const sessionName = terminal.sessionName || terminal.sessionId;
+          const sessionExists = ptyHandler.tmuxSessionExists(sessionName);
+
+          if (sessionExists) {
+            // Session still exists - user might have detached or PTY died
+            console.log(`[TerminalRegistry] Tmux session ${sessionName} still exists, marking as disconnected`);
+            terminal.state = 'disconnected';
+          } else {
+            // Session ended (user typed exit/Ctrl+D) - clean up
+            console.log(`[TerminalRegistry] Tmux session ${sessionName} ended, removing terminal`);
+            this.terminals.delete(terminalId);
+            this.emit('closed', terminalId);
+          }
         } else {
           // Non-tmux terminals can be safely deleted when PTY closes
           this.terminals.delete(terminalId);

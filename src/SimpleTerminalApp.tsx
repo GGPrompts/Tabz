@@ -69,14 +69,22 @@ type DropZone = 'left' | 'right' | 'top' | 'bottom' | 'center' | null
 interface SortableTabProps {
   terminal: StoredTerminal
   isActive: boolean
+  isFocused: boolean
+  isSplitActive: boolean
   onActivate: () => void
   onClose: (e: React.MouseEvent) => void
+  onContextMenu: (e: React.MouseEvent, terminalId: string) => void
   dropZone: DropZone
   isDraggedOver: boolean
   mousePosition: React.MutableRefObject<{ x: number; y: number }>
+  splitPosition?: 'single' | 'left' | 'middle' | 'right'
 }
 
-function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDraggedOver, mousePosition }: SortableTabProps) {
+function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate, onClose, onContextMenu, dropZone, isDraggedOver, mousePosition, splitPosition = 'single' }: SortableTabProps) {
+  // LOCK SPLIT PANES: Disable dragging for terminals that are part of a split (but not the container)
+  const isPartOfSplit = splitPosition !== 'single'
+  const isDraggable = !isPartOfSplit
+
   const {
     attributes,
     listeners,
@@ -88,6 +96,8 @@ function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDrag
     id: terminal.id,
     // Disable layout animations to prevent tabs from shifting during drag
     animateLayoutChanges: () => false,
+    // Disable dragging for split pane tabs (lock them together)
+    disabled: !isDraggable,
   })
 
   const style = {
@@ -188,26 +198,23 @@ function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDrag
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={{
+        ...style,
+        cursor: isDraggable ? 'grab' : 'default', // Show non-draggable cursor for split panes
+      }}
       data-tab-id={terminal.id}
-      className={`tab ${isActive ? 'active' : ''} ${terminal.status === 'spawning' ? 'spawning' : ''} ${isDraggedOver ? 'drag-over' : ''} ${isBlocked ? 'merge-blocked' : ''}`}
+      className={`tab ${isActive ? 'active' : ''} ${isFocused ? 'focused' : ''} ${isSplitActive ? 'split-active' : ''} ${terminal.status === 'spawning' ? 'spawning' : ''} ${terminal.status === 'detached' ? 'detached' : ''} ${isDraggedOver ? 'drag-over' : ''} ${isBlocked ? 'merge-blocked' : ''} ${splitPosition !== 'single' ? `split-${splitPosition}` : ''} ${isPartOfSplit ? 'locked' : ''}`}
       onClick={onActivate}
+      onContextMenu={(e) => onContextMenu(e, terminal.id)}
       {...attributes}
-      {...listeners}
+      {...(isDraggable ? listeners : {})}
     >
-      {renderTabIcon()}
+      {terminal.status === 'detached' ? (
+        <span className="tab-icon-single">📌</span>
+      ) : (
+        <span className="tab-icon-single">{terminal.icon || '💻'}</span>
+      )}
       <span className="tab-label">{terminal.name}</span>
-      <button
-        className="popout-tab-btn"
-        onClick={(e) => {
-          e.stopPropagation()
-          window.handlePopOutTab?.(terminal.id)
-        }}
-        onPointerDown={(e) => e.stopPropagation()}
-        title="Pop out to new browser tab"
-      >
-        ↗
-      </button>
       <button
         className="tab-close"
         onClick={onClose}
@@ -231,11 +238,11 @@ function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDrag
         <div className={`reorder-indicator ${dropZone}`}></div>
       )}
 
-      {/* Blocked Overlay - shows when trying to split into a split tab */}
+      {/* Blocked Overlay - shows when trying to split into/from split panes */}
       {isBlocked && (
         <div className="merge-blocked-overlay">
-          <div className="blocked-icon">🚫</div>
-          <div className="blocked-text">Can't split into split tab<br/>(Use center to reorder)</div>
+          <div className="blocked-icon">🔒</div>
+          <div className="blocked-text">Split panes are locked<br/>(Use "Unsplit" in context menu)</div>
         </div>
       )}
     </div>
@@ -246,6 +253,14 @@ function SimpleTerminalApp() {
   const [showSpawnMenu, setShowSpawnMenu] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [headerVisible, setHeaderVisible] = useState(true)
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    show: boolean
+    x: number
+    y: number
+    terminalId: string | null
+  }>({ show: false, x: 0, y: 0, terminalId: null })
 
   // Settings
   const { useTmux, updateSettings } = useSettingsStore()
@@ -285,10 +300,12 @@ function SimpleTerminalApp() {
 
   // Filter terminals by current window ID
   // Each window only shows terminals that belong to it (or have no windowId yet = default to main window)
+  // EXCEPT: Detached terminals show in ALL windows so they can be re-attached anywhere
+  // NEW: Split panes now show as tabs (styled to look merged)
   const visibleTerminals = useMemo(() => {
     const filtered = storedTerminals.filter(t => {
-      // Hidden terminals (split panes) are never visible in tab bar
-      if (t.isHidden) return false
+      // Detached terminals show in ALL windows (can re-attach from any monitor)
+      if (t.status === 'detached') return true
 
       // Terminals without a windowId belong to the main window (backwards compatibility)
       const terminalWindow = t.windowId || 'main'
@@ -299,6 +316,38 @@ function SimpleTerminalApp() {
 
     return filtered
   }, [storedTerminals, currentWindowId])
+
+  // Detect split tab positions for merged styling
+  const splitTabInfo = useMemo(() => {
+    const info = new Map<string, { position: 'single' | 'left' | 'middle' | 'right', splitContainerId: string }>()
+
+    visibleTerminals.forEach(terminal => {
+      // Check if this terminal is part of a split (find container)
+      const splitContainer = visibleTerminals.find(t =>
+        t.splitLayout?.panes?.some(p => p.terminalId === terminal.id)
+      )
+
+      if (splitContainer?.splitLayout && splitContainer.splitLayout.type !== 'single') {
+        const panes = splitContainer.splitLayout.panes
+        const paneIndex = panes.findIndex(p => p.terminalId === terminal.id)
+
+        if (paneIndex !== -1) {
+          let position: 'left' | 'middle' | 'right'
+          if (panes.length === 2) {
+            position = paneIndex === 0 ? 'left' : 'right'
+          } else {
+            position = paneIndex === 0 ? 'left' : paneIndex === panes.length - 1 ? 'right' : 'middle'
+          }
+
+          info.set(terminal.id, { position, splitContainerId: splitContainer.id })
+        }
+      } else {
+        info.set(terminal.id, { position: 'single', splitContainerId: '' })
+      }
+    })
+
+    return info
+  }, [visibleTerminals])
 
   // Drag-and-drop logic (extracted to custom hook)
   const {
@@ -523,10 +572,238 @@ function SimpleTerminalApp() {
     }
   }, [handlePopOutTab])
 
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!contextMenu.show) return
+
+    const handleClick = () => {
+      setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+    }
+
+    document.addEventListener('click', handleClick)
+    return () => {
+      document.removeEventListener('click', handleClick)
+    }
+  }, [contextMenu.show])
+
+  // Handle right-click on tab
+  const handleTabContextMenu = (e: React.MouseEvent, terminalId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setContextMenu({
+      show: true,
+      x: e.clientX,
+      y: e.clientY,
+      terminalId
+    })
+  }
+
+  // Handle "Unsplit" context menu option
+  const handleContextUnsplit = () => {
+    if (!contextMenu.terminalId) return
+    const terminal = storedTerminals.find(t => t.id === contextMenu.terminalId)
+    if (!terminal) return
+
+    // Determine which pane to pop out
+    let paneToPopOut: string | null = null
+
+    if (terminal.splitLayout && terminal.splitLayout.type !== 'single') {
+      // Terminal is a container - use focusedTerminalId
+      paneToPopOut = focusedTerminalId
+    } else {
+      // Terminal is a pane - use its own ID
+      paneToPopOut = terminal.id
+    }
+
+    if (paneToPopOut) {
+      handlePopOutPane(paneToPopOut)
+    }
+    setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+  }
+
+  // Handle "Pop out to new window" context menu option
+  const handleContextPopOut = () => {
+    if (!contextMenu.terminalId) return
+    handlePopOutTab(contextMenu.terminalId)
+    setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+  }
+
+  // Handle "Detach" context menu option
+  const handleContextDetach = async () => {
+    if (!contextMenu.terminalId) return
+    const terminal = storedTerminals.find(t => t.id === contextMenu.terminalId)
+    if (!terminal || !terminal.sessionName) return
+
+    console.log(`[SimpleTerminalApp] Detaching from tmux session: ${terminal.sessionName}`)
+
+    // Check if this terminal is part of a split
+    const splitContainer = storedTerminals.find(t =>
+      t.splitLayout?.panes?.some(p => p.terminalId === terminal.id)
+    )
+
+    if (splitContainer && splitContainer.splitLayout) {
+      // Terminal is part of a split - remove it from the split first
+      console.log(`[SimpleTerminalApp] Detaching split pane ${terminal.id} from split ${splitContainer.id}`)
+
+      const remainingPanes = splitContainer.splitLayout.panes.filter(
+        p => p.terminalId !== terminal.id
+      )
+
+      if (remainingPanes.length === 1) {
+        // Only 1 pane left - convert split container back to single terminal
+        console.log(`[SimpleTerminalApp] Only 1 pane remaining, converting split to single terminal`)
+        updateTerminal(splitContainer.id, {
+          splitLayout: { type: 'single', panes: [] }
+        })
+
+        // Unhide the remaining pane if it was hidden (backwards compatibility)
+        const remainingPaneTerminal = storedTerminals.find(t => t.id === remainingPanes[0].terminalId)
+        if (remainingPaneTerminal?.isHidden) {
+          updateTerminal(remainingPanes[0].terminalId, {
+            isHidden: false
+          })
+        }
+
+        // Set the remaining pane as active
+        setActiveTerminal(remainingPanes[0].terminalId)
+      } else if (remainingPanes.length > 1) {
+        // Still have multiple panes
+        updateTerminal(splitContainer.id, {
+          splitLayout: {
+            ...splitContainer.splitLayout,
+            panes: remainingPanes
+          }
+        })
+
+        // Keep the split active, focus the first remaining pane
+        setActiveTerminal(splitContainer.id)
+        setFocusedTerminal(remainingPanes[0].terminalId)
+      }
+    }
+
+    try {
+      const response = await fetch(`/api/tmux/detach/${terminal.sessionName}`, {
+        method: 'POST',
+      })
+      const result = await response.json()
+
+      if (result.success) {
+        console.log(`[SimpleTerminalApp] ✓ Detached from session: ${terminal.sessionName}`)
+
+        // Close the PTY process via WebSocket (but keep terminal in store)
+        if (terminal.agentId && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          console.log(`[SimpleTerminalApp] Closing PTY for agent: ${terminal.agentId}`)
+          wsRef.current.send(JSON.stringify({
+            type: 'close',
+            terminalId: terminal.agentId,
+          }))
+        }
+
+        // Mark terminal as detached (keeps in localStorage, shows as grayed tab)
+        updateTerminal(contextMenu.terminalId, {
+          status: 'detached',
+          agentId: undefined, // Clear PTY connection
+        })
+      } else {
+        console.error(`[SimpleTerminalApp] Failed to detach:`, result.error)
+      }
+    } catch (error) {
+      console.error(`[SimpleTerminalApp] Error detaching from session:`, error)
+    }
+
+    setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+  }
+
+  // Handle re-attaching a detached terminal
+  const handleReattachTerminal = async (terminalId: string) => {
+    const terminal = storedTerminals.find(t => t.id === terminalId)
+    if (!terminal || terminal.status !== 'detached') return
+
+    console.log(`[SimpleTerminalApp] Re-attaching terminal ${terminal.name} to session ${terminal.sessionName}`)
+
+    // Find matching spawn option
+    const option = spawnOptions.find(opt =>
+      opt.command === terminal.command ||
+      opt.terminalType === terminal.terminalType
+    )
+
+    if (!option) {
+      console.error(`[SimpleTerminalApp] No spawn option found for terminal type: ${terminal.terminalType}`)
+      return
+    }
+
+    // Assign to current window when re-attaching
+    updateTerminal(terminalId, {
+      windowId: currentWindowId,
+      status: 'spawning',
+    })
+
+    // Use existing reconnect logic
+    await handleReconnectTerminal(terminal, option)
+
+    // Set as active after reconnecting
+    setActiveTerminal(terminalId)
+  }
+
   const handleCloseTerminal = (terminalId: string) => {
     const terminal = storedTerminals.find(t => t.id === terminalId)
+
+    // Check if this terminal is part of a split
+    const splitContainer = storedTerminals.find(t =>
+      t.splitLayout?.panes?.some(p => p.terminalId === terminalId)
+    )
+
+    if (splitContainer && splitContainer.splitLayout) {
+      // Terminal is part of a split - clean up the split first
+      console.log(`[SimpleTerminalApp] Closing pane ${terminalId} from split ${splitContainer.id}`)
+
+      const remainingPanes = splitContainer.splitLayout.panes.filter(
+        p => p.terminalId !== terminalId
+      )
+
+      if (remainingPanes.length === 1) {
+        // Only 1 pane left - convert split container back to single terminal
+        console.log(`[SimpleTerminalApp] Only 1 pane remaining, converting split to single terminal`)
+        updateTerminal(splitContainer.id, {
+          splitLayout: { type: 'single', panes: [] }
+        })
+
+        // Unhide the remaining pane if it was hidden (backwards compatibility)
+        const remainingPaneTerminal = storedTerminals.find(t => t.id === remainingPanes[0].terminalId)
+        if (remainingPaneTerminal?.isHidden) {
+          updateTerminal(remainingPanes[0].terminalId, {
+            isHidden: false
+          })
+        }
+
+        // Set the remaining pane as active
+        setActiveTerminal(remainingPanes[0].terminalId)
+      } else if (remainingPanes.length > 1) {
+        // Still have multiple panes
+        updateTerminal(splitContainer.id, {
+          splitLayout: {
+            ...splitContainer.splitLayout,
+            panes: remainingPanes
+          }
+        })
+
+        // Keep the split active, focus the first remaining pane
+        setActiveTerminal(splitContainer.id)
+        setFocusedTerminal(remainingPanes[0].terminalId)
+      } else {
+        // No panes left - close the container too
+        if (splitContainer.agentId && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'close',
+            terminalId: splitContainer.agentId,
+          }))
+        }
+        removeTerminal(splitContainer.id)
+      }
+    }
+
+    // Close the terminal via WebSocket
     if (terminal && terminal.agentId) {
-      // Close via WebSocket
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'close',
@@ -534,6 +811,8 @@ function SimpleTerminalApp() {
         }))
       }
     }
+
+    // Remove the terminal from store
     removeTerminal(terminalId)
   }
 
@@ -568,10 +847,7 @@ function SimpleTerminalApp() {
       return
     }
 
-    console.log(`[SimpleTerminalApp] Popping out pane ${paneTerminalId} to new tab`)
-
-    // Unhide the pane terminal (make it visible in tab bar)
-    updateTerminal(paneTerminalId, { isHidden: false })
+    console.log(`[SimpleTerminalApp] Popping out pane ${paneTerminalId} to new tab (unsplit)`)
 
     // Remove pane from split
     const remainingPanes = splitContainer.splitLayout.panes.filter(
@@ -584,9 +860,6 @@ function SimpleTerminalApp() {
       updateTerminal(splitContainer.id, {
         splitLayout: { type: 'single', panes: [] }
       })
-      // Unhide the remaining pane
-      const remainingPaneTerminalId = remainingPanes[0].terminalId
-      updateTerminal(remainingPaneTerminalId, { isHidden: false })
     } else if (remainingPanes.length > 1) {
       // Still have multiple panes
       updateTerminal(splitContainer.id, {
@@ -594,6 +867,13 @@ function SimpleTerminalApp() {
           ...splitContainer.splitLayout,
           panes: remainingPanes
         }
+      })
+    }
+
+    // Clear isHidden flag from popped-out terminal (backwards compatibility with old splits)
+    if (paneTerminal.isHidden) {
+      updateTerminal(paneTerminalId, {
+        isHidden: false
       })
     }
 
@@ -931,24 +1211,88 @@ function SimpleTerminalApp() {
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={visibleTerminals.map(t => t.id)}
+            items={visibleTerminals
+              .filter(t => {
+                const isHidden = t.isHidden === true
+                if (isHidden) return false
+
+                // Include panes (even if they also have splitLayout)
+                const splitInfo = splitTabInfo.get(t.id)
+                if (splitInfo && splitInfo.position !== 'single') return true
+
+                // Exclude containers that are not panes
+                const hasSplitLayout = t.splitLayout && t.splitLayout.type !== 'single'
+                if (hasSplitLayout) return false
+
+                return true
+              })
+              .map(t => t.id)}
             strategy={horizontalListSortingStrategy}
           >
             <div className="tab-bar">
-              {visibleTerminals.map(terminal => {
+              {visibleTerminals
+                .filter(terminal => {
+                  // HIDE terminals marked as hidden (backwards compatibility with old split approach)
+                  const isHidden = terminal.isHidden === true
+                  if (isHidden) return false
+
+                  // SHOW terminals that are panes in a split (even if they also have splitLayout)
+                  const splitInfo = splitTabInfo.get(terminal.id)
+                  if (splitInfo && splitInfo.position !== 'single') {
+                    return true // This is a pane - show it
+                  }
+
+                  // HIDE split containers that are NOT also panes
+                  const hasSplitLayout = terminal.splitLayout && terminal.splitLayout.type !== 'single'
+                  if (hasSplitLayout) {
+                    return false // Container only, not a pane - hide it
+                  }
+
+                  // SHOW regular terminals
+                  return true
+                })
+                .map(terminal => {
+                  const splitInfo = splitTabInfo.get(terminal.id)
+                  const isSplit = splitInfo && splitInfo.position !== 'single'
+
+                  // Check if any sibling in the split is active
+                  const isSplitActive = isSplit && visibleTerminals.some(t => {
+                    const siblingInfo = splitTabInfo.get(t.id)
+                    return siblingInfo?.splitContainerId === splitInfo.splitContainerId && t.id === activeTerminalId
+                  })
+
                 return (
                   <SortableTab
                     key={terminal.id}
                     terminal={terminal}
                     isActive={terminal.id === activeTerminalId}
-                    onActivate={() => setActiveTerminal(terminal.id)}
+                    isFocused={terminal.id === focusedTerminalId}
+                    isSplitActive={!!isSplitActive}
+                    onActivate={() => {
+                      // If detached, re-attach. Otherwise, just set as active
+                      if (terminal.status === 'detached') {
+                        handleReattachTerminal(terminal.id)
+                      } else {
+                        // If this tab is part of a split, set activeTerminalId to the container
+                        // (so the split view renders), and set focusedTerminalId to this pane
+                        if (splitInfo && splitInfo.splitContainerId) {
+                          setActiveTerminal(splitInfo.splitContainerId)
+                          setFocusedTerminal(terminal.id)
+                        } else {
+                          // Regular tab - just set as active
+                          setActiveTerminal(terminal.id)
+                        }
+                      }
+                    }}
                     onClose={(e) => {
                       e.stopPropagation()
                       handleCloseTerminal(terminal.id)
                     }}
+                    onContextMenu={handleTabContextMenu}
                     dropZone={dropZoneState?.terminalId === terminal.id ? dropZoneState.zone : null}
                     isDraggedOver={dropZoneState?.terminalId === terminal.id}
                     mousePosition={mousePosition}
+                    splitPosition={splitInfo?.position}
                   />
                 )
               })}
@@ -1163,20 +1507,49 @@ function SimpleTerminalApp() {
           </div>
         ) : (
           <>
-            {/* Render ONLY visible terminals (hidden terminals are rendered inside SplitLayout as panes) */}
-            {visibleTerminals.map((terminal) => {
+            {/* Render ONLY visible terminals (exclude split containers and hidden terminals) */}
+            {visibleTerminals
+              .filter(terminal => {
+                const isHidden = terminal.isHidden === true
+                if (isHidden) return false
+
+                // Include panes in splits (even if they also have splitLayout)
+                const splitInfo = splitTabInfo.get(terminal.id)
+                if (splitInfo && splitInfo.position !== 'single') return true
+
+                // Exclude containers that are not also panes
+                const hasSplitLayout = terminal.splitLayout && terminal.splitLayout.type !== 'single'
+                if (hasSplitLayout) return false
+
+                return true
+              })
+              .map((terminal) => {
               const agent = agents.find(a => a.id === terminal.agentId)
 
               // Don't render Terminal component until status is 'active' and agent exists
               if (!agent || terminal.status !== 'active') {
                 return terminal.id === activeTerminalId ? (
                   <div key={terminal.id} className="loading-state">
-                    <div className="loading-spinner"></div>
-                    <div className="loading-text">
-                      {terminal.status === 'spawning' ? 'Connecting to terminal...' :
-                       terminal.status === 'error' ? 'Failed to connect' :
-                       'Loading...'}
-                    </div>
+                    {terminal.status === 'detached' ? (
+                      <>
+                        <div style={{ fontSize: '48px', marginBottom: '16px' }}>📌</div>
+                        <div className="loading-text">
+                          Terminal detached from session: {terminal.sessionName}
+                        </div>
+                        <div style={{ marginTop: '12px', fontSize: '14px', color: '#888' }}>
+                          Click this tab to re-attach
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="loading-spinner"></div>
+                        <div className="loading-text">
+                          {terminal.status === 'spawning' ? 'Connecting to terminal...' :
+                           terminal.status === 'error' ? 'Failed to connect' :
+                           'Loading...'}
+                        </div>
+                      </>
+                    )}
                   </div>
                 ) : null
               }
@@ -1327,6 +1700,60 @@ function SimpleTerminalApp() {
               </label>
             </div>
           </div>
+      )}
+
+      {/* Context Menu */}
+      {contextMenu.show && contextMenu.terminalId && (
+        <div
+          className="tab-context-menu"
+          style={{
+            position: 'fixed',
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+            zIndex: 10000,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {(() => {
+            const terminal = storedTerminals.find(t => t.id === contextMenu.terminalId)
+            const canDetach = terminal?.sessionName && terminal?.status !== 'detached'
+
+            // Check if this terminal is part of a split (either as container or as pane)
+            const isInSplit = terminal && (
+              // This terminal is a split container
+              (terminal.splitLayout && terminal.splitLayout.type !== 'single') ||
+              // OR this terminal is a pane in another container's split
+              storedTerminals.some(t => t.splitLayout?.panes?.some(p => p.terminalId === terminal.id))
+            )
+
+            return (
+              <>
+                {canDetach && (
+                  <button
+                    className="context-menu-item"
+                    onClick={handleContextDetach}
+                  >
+                    Detach
+                  </button>
+                )}
+                {isInSplit && (
+                  <button
+                    className="context-menu-item"
+                    onClick={handleContextUnsplit}
+                  >
+                    Unsplit
+                  </button>
+                )}
+                <button
+                  className="context-menu-item"
+                  onClick={handleContextPopOut}
+                >
+                  Pop out to new window
+                </button>
+              </>
+            )
+          })()}
+        </div>
       )}
     </div>
   )

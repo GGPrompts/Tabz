@@ -49,9 +49,6 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
       updateTerminal(terminal.id, {
         splitLayout: { type: 'single', panes: [] }
       });
-      // Unhide the remaining pane
-      const remainingPaneTerminalId = remainingPanes[0].terminalId;
-      updateTerminal(remainingPaneTerminalId, { isHidden: false });
     } else if (remainingPanes.length > 1) {
       // Still have multiple panes
       updateTerminal(terminal.id, {
@@ -224,44 +221,24 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
           className={`split-pane split-pane-left ${leftTerminal.id === focusedTerminalId ? 'focused' : ''}`}
           onClick={() => setFocusedTerminal(leftTerminal.id)}
         >
-          <div className="pane-buttons">
-            <button
-              className="pane-popout-button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPopOut(leftTerminal.id);
-              }}
-              title={`Pop out ${leftTerminal.name} to new tab`}
-            >
-              ↗
-            </button>
-            <button
-              className="pane-close-button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleClosePane(leftTerminal.id);
-              }}
-              title={`Close ${leftTerminal.name}`}
-            >
-              ✕
-            </button>
-          </div>
-          <div style={{ width: '100%', height: '100%' }}>
-            <Terminal
-              key={`term-${leftTerminal.id}`}
-              ref={leftTerminal.id === focusedTerminalId ? terminalRef : null}
-              agent={leftAgent}
-              onClose={() => onClose(leftTerminal.id)}
-              onCommand={(cmd) => onCommand(cmd, leftTerminal.id)}
-              wsRef={wsRef}
-              embedded={true}
-              initialTheme={leftTerminal.theme}
-              initialBackground={leftTerminal.background || THEME_BACKGROUNDS[leftTerminal.theme || 'default'] || 'dark-neutral'}
-              initialOpacity={leftTerminal.transparency !== undefined ? leftTerminal.transparency / 100 : 1}
-              initialFontSize={leftTerminal.fontSize}
-              initialFontFamily={leftTerminal.fontFamily}
-              isSelected={leftTerminal.id === activeTerminalId}
-            />
+          <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+            <div style={{ width: '100%', height: '100%' }}>
+              <Terminal
+                key={`term-${leftTerminal.id}`}
+                ref={leftTerminal.id === focusedTerminalId ? terminalRef : null}
+                agent={leftAgent}
+                onClose={() => onClose(leftTerminal.id)}
+                onCommand={(cmd) => onCommand(cmd, leftTerminal.id)}
+                wsRef={wsRef}
+                embedded={true}
+                initialTheme={leftTerminal.theme}
+                initialBackground={leftTerminal.background || THEME_BACKGROUNDS[leftTerminal.theme || 'default'] || 'dark-neutral'}
+                initialOpacity={leftTerminal.transparency !== undefined ? leftTerminal.transparency / 100 : 1}
+                initialFontSize={leftTerminal.fontSize}
+                initialFontFamily={leftTerminal.fontFamily}
+                isSelected={leftTerminal.id === activeTerminalId}
+              />
+            </div>
           </div>
         </ResizableBox>
 
@@ -270,28 +247,6 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
           style={{ flex: 1 }}
           onClick={() => setFocusedTerminal(rightTerminal.id)}
         >
-          <div className="pane-buttons">
-            <button
-              className="pane-popout-button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPopOut(rightTerminal.id);
-              }}
-              title={`Pop out ${rightTerminal.name} to new tab`}
-            >
-              ↗
-            </button>
-            <button
-              className="pane-close-button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleClosePane(rightTerminal.id);
-              }}
-              title={`Close ${rightTerminal.name}`}
-            >
-              ✕
-            </button>
-          </div>
           <Terminal
             key={`term-${rightTerminal.id}`}
             ref={rightTerminal.id === focusedTerminalId ? terminalRef : null}
@@ -401,44 +356,24 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
           className={`split-pane split-pane-top ${topTerminal.id === focusedTerminalId ? 'focused' : ''}`}
           onClick={() => setFocusedTerminal(topTerminal.id)}
         >
-          <div className="pane-buttons">
-            <button
-              className="pane-popout-button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPopOut(topTerminal.id);
-              }}
-              title={`Pop out ${topTerminal.name} to new tab`}
-            >
-              ↗
-            </button>
-            <button
-              className="pane-close-button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleClosePane(topTerminal.id);
-              }}
-              title={`Close ${topTerminal.name}`}
-            >
-              ✕
-            </button>
-          </div>
-          <div style={{ width: '100%', height: '100%' }}>
-            <Terminal
-              key={`term-${topTerminal.id}`}
-              ref={topTerminal.id === focusedTerminalId ? terminalRef : null}
-              agent={topAgent}
-              onClose={() => onClose(topTerminal.id)}
-              onCommand={(cmd) => onCommand(cmd, topTerminal.id)}
-              wsRef={wsRef}
-              embedded={true}
-              initialTheme={topTerminal.theme}
-              initialBackground={topTerminal.background || THEME_BACKGROUNDS[topTerminal.theme || 'default'] || 'dark-neutral'}
-              initialOpacity={topTerminal.transparency !== undefined ? topTerminal.transparency / 100 : 1}
-              initialFontSize={topTerminal.fontSize}
-              initialFontFamily={topTerminal.fontFamily}
-              isSelected={topTerminal.id === activeTerminalId}
-            />
+          <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+            <div style={{ width: '100%', height: '100%' }}>
+              <Terminal
+                key={`term-${topTerminal.id}`}
+                ref={topTerminal.id === focusedTerminalId ? terminalRef : null}
+                agent={topAgent}
+                onClose={() => onClose(topTerminal.id)}
+                onCommand={(cmd) => onCommand(cmd, topTerminal.id)}
+                wsRef={wsRef}
+                embedded={true}
+                initialTheme={topTerminal.theme}
+                initialBackground={topTerminal.background || THEME_BACKGROUNDS[topTerminal.theme || 'default'] || 'dark-neutral'}
+                initialOpacity={topTerminal.transparency !== undefined ? topTerminal.transparency / 100 : 1}
+                initialFontSize={topTerminal.fontSize}
+                initialFontFamily={topTerminal.fontFamily}
+                isSelected={topTerminal.id === activeTerminalId}
+              />
+            </div>
           </div>
         </ResizableBox>
 
@@ -447,28 +382,6 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
           style={{ flex: 1 }}
           onClick={() => setFocusedTerminal(bottomTerminal.id)}
         >
-          <div className="pane-buttons">
-            <button
-              className="pane-popout-button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPopOut(bottomTerminal.id);
-              }}
-              title={`Pop out ${bottomTerminal.name} to new tab`}
-            >
-              ↗
-            </button>
-            <button
-              className="pane-close-button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleClosePane(bottomTerminal.id);
-              }}
-              title={`Close ${bottomTerminal.name}`}
-            >
-              ✕
-            </button>
-          </div>
           <Terminal
             key={`term-${bottomTerminal.id}`}
             ref={bottomTerminal.id === focusedTerminalId ? terminalRef : null}

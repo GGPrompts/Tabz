@@ -45,6 +45,16 @@ export function useDragDrop(
   const [dropZoneState, setDropZoneState] = useState<{ terminalId: string; zone: DropZone } | null>(null)
   const mousePosition = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
 
+  /**
+   * Check if a terminal is part of a split (as a pane, not as the container)
+   * Returns true if this terminal is referenced in another terminal's splitLayout.panes
+   */
+  const isTerminalPartOfSplit = (terminalId: string): boolean => {
+    return visibleTerminals.some(t =>
+      t.splitLayout?.panes?.some(p => p.terminalId === terminalId)
+    )
+  }
+
   // Drag-and-drop sensors
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -70,9 +80,13 @@ export function useDragDrop(
       if (draggedTerminalId && dropZoneState) {
         const zone = detectDropZone(dropZoneState.terminalId)
 
-        // PREVENT MERGE INTO EXISTING SPLITS: Block edge zones (splits) if target has splits
+        // PREVENT MERGE INTO/FROM SPLIT PANES: Block if either source or target is part of a split
         const targetTerminal = storedTerminals.find(t => t.id === dropZoneState.terminalId)
-        if (targetTerminal?.splitLayout && targetTerminal.splitLayout.type !== 'single') {
+        const isTargetSplitContainer = targetTerminal?.splitLayout && targetTerminal.splitLayout.type !== 'single'
+        const isTargetSplitPane = isTerminalPartOfSplit(dropZoneState.terminalId)
+        const isSourceSplitPane = isTerminalPartOfSplit(draggedTerminalId)
+
+        if (isTargetSplitContainer || isTargetSplitPane || isSourceSplitPane) {
           // Check if we're in an edge zone (trying to split)
           const tabElement = document.querySelector(`[data-tab-id="${dropZoneState.terminalId}"]`)
           if (tabElement) {
@@ -163,9 +177,13 @@ export function useDragDrop(
       return
     }
 
-    // PREVENT MERGE INTO EXISTING SPLITS: Block edge zones if target has splits
+    // PREVENT MERGE INTO/FROM SPLIT PANES: Block if either source or target is part of a split
     const targetTerminal = storedTerminals.find(t => t.id === over.id)
-    if (targetTerminal?.splitLayout && targetTerminal.splitLayout.type !== 'single') {
+    const isTargetSplitContainer = targetTerminal?.splitLayout && targetTerminal.splitLayout.type !== 'single'
+    const isTargetSplitPane = isTerminalPartOfSplit(over.id as string)
+    const isSourceSplitPane = isTerminalPartOfSplit(draggedTerminalId)
+
+    if (isTargetSplitContainer || isTargetSplitPane || isSourceSplitPane) {
       const zone = detectDropZone(over.id as string)
       // Check if detected zone is in an edge (trying to split)
       const tabElement = document.querySelector(`[data-tab-id="${over.id}"]`)
@@ -182,7 +200,7 @@ export function useDragDrop(
           xPercent > 1 - edgeThreshold
 
         if (isEdgeZone) {
-          // In edge zone - don't allow (block split into split tab)
+          // In edge zone - don't allow (block split into/from split panes)
           // Force to center-left (default reorder position)
           setDropZoneState({ terminalId: over.id as string, zone: 'left' })
           return
@@ -203,11 +221,21 @@ export function useDragDrop(
       return
     }
 
-    // PREVENT MERGE INTO EXISTING SPLITS: Check if target already has splits
+    // PREVENT MERGE INTO/FROM SPLIT PANES: Check if either source or target is part of a split
     const targetTerminal = storedTerminals.find(t => t.id === targetTabId)
-    if (targetTerminal?.splitLayout && targetTerminal.splitLayout.type !== 'single') {
+    const isTargetSplitContainer = targetTerminal?.splitLayout && targetTerminal.splitLayout.type !== 'single'
+    const isTargetSplitPane = isTerminalPartOfSplit(targetTabId)
+    const isSourceSplitPane = isTerminalPartOfSplit(sourceTabId)
+
+    if (isTargetSplitContainer) {
       console.warn('[useDragDrop] Cannot merge into tab that already has splits:', targetTabId)
       console.log('[useDragDrop] 💡 Tip: Pop out panes to new tabs first, or drag to reorder tabs instead')
+      return
+    }
+
+    if (isTargetSplitPane || isSourceSplitPane) {
+      console.warn('[useDragDrop] Cannot merge split panes - they are locked together')
+      console.log('[useDragDrop] 💡 Tip: Use context menu "Unsplit" to convert panes to regular tabs first')
       return
     }
 
@@ -222,32 +250,39 @@ export function useDragDrop(
       dropZone === 'right' ? 'left' :
       dropZone === 'top' ? 'bottom' : 'top'
 
+    // Order panes by visual position (left before right, top before bottom)
+    const panes = []
+    if (splitType === 'vertical') {
+      // Left pane first, right pane second
+      if (sourcePosition === 'left') {
+        panes.push({ id: `pane-${Date.now()}-1`, terminalId: sourceTabId, size: 50, position: 'left' })
+        panes.push({ id: `pane-${Date.now()}-2`, terminalId: targetTabId, size: 50, position: 'right' })
+      } else {
+        panes.push({ id: `pane-${Date.now()}-1`, terminalId: targetTabId, size: 50, position: 'left' })
+        panes.push({ id: `pane-${Date.now()}-2`, terminalId: sourceTabId, size: 50, position: 'right' })
+      }
+    } else {
+      // Top pane first, bottom pane second
+      if (sourcePosition === 'top') {
+        panes.push({ id: `pane-${Date.now()}-1`, terminalId: sourceTabId, size: 50, position: 'top' })
+        panes.push({ id: `pane-${Date.now()}-2`, terminalId: targetTabId, size: 50, position: 'bottom' })
+      } else {
+        panes.push({ id: `pane-${Date.now()}-1`, terminalId: targetTabId, size: 50, position: 'top' })
+        panes.push({ id: `pane-${Date.now()}-2`, terminalId: sourceTabId, size: 50, position: 'bottom' })
+      }
+    }
+
     // Update target tab to have split layout
     updateTerminal(targetTabId, {
       splitLayout: {
         type: splitType,
-        panes: [
-          {
-            id: `pane-${Date.now()}-1`,
-            terminalId: targetTabId,
-            size: 50,
-            position: targetPosition,
-          },
-          {
-            id: `pane-${Date.now()}-2`,
-            terminalId: sourceTabId,
-            size: 50,
-            position: sourcePosition,
-          },
-        ],
+        panes,
       },
     })
 
-    // Mark source terminal as hidden (part of split, don't show in tab bar)
-    // DON'T remove it - the split layout needs it to exist!
-    updateTerminal(sourceTabId, {
-      isHidden: true,
-    })
+    // NEW APPROACH: Don't hide pane terminals - they show as separate tabs with merged styling
+    // The container (target) is hidden via filter in SimpleTerminalApp.tsx
+    // Both panes (target and source) remain visible in tab bar
 
     setActiveTerminal(targetTabId)
     // Focus the newly merged terminal
