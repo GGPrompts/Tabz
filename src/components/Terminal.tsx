@@ -365,6 +365,23 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
               textarea.setAttribute("autocomplete", "off");
               textarea.setAttribute("data-form-type", "other");
             }
+
+            // Trigger fit and resize to sync with tmux (fixes split pane rendering)
+            // This mimics what happens on font size change
+            if (fitAddon && xterm) {
+              fitAddon.fit();
+              // Send current dimensions to backend to ensure tmux viewport is correct
+              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                wsRef.current.send(
+                  JSON.stringify({
+                    type: "resize",
+                    terminalId: agent.id,
+                    cols: xterm.cols,
+                    rows: xterm.rows,
+                  }),
+                );
+              }
+            }
           } catch {}
         }
       };
