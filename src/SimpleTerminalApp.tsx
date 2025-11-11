@@ -2088,7 +2088,7 @@ function SimpleTerminalApp() {
       <DetachedSessionsModal
         isOpen={showDetachedModal}
         onClose={() => setShowDetachedModal(false)}
-        activeSessions={visibleTerminals}
+        activeSessions={storedTerminals.filter(t => !t.isDetached && !t.isHidden)}
         currentWindowId={currentWindowId}
         detachedSessions={detachedSessions}
         orphanedSessions={orphanedSessions}
