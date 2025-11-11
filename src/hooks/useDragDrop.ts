@@ -79,7 +79,7 @@ export function useDragDrop(
             const rect = tabElement.getBoundingClientRect()
             const xPercent = (mousePosition.current.x - rect.left) / rect.width
             const yPercent = (mousePosition.current.y - rect.top) / rect.height
-            const edgeThreshold = 0.20
+            const edgeThreshold = 0.15
 
             const isEdgeZone =
               yPercent < edgeThreshold ||
@@ -106,7 +106,7 @@ export function useDragDrop(
 
   /**
    * Detect drop zone based on actual mouse position over element
-   * NEW MODEL: All 4 edges = split, center = reorder
+   * NEW MODEL: Edge 15% on all sides = split, center 70% = reorder (easier to hit!)
    */
   const detectDropZone = (overTabId: string): DropZone => {
     // Get the DOM element for the tab being hovered over
@@ -125,8 +125,8 @@ export function useDragDrop(
     const xPercent = relativeX / rect.width
     const yPercent = relativeY / rect.height
 
-    // Edge zones for SPLITS (20% on all sides)
-    const edgeThreshold = 0.20
+    // Edge zones for SPLITS (15% on all sides = easier to hit center for reordering)
+    const edgeThreshold = 0.15
 
     // Check all 4 edges (priority: top/bottom first, then left/right)
     if (yPercent < edgeThreshold) return 'top'
@@ -134,7 +134,7 @@ export function useDragDrop(
     if (xPercent < edgeThreshold) return 'left'
     if (xPercent > 1 - edgeThreshold) return 'right'
 
-    // Center area (60% x 60%) is for REORDERING
+    // Center area (70% x 70%) is for REORDERING (easier to hit than before!)
     // Left half of center vs right half of center
     return xPercent < 0.5 ? 'left' : 'right'
   }
@@ -173,7 +173,7 @@ export function useDragDrop(
         const rect = tabElement.getBoundingClientRect()
         const xPercent = (mousePosition.current.x - rect.left) / rect.width
         const yPercent = (mousePosition.current.y - rect.top) / rect.height
-        const edgeThreshold = 0.20
+        const edgeThreshold = 0.15
 
         const isEdgeZone =
           yPercent < edgeThreshold ||
@@ -283,7 +283,7 @@ export function useDragDrop(
         const mouseY = mousePosition.current.y
         const xPercent = (mouseX - rect.left) / rect.width
         const yPercent = (mouseY - rect.top) / rect.height
-        const edgeThreshold = 0.20
+        const edgeThreshold = 0.15
 
         // Determine if we're in an edge zone or center zone
         const isEdgeZone =

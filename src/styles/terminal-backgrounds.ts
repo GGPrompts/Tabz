@@ -23,6 +23,13 @@ export const backgroundGradients: Record<string, BackgroundGradient> = {
     description: 'Solid black for maximum contrast',
   },
 
+  'carbon': {
+    name: 'Carbon',
+    gradient: 'linear-gradient(135deg, #000000 0%, #111111 50%, #1a1a1a 100%)',
+    preview: ['#000000', '#111111', '#1a1a1a'],
+    description: 'Sleek carbon fiber gradient with subtle depth',
+  },
+
   'amber-warmth': {
     name: 'Amber Warmth',
     gradient: 'linear-gradient(135deg, #2d1810 0%, #1a1308 50%, #0a0603 100%)',
@@ -84,6 +91,13 @@ export const backgroundGradients: Record<string, BackgroundGradient> = {
     gradient: 'linear-gradient(135deg, #1a1b26 0%, #282a36 50%, #1a1b26 100%)',
     preview: ['#1a1b26', '#282a36'],
     description: 'Dracula theme inspired gradient',
+  },
+
+  'deep-purple': {
+    name: 'Deep Purple',
+    gradient: 'linear-gradient(135deg, #14141e 0%, #1e1428 100%)',
+    preview: ['#14141e', '#1e1428'],
+    description: 'Rich purple gradient from Opustrator settings modal',
   },
 
   'monokai-brown': {

@@ -54,6 +54,7 @@ interface SpawnOption {
   icon: string
   description: string
   workingDir?: string
+  workingDirOverride?: string // Override from spawn menu (highest priority)
   defaultTheme?: string
   defaultBackground?: string // Background gradient key
   defaultTransparency?: number
@@ -105,24 +106,44 @@ function SortableTab({ terminal, isActive, onActivate, onClose, dropZone, isDrag
 
   // Determine if we're in an edge zone or center zone for visual feedback
   const [isEdgeZone, setIsEdgeZone] = React.useState(false)
+
+  // Update edge zone continuously during drag using requestAnimationFrame
   React.useEffect(() => {
     if (isDraggedOver && dropZone) {
-      const tabElement = document.querySelector(`[data-tab-id="${terminal.id}"]`)
-      if (tabElement) {
-        const rect = tabElement.getBoundingClientRect()
-        // Use current mouse position from parent
-        const xPercent = (mousePosition.current.x - rect.left) / rect.width
-        const yPercent = (mousePosition.current.y - rect.top) / rect.height
-        const edgeThreshold = 0.20
+      let rafId: number
 
-        const inEdge =
-          yPercent < edgeThreshold ||
-          yPercent > 1 - edgeThreshold ||
-          xPercent < edgeThreshold ||
-          xPercent > 1 - edgeThreshold
+      const updateEdgeZone = () => {
+        const tabElement = document.querySelector(`[data-tab-id="${terminal.id}"]`)
+        if (tabElement) {
+          const rect = tabElement.getBoundingClientRect()
+          // Use current mouse position from parent
+          const xPercent = (mousePosition.current.x - rect.left) / rect.width
+          const yPercent = (mousePosition.current.y - rect.top) / rect.height
+          const edgeThreshold = 0.15
 
-        setIsEdgeZone(inEdge)
+          const inEdge =
+            yPercent < edgeThreshold ||
+            yPercent > 1 - edgeThreshold ||
+            xPercent < edgeThreshold ||
+            xPercent > 1 - edgeThreshold
+
+          setIsEdgeZone(inEdge)
+        }
+
+        // Continue updating while dragging
+        if (isDraggedOver) {
+          rafId = requestAnimationFrame(updateEdgeZone)
+        }
       }
+
+      rafId = requestAnimationFrame(updateEdgeZone)
+
+      return () => {
+        if (rafId) cancelAnimationFrame(rafId)
+      }
+    } else {
+      // Clear edge zone when not being dragged over
+      setIsEdgeZone(false)
     }
   }, [isDraggedOver, dropZone, terminal.id])
 
@@ -231,6 +252,12 @@ function SimpleTerminalApp() {
   const [showCustomizePanel, setShowCustomizePanel] = useState(false)
   const [spawnOptions, setSpawnOptions] = useState<SpawnOption[]>([])
   const spawnOptionsRef = useRef<SpawnOption[]>([]) // Ref to avoid closure issues
+
+  // Multi-select spawn options
+  const [spawnSearchText, setSpawnSearchText] = useState('')
+  const [spawnWorkingDirOverride, setSpawnWorkingDirOverride] = useState('')
+  const [selectedSpawnOptions, setSelectedSpawnOptions] = useState<Set<number>>(new Set())
+
   const terminalRef = useRef<any>(null)
   const wsRef = useRef<WebSocket | null>(null) // Needed by both spawning and WebSocket hooks
   const pendingSpawns = useRef<Map<string, StoredTerminal>>(new Map()) // Track pending spawns by requestId
@@ -430,10 +457,50 @@ function SimpleTerminalApp() {
     return result
   }, [webSocketAgents, storedTerminals])
 
-  // Wrapper to close spawn menu before spawning
-  const handleSpawnTerminal = async (option: SpawnOption) => {
+  // Wrapper to spawn terminal (optionally close menu)
+  const handleSpawnTerminal = async (option: SpawnOption, closeMenu = true) => {
+    if (closeMenu) {
+      setShowSpawnMenu(false)
+      setSpawnWorkingDirOverride('')
+      setSelectedSpawnOptions(new Set())
+    }
+    // Pass working dir override through option
+    const optionWithOverride = spawnWorkingDirOverride
+      ? { ...option, workingDirOverride: spawnWorkingDirOverride }
+      : option
+    await spawnTerminal(optionWithOverride)
+  }
+
+  // Bulk spawn with staggered delays for better reliability
+  const handleBulkSpawn = async () => {
+    const selectedIndices = Array.from(selectedSpawnOptions)
+    console.log(`[SimpleTerminalApp] Bulk spawning ${selectedIndices.length} terminals with 150ms stagger`)
+
+    // Close menu and clear selections
     setShowSpawnMenu(false)
-    await spawnTerminal(option)
+    const workingDirOverride = spawnWorkingDirOverride
+    setSpawnWorkingDirOverride('')
+    setSelectedSpawnOptions(new Set())
+
+    // Spawn terminals with 150ms delay between each
+    for (let i = 0; i < selectedIndices.length; i++) {
+      const idx = selectedIndices[i]
+      const option = spawnOptions[idx]
+      console.log(`[SimpleTerminalApp] Spawning ${i + 1}/${selectedIndices.length}: ${option.label}`)
+
+      // Apply working dir override if set
+      const optionWithOverride = workingDirOverride
+        ? { ...option, workingDirOverride }
+        : option
+      await spawnTerminal(optionWithOverride)
+
+      // Add delay except after last terminal
+      if (i < selectedIndices.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 150))
+      }
+    }
+
+    console.log(`[SimpleTerminalApp] ✅ Bulk spawn complete: ${selectedIndices.length} terminals`)
   }
 
   // Multi-window popout logic (extracted to custom hook)
@@ -907,23 +974,180 @@ function SimpleTerminalApp() {
         <div className="spawn-menu">
           <div className="spawn-menu-header">
             <span>Spawn Terminal</span>
-            <button onClick={() => setShowSpawnMenu(false)}>✕</button>
+            <button onClick={() => {
+              setShowSpawnMenu(false)
+              setSpawnSearchText('')
+              setSpawnWorkingDirOverride('')
+              setSelectedSpawnOptions(new Set())
+            }}>✕</button>
           </div>
-          <div className="spawn-menu-list">
-            {spawnOptions.map((option, idx) => (
-              <div
-                key={idx}
-                className="spawn-option"
-                onClick={() => handleSpawnTerminal(option)}
+
+          {/* Working Directory Override Input */}
+          <div className="spawn-workingdir-container">
+            <label className="spawn-workingdir-label">
+              📁 Working Directory (optional override)
+            </label>
+            <input
+              type="text"
+              className="spawn-workingdir-input"
+              placeholder="Leave empty to use defaults..."
+              value={spawnWorkingDirOverride}
+              onChange={(e) => setSpawnWorkingDirOverride(e.target.value)}
+            />
+            {spawnWorkingDirOverride && (
+              <button
+                className="spawn-workingdir-clear"
+                onClick={() => setSpawnWorkingDirOverride('')}
+                title="Clear override"
               >
-                <span className="spawn-icon">{option.icon}</span>
-                <div className="spawn-info">
-                  <div className="spawn-label">{option.label}</div>
-                  <div className="spawn-description">{option.description}</div>
-                </div>
-              </div>
-            ))}
+                ✕
+              </button>
+            )}
           </div>
+
+          {/* Search Input */}
+          <div className="spawn-search-container">
+            <input
+              type="text"
+              className="spawn-search-input"
+              placeholder="Search terminals..."
+              value={spawnSearchText}
+              onChange={(e) => setSpawnSearchText(e.target.value)}
+              autoFocus
+            />
+          </div>
+
+          {/* Select All / Deselect All */}
+          {(() => {
+            // Filter options based on search text
+            const filteredOptions = spawnOptions
+              .map((option, idx) => ({ option, idx }))
+              .filter(({ option }) => {
+                if (!spawnSearchText) return true
+                const searchLower = spawnSearchText.toLowerCase()
+                return (
+                  option.label.toLowerCase().includes(searchLower) ||
+                  option.description?.toLowerCase().includes(searchLower) ||
+                  option.command?.toLowerCase().includes(searchLower)
+                )
+              })
+
+            const filteredIndices = filteredOptions.map(({ idx }) => idx)
+            const allSelected = filteredIndices.length > 0 && filteredIndices.every(idx => selectedSpawnOptions.has(idx))
+
+            return (
+              <div className="spawn-select-all">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={() => {
+                      const newSelected = new Set(selectedSpawnOptions)
+                      if (allSelected) {
+                        // Deselect all filtered
+                        filteredIndices.forEach(idx => newSelected.delete(idx))
+                      } else {
+                        // Select all filtered
+                        filteredIndices.forEach(idx => newSelected.add(idx))
+                      }
+                      setSelectedSpawnOptions(newSelected)
+                    }}
+                  />
+                  <span>{allSelected ? 'Deselect All' : 'Select All'} ({filteredOptions.length})</span>
+                </label>
+              </div>
+            )
+          })()}
+
+          <div className="spawn-menu-list">
+            {spawnOptions
+              .map((option, idx) => ({ option, originalIdx: idx }))
+              .filter(({ option }) => {
+                if (!spawnSearchText) return true
+                const searchLower = spawnSearchText.toLowerCase()
+                return (
+                  option.label.toLowerCase().includes(searchLower) ||
+                  option.description?.toLowerCase().includes(searchLower) ||
+                  option.command?.toLowerCase().includes(searchLower)
+                )
+              })
+              .map(({ option, originalIdx }) => {
+              const isSelected = selectedSpawnOptions.has(originalIdx)
+
+              // Calculate effective working directory (3-tier priority)
+              const globalWorkingDir = useSettingsStore.getState().workingDirectory || '~'
+              const effectiveWorkingDir = spawnWorkingDirOverride || option.workingDir || globalWorkingDir
+              const isOverride = !!spawnWorkingDirOverride
+              const isCustom = !spawnWorkingDirOverride && !!option.workingDir
+              const isDefault = !spawnWorkingDirOverride && !option.workingDir
+
+              return (
+                <div
+                  key={originalIdx}
+                  className={`spawn-option ${isSelected ? 'selected' : ''}`}
+                >
+                  {/* Checkbox for multi-select */}
+                  <input
+                    type="checkbox"
+                    className="spawn-checkbox"
+                    checked={isSelected}
+                    onChange={(e) => {
+                      e.stopPropagation()
+                      const newSelected = new Set(selectedSpawnOptions)
+                      if (isSelected) {
+                        newSelected.delete(originalIdx)
+                      } else {
+                        newSelected.add(originalIdx)
+                      }
+                      setSelectedSpawnOptions(newSelected)
+                    }}
+                  />
+                  <div
+                    className="spawn-option-content"
+                    onClick={() => {
+                      if (selectedSpawnOptions.size === 0) {
+                        // No selections - spawn single terminal immediately
+                        handleSpawnTerminal(option)
+                      } else {
+                        // Has selections - toggle this one
+                        const newSelected = new Set(selectedSpawnOptions)
+                        if (isSelected) {
+                          newSelected.delete(originalIdx)
+                        } else {
+                          newSelected.add(originalIdx)
+                        }
+                        setSelectedSpawnOptions(newSelected)
+                      }
+                    }}
+                  >
+                    <span className="spawn-icon">{option.icon}</span>
+                    <div className="spawn-info">
+                      <div className="spawn-label">{option.label}</div>
+                      <div className="spawn-description">{option.description}</div>
+                      <div className="spawn-workingdir">
+                        📁 {effectiveWorkingDir}
+                        {isOverride && <span className="workingdir-badge workingdir-override"> (override)</span>}
+                        {isCustom && <span className="workingdir-badge workingdir-custom"> (custom)</span>}
+                        {isDefault && <span className="workingdir-badge workingdir-default"> (default)</span>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Bulk Spawn Button */}
+          {selectedSpawnOptions.size > 0 && (
+            <div className="spawn-menu-footer">
+              <button
+                className="spawn-selected-btn"
+                onClick={handleBulkSpawn}
+              >
+                Spawn {selectedSpawnOptions.size} Terminal{selectedSpawnOptions.size > 1 ? 's' : ''}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

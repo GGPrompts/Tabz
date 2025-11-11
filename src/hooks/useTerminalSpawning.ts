@@ -14,6 +14,7 @@ interface SpawnOption {
   icon: string
   description: string
   workingDir?: string
+  workingDirOverride?: string // Override from spawn menu (highest priority)
   defaultTheme?: string
   defaultBackground?: string
   defaultTransparency?: number
@@ -81,13 +82,17 @@ export function useTerminalSpawning(
       const sessionName = useTmux ? generateSessionName(option.terminalType, option.label, option.command) : undefined
 
       // Create placeholder terminal IMMEDIATELY (before spawn)
+      // 3-tier priority: override > option > global default
+      const globalWorkingDir = useSettingsStore.getState().workingDirectory || '~'
+      const effectiveWorkingDir = option.workingDirOverride || option.workingDir || globalWorkingDir
+
       const newTerminal: StoredTerminal = {
         id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: option.label,
         terminalType: option.terminalType,
         command: option.command, // Store original command for matching during reconnection
         icon: option.icon,
-        workingDir: option.workingDir || '~',
+        workingDir: effectiveWorkingDir,
         theme: option.defaultTheme,
         background: option.defaultBackground || THEME_BACKGROUNDS[option.defaultTheme || 'default'] || 'dark-neutral',
         transparency: option.defaultTransparency,
@@ -114,7 +119,7 @@ export function useTerminalSpawning(
       const config: any = {
         terminalType: option.terminalType,
         name: option.label,
-        workingDir: option.workingDir || '~',
+        workingDir: effectiveWorkingDir,
         theme: option.defaultTheme,
         transparency: option.defaultTransparency,
         size: { width: 800, height: 600 },  // Initial size (FitAddon will resize after opening)

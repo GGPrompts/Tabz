@@ -132,10 +132,15 @@ export function useWebSocketManager(
             existingTerminal = storedTerminals.find(t => t.agentId === message.data.id)
           }
 
-          // Fallback: Find most recent spawning terminal of same type
+          // Fallback: Find most recent spawning terminal of same type IN THIS WINDOW
+          // CRITICAL: Filter by windowId to prevent cross-window contamination with fast-spawning terminals (bash)
           if (!existingTerminal) {
             existingTerminal = storedTerminals
-              .filter(t => t.status === 'spawning' && t.terminalType === message.data.terminalType)
+              .filter(t =>
+                t.status === 'spawning' &&
+                t.terminalType === message.data.terminalType &&
+                (t.windowId || 'main') === currentWindowId
+              )
               .sort((a, b) => b.createdAt - a.createdAt)[0]
           }
 
