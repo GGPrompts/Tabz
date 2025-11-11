@@ -28,11 +28,11 @@
       "terminalType": "claude-code",
       "icon": "⚡",
       "description": "Claude Code with no permission prompts",
-      "defaultTheme": "amber",
+      "defaultTheme": "matrix",
       "defaultTransparency": 100,
       "defaultFontSize": 20,
       "defaultFontFamily": "'JetBrains Mono', monospace",
-      "defaultBackground": "dark-neutral"
+      "defaultBackground": "carbon"
     },
     {
       "label": "Codex",
