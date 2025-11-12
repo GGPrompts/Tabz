@@ -86,6 +86,28 @@ export function useTerminalSpawning(
       const globalWorkingDir = useSettingsStore.getState().workingDirectory || '~'
       const effectiveWorkingDir = option.workingDirOverride || option.workingDir || globalWorkingDir
 
+      // Get global defaults for 3-tier priority system
+      const globalSettings = useSettingsStore.getState()
+      const effectiveTheme = option.defaultTheme ?? globalSettings.terminalDefaultTheme
+      const effectiveBackground = option.defaultBackground ?? globalSettings.terminalDefaultBackground
+      const effectiveTransparency = option.defaultTransparency ?? Math.round(globalSettings.terminalDefaultTransparency * 100)
+
+      // Debug: Log priority resolution
+      console.log('[SpawnPriority] Font settings resolution:', {
+        spawnOption: {
+          fontSize: option.defaultFontSize,
+          fontFamily: option.defaultFontFamily,
+        },
+        global: {
+          fontSize: globalSettings.terminalDefaultFontSize,
+          fontFamily: globalSettings.terminalDefaultFontFamily,
+        },
+        effective: {
+          fontSize: option.defaultFontSize ?? globalSettings.terminalDefaultFontSize,
+          fontFamily: option.defaultFontFamily ?? globalSettings.terminalDefaultFontFamily,
+        },
+      })
+
       const newTerminal: StoredTerminal = {
         id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: option.label,
@@ -93,11 +115,11 @@ export function useTerminalSpawning(
         command: option.command, // Store original command for matching during reconnection
         icon: option.icon,
         workingDir: effectiveWorkingDir,
-        theme: option.defaultTheme,
-        background: option.defaultBackground || THEME_BACKGROUNDS[option.defaultTheme || 'default'] || 'dark-neutral',
-        transparency: option.defaultTransparency,
-        fontSize: option.defaultFontSize || useSettingsStore.getState().terminalDefaultFontSize,
-        fontFamily: option.defaultFontFamily,
+        theme: effectiveTheme,
+        background: effectiveBackground || THEME_BACKGROUNDS[effectiveTheme] || 'dark-neutral',
+        transparency: effectiveTransparency,
+        fontSize: option.defaultFontSize ?? globalSettings.terminalDefaultFontSize,
+        fontFamily: option.defaultFontFamily ?? globalSettings.terminalDefaultFontFamily,
         sessionName, // Store session name for persistence
         createdAt: Date.now(),
         status: 'spawning',
@@ -208,15 +230,17 @@ export function useTerminalSpawning(
       console.log(`[useTerminalSpawning] Reconnecting terminal ${terminal.id} to session ${terminal.sessionName}`)
 
       // Build config with EXISTING sessionName (backend will detect and reconnect)
+      // 3-tier priority: per-terminal > spawn option > global default
+      const globalSettings = useSettingsStore.getState()
       const config: any = {
         terminalType: option.terminalType,
         name: option.label,
-        workingDir: terminal.workingDir || option.workingDir || '~',
-        theme: terminal.theme || option.defaultTheme,
-        background: terminal.background || option.defaultBackground || THEME_BACKGROUNDS[terminal.theme || 'default'] || 'dark-neutral',
-        transparency: terminal.transparency ?? option.defaultTransparency,
-        fontSize: terminal.fontSize ?? option.defaultFontSize ?? useSettingsStore.getState().terminalDefaultFontSize,
-        fontFamily: terminal.fontFamily ?? option.defaultFontFamily ?? useSettingsStore.getState().terminalDefaultFontFamily ?? 'monospace',
+        workingDir: terminal.workingDir || option.workingDir || globalSettings.workingDirectory || '~',
+        theme: terminal.theme ?? option.defaultTheme ?? globalSettings.terminalDefaultTheme,
+        background: terminal.background ?? option.defaultBackground ?? globalSettings.terminalDefaultBackground ?? THEME_BACKGROUNDS[terminal.theme || 'default'] ?? 'dark-neutral',
+        transparency: terminal.transparency ?? option.defaultTransparency ?? Math.round(globalSettings.terminalDefaultTransparency * 100),
+        fontSize: terminal.fontSize ?? option.defaultFontSize ?? globalSettings.terminalDefaultFontSize,
+        fontFamily: terminal.fontFamily ?? option.defaultFontFamily ?? globalSettings.terminalDefaultFontFamily ?? 'monospace',
         size: { width: 800, height: 600 },  // Initial size (FitAddon will resize after reconnecting)
         useTmux: true, // Must be true for reconnection
         sessionName: terminal.sessionName, // CRITICAL: Use existing session name!

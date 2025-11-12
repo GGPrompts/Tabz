@@ -97,8 +97,17 @@ class PTYHandler extends EventEmitter {
                       name?.toLowerCase().includes('micro');
 
     // Build enhanced environment
+    // Filter out parent terminal's variables to prevent contamination
+    const filteredEnv = { ...process.env };
+    delete filteredEnv.WT_SESSION;  // Windows Terminal
+    delete filteredEnv.WT_PROFILE_ID;  // Windows Terminal
+    delete filteredEnv.WEZTERM_EXECUTABLE;  // WezTerm
+    delete filteredEnv.WEZTERM_PANE;  // WezTerm
+    delete filteredEnv.ALACRITTY_SOCKET;  // Alacritty
+    delete filteredEnv.KITTY_WINDOW_ID;  // Kitty
+
     const enhancedEnv = {
-      ...process.env,
+      ...filteredEnv,
       ...env,
       TERM: isTUITool ? 'xterm-256color' : this.termType,
       LANG: process.env.LANG || 'en_US.UTF-8',
@@ -209,6 +218,19 @@ class PTYHandler extends EventEmitter {
           env: enhancedEnv,
           conptyInheritCursor: false
         });
+
+        // Exit copy-mode if accidentally triggered during reconnection using tmux API
+        // (Mouse wheel events can trigger copy-mode on attach)
+        if (isReconnection) {
+          setTimeout(() => {
+            try {
+              execSync(`tmux send-keys -t "${sessionName}" -X cancel 2>/dev/null || true`);
+              log.debug(`Sent copy-mode cancel to ${sessionName}`);
+            } catch (err) {
+              log.debug('Failed to cancel copy-mode on reconnection:', err.message);
+            }
+          }, 150);
+        }
       } else {
         // Standard non-tmux spawning (existing behavior)
         const shellCommand = this.getShellCommand(terminalType);

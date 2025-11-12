@@ -98,6 +98,16 @@ export function usePopout(
         setActiveTerminal(remainingPanes[0].terminalId)
       }
 
+      // CRITICAL: Send disconnect WebSocket message to remove from terminalOwners map
+      // This prevents the original window from receiving terminal output after popout
+      if (terminal.agentId && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        console.log(`[usePopout] Sending disconnect for agentId: ${terminal.agentId}`)
+        wsRef.current.send(JSON.stringify({
+          type: 'disconnect',
+          data: { terminalId: terminal.agentId }
+        }))
+      }
+
       // Detach from tmux session
       if (terminal.sessionName && useTmux) {
         console.log(`[usePopout] Detaching from tmux session via API`)
@@ -173,7 +183,22 @@ export function usePopout(
       // (Individual panes are now independent terminals in their own windows)
       useSimpleTerminalStore.getState().removeTerminal(terminalId)
 
-      // Step 3: Switch to next available tab in current window
+      // Step 3: Send disconnect WebSocket messages for all panes
+      // This removes them from terminalOwners map on the backend
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        console.log(`[usePopout] Sending disconnect for ${paneTerminals.length} panes`)
+        paneTerminals.forEach(paneTerminal => {
+          if (paneTerminal.agentId) {
+            console.log(`[usePopout] Disconnecting agentId: ${paneTerminal.agentId}`)
+            wsRef.current!.send(JSON.stringify({
+              type: 'disconnect',
+              data: { terminalId: paneTerminal.agentId }
+            }))
+          }
+        })
+      }
+
+      // Step 4: Switch to next available tab in current window
       if (activeTerminalId === terminalId) {
         const remainingTerminals = visibleTerminals.filter(t =>
           t.id !== terminalId &&
@@ -189,7 +214,7 @@ export function usePopout(
         }
       }
 
-      // Step 4: Detach from tmux sessions
+      // Step 5: Detach from tmux sessions
       if (useTmux) {
         console.log(`[usePopout] Detaching from ${paneUpdates.length} tmux sessions via API`)
         await Promise.all(
@@ -211,7 +236,7 @@ export function usePopout(
         )
       }
 
-      // Step 5: Wait for localStorage sync, then open SEPARATE windows for each pane
+      // Step 6: Wait for localStorage sync, then open SEPARATE windows for each pane
       setTimeout(() => {
         console.log(`[usePopout] Opening ${paneUpdates.length} separate windows`)
         let successCount = 0
@@ -249,15 +274,24 @@ export function usePopout(
       sessionsToDetach.push(terminal.sessionName)
     }
 
-    // Step 1: Update state - move to new window and clear agent IDs
-    console.log(`[usePopout] Step 1: Updating state (windowId=${newWindowId})`)
+    // Step 1: Send disconnect WebSocket message to remove from terminalOwners map
+    if (terminal.agentId && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log(`[usePopout] Step 1: Sending disconnect for agentId: ${terminal.agentId}`)
+      wsRef.current.send(JSON.stringify({
+        type: 'disconnect',
+        data: { terminalId: terminal.agentId }
+      }))
+    }
+
+    // Step 2: Update state - move to new window and clear agent IDs
+    console.log(`[usePopout] Step 2: Updating state (windowId=${newWindowId})`)
     updateTerminal(terminalId, {
       agentId: undefined,
       status: 'spawning',
       windowId: newWindowId,
     })
 
-    // Step 2: Switch away from this terminal in current window
+    // Step 3: Switch away from this terminal in current window
     if (activeTerminalId === terminalId) {
       const remainingTerminals = visibleTerminals.filter(t =>
         t.id !== terminalId &&
@@ -265,16 +299,16 @@ export function usePopout(
       )
       if (remainingTerminals.length > 0) {
         setActiveTerminal(remainingTerminals[0].id)
-        console.log(`[usePopout] Step 2: Switched to ${remainingTerminals[0].name}`)
+        console.log(`[usePopout] Step 3: Switched to ${remainingTerminals[0].name}`)
       } else {
         setActiveTerminal(null)
-        console.log(`[usePopout] Step 2: No remaining terminals, cleared active`)
+        console.log(`[usePopout] Step 3: No remaining terminals, cleared active`)
       }
     }
 
-    // Step 3: Detach from tmux sessions using API (for tmux terminals)
+    // Step 4: Detach from tmux sessions using API (for tmux terminals)
     if (sessionsToDetach.length > 0 && useTmux) {
-      console.log(`[usePopout] Step 3: Detaching from ${sessionsToDetach.length} tmux sessions via API`)
+      console.log(`[usePopout] Step 4: Detaching from ${sessionsToDetach.length} tmux sessions via API`)
       // Detach from all sessions concurrently
       await Promise.all(
         sessionsToDetach.map(async (sessionName) => {
@@ -305,7 +339,7 @@ export function usePopout(
       }
 
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && agentsToDetach.length > 0) {
-        console.log(`[usePopout] Step 3: Sending ${agentsToDetach.length} WebSocket detach messages`)
+        console.log(`[usePopout] Step 4: Sending ${agentsToDetach.length} WebSocket detach messages`)
         agentsToDetach.forEach(agentId => {
           wsRef.current!.send(JSON.stringify({
             type: 'detach',
@@ -315,12 +349,12 @@ export function usePopout(
       }
     }
 
-    // Step 4: Wait for state to sync and detaches to process, then open new window
+    // Step 5: Wait for state to sync and detaches to process, then open new window
     // New window will see updated windowId in localStorage and reconnect automatically
     // CRITICAL: Must wait for Zustand localStorage sync (debounced with 100ms delay)
     // to complete before opening new window, otherwise new window won't see updated windowId
     setTimeout(() => {
-      console.log(`[usePopout] Step 4: Opening new window`)
+      console.log(`[usePopout] Step 5: Opening new window`)
       // Pass both windowId AND the terminalId to activate in the new window
       const url = `${window.location.origin}${window.location.pathname}?window=${newWindowId}&active=${terminalId}`
       const newWin = window.open(url, `tabz-${newWindowId}`)

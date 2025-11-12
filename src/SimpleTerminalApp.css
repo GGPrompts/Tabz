@@ -1419,3 +1419,105 @@
 .context-menu-item:active {
   background: rgba(59, 130, 246, 0.5);
 }
+
+/* Rename Dialog */
+.rename-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  backdrop-filter: blur(4px);
+}
+
+.rename-dialog {
+  background: rgba(30, 30, 40, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 400px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.rename-dialog h3 {
+  margin: 0 0 16px 0;
+  color: #e0e0e0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.rename-dialog input[type="text"] {
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 14px;
+  font-family: inherit;
+  margin-bottom: 16px;
+  transition: all 0.2s;
+}
+
+.rename-dialog input[type="text"]:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.rename-auto-update {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #b0b0b0;
+  font-size: 14px;
+  margin-bottom: 20px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.rename-auto-update input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.rename-dialog-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.rename-dialog-buttons button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.rename-cancel {
+  background: rgba(255, 255, 255, 0.05);
+  color: #b0b0b0;
+}
+
+.rename-cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e0e0e0;
+}
+
+.rename-save {
+  background: rgba(59, 130, 246, 0.9);
+  color: white;
+}
+
+.rename-save:hover {
+  background: rgb(59, 130, 246);
+}

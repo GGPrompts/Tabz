@@ -441,7 +441,8 @@ const themeAliases: Record<string, string> = {
 
   // Legacy aliases
   "retro": "claude-amber-modern",      // Redirect old retro to new amber
-  "matrix": "claude-mono-green",       // Redirect old matrix to new mono green
+  // NOTE: Keep original matrix theme - it's the classic bright green Matrix look
+  // "matrix" is NOT aliased - uses the original bright green theme defined above
 };
 
 // Get theme by terminal type or theme key

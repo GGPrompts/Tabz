@@ -4,8 +4,8 @@
 
 Tabz (Tab>_) is a **lightweight, tab-based terminal interface** for the web. Built with React, TypeScript, and xterm.js, it provides a simple alternative to complex canvas-based terminal managers.
 
-**Version**: 1.1.0
-**Status**: Multi-Window + Split Terminals Complete ✅
+**Version**: 1.2.0
+**Status**: Multi-Window + Split Terminals + Auto-Naming Complete ✅
 **Architecture**: Tab-based UI with WebSocket terminal backend
 **Extracted from**: [Opustrator](https://github.com/GGPrompts/opustrator) v3.14.2
 **Cleanup Complete**: November 8, 2025 - Removed ~1,000 lines of Opustrator legacy code
@@ -80,6 +80,7 @@ backend/
 ✅ **Tab-Based Interface** - Browser-style tabs for terminals
 ✅ **Multi-Window Support** - Move tabs between browser windows for multi-monitor setups
 ✅ **Split Terminals** - Split tabs horizontally/vertically with independent panes
+✅ **Auto-Naming from Tmux** - Tab names update live from tmux pane titles (shows Claude Code status, window count)
 ✅ **15 Terminal Types** - Claude Code, Bash, TFE, LazyGit, etc.
 ✅ **Full Terminal Emulation** - xterm.js with WebGL rendering
 ✅ **WebSocket Communication** - Real-time I/O
@@ -266,6 +267,75 @@ If popout windows show blank terminals:
 - Tab 4: LazyGit (window-abc123) - moved via ↗
 
 # All terminals persist and reconnect correctly!
+```
+
+---
+
+## 📝 Auto-Naming from Tmux
+
+**NEW in v1.2.0** - Tab names automatically update from tmux pane titles!
+
+### How It Works
+
+Tabz polls tmux every 2 seconds to read the **pane title** (what applications like Claude Code set via escape sequences) and updates tab names accordingly. This gives you live, dynamic tab names just like WezTerm!
+
+### What You See
+
+**Single Window:**
+```
+"bash"  →  "Editing: Terminal.tsx"  →  "Running tests"
+```
+
+**Multiple Windows (tmux Ctrl+B c):**
+```
+"Editing: file.ts (2)"  ←  Shows you have 2 windows in this session
+"Running tests (3)"     ←  Shows 3 windows
+```
+
+### Right-Click Menu: "Rename Tab..."
+
+- **Auto-update ON** (default): Tab name syncs from tmux pane title every 2 seconds
+- **Auto-update OFF**: Set a custom name that won't change
+- **Toggle anytime**: Re-enable auto-update to sync with tmux again
+
+### Technical Details
+
+**Backend:**
+- `GET /api/tmux/info/:sessionName` - Returns pane title + window count
+- Uses tmux format: `#{pane_title}|#{session_windows}|#{window_index}`
+
+**Frontend:**
+- `useTerminalNameSync` hook polls every 2 seconds (only for visible terminals)
+- Only updates if name actually changed (avoids unnecessary re-renders)
+- Terminal fields: `autoUpdateName` (boolean), `customName` (string)
+
+**Files:**
+- `backend/routes/api.js` - API endpoint
+- `src/hooks/useTerminalNameSync.ts` - Polling logic
+- `src/stores/simpleTerminalStore.ts` - Terminal interface
+- `src/SimpleTerminalApp.tsx` - Rename dialog UI
+
+### Use Cases
+
+1. **Claude Code Status**: See exactly what Claude is working on in real-time
+2. **Multiple Tmux Windows**: Know how many windows exist in each session
+3. **Custom Organization**: Manually name tabs like "Main Dev", "Logs", "Tests"
+4. **Mixed Mode**: Some tabs auto-update, others stay manually named
+
+### Example Workflow
+
+```bash
+# Spawn Claude Code terminal
+# Tab shows: "Claude Code"
+
+# Claude starts working
+# Tab updates: "Editing: Terminal.tsx"
+
+# Create 2nd tmux window (Ctrl+B c)
+# Tab updates: "Editing: Terminal.tsx (2)"
+
+# Right-click → Rename Tab... → "Main Dev" + uncheck auto-update
+# Tab stays: "Main Dev" (no more updates)
 ```
 
 ---

@@ -63,7 +63,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
     terminalType: 'bash',
     icon: '💻',
     description: '',
-    workingDir: '~',
+    workingDir: '', // Empty = use global default
     defaultTheme: 'default',
     defaultBackground: 'dark-neutral',
     defaultTransparency: 100,
@@ -100,6 +100,20 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
       if (result.success) {
         setSpawnOptions(result.data)
         setOriginalOptions(JSON.parse(JSON.stringify(result.data))) // Deep copy for comparison
+
+        // Load global defaults from file and apply to settings store
+        if (result.globalDefaults) {
+          const defaults = result.globalDefaults
+          settings.updateSettings({
+            workingDirectory: defaults.workingDirectory ?? settings.workingDirectory,
+            terminalDefaultFontFamily: defaults.fontFamily ?? settings.terminalDefaultFontFamily,
+            terminalDefaultFontSize: defaults.fontSize ?? settings.terminalDefaultFontSize,
+            terminalDefaultTheme: defaults.theme ?? settings.terminalDefaultTheme,
+            terminalDefaultBackground: defaults.background ?? settings.terminalDefaultBackground,
+            terminalDefaultTransparency: (defaults.transparency ?? 100) / 100, // Convert % to 0-1
+            useTmux: defaults.useTmux ?? settings.useTmux,
+          })
+        }
       } else {
         setError('Failed to load spawn options')
       }
@@ -130,10 +144,21 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
     setIsSaving(true)
     setError(null)
     try {
+      // Build globalDefaults from current settings store
+      const globalDefaults = {
+        workingDirectory: settings.workingDirectory,
+        fontFamily: settings.terminalDefaultFontFamily,
+        fontSize: settings.terminalDefaultFontSize,
+        theme: settings.terminalDefaultTheme,
+        background: settings.terminalDefaultBackground,
+        transparency: Math.round(settings.terminalDefaultTransparency * 100), // Convert 0-1 to %
+        useTmux: settings.useTmux,
+      }
+
       const response = await fetch('/api/spawn-options', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spawnOptions }),
+        body: JSON.stringify({ spawnOptions, globalDefaults }),
       })
       const result = await response.json()
       if (result.success) {
@@ -154,7 +179,12 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
       alert('Label and Command are required')
       return
     }
-    setSpawnOptions([...spawnOptions, formData])
+    // Clean up empty workingDir (convert to undefined for cleaner JSON)
+    const cleanedData = { ...formData }
+    if (!cleanedData.workingDir) {
+      delete cleanedData.workingDir
+    }
+    setSpawnOptions([...spawnOptions, cleanedData])
     resetForm()
   }
 
@@ -164,8 +194,13 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
       alert('Label and Command are required')
       return
     }
+    // Clean up empty workingDir (convert to undefined for cleaner JSON)
+    const cleanedData = { ...formData }
+    if (!cleanedData.workingDir) {
+      delete cleanedData.workingDir
+    }
     const updated = [...spawnOptions]
-    updated[editingIndex] = formData
+    updated[editingIndex] = cleanedData
     setSpawnOptions(updated)
     resetForm()
   }
@@ -175,6 +210,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
     // Fill in global defaults for any undefined fields
     setFormData({
       ...option,
+      workingDir: option.workingDir || '', // Convert undefined to empty string to show placeholder
       defaultFontSize: option.defaultFontSize ?? 16, // Use global default if not set
       defaultFontFamily: option.defaultFontFamily ?? 'monospace',
       defaultTheme: option.defaultTheme ?? 'default',
@@ -209,7 +245,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
       terminalType: 'bash',
       icon: '💻',
       description: '',
-      workingDir: '~',
+      workingDir: '', // Empty = use global default
       defaultTheme: 'default',
       defaultBackground: 'dark-neutral',
       defaultTransparency: 100,
@@ -309,7 +345,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                 <input
                   type="text"
                   value={settings.workingDirectory}
-                  onChange={(e) => settings.setWorkingDirectory(e.target.value)}
+                  onChange={(e) => settings.updateSettings({ workingDirectory: e.target.value })}
                   placeholder="/home/matt"
                 />
               </div>
@@ -317,11 +353,9 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
               <div className="settings-section">
                 <h3>🔤 Default Font Family</h3>
                 <p className="setting-description">Used when spawn options don't specify a font</p>
-                <input
-                  type="text"
+                <FontFamilyDropdown
                   value={settings.terminalDefaultFontFamily}
-                  onChange={(e) => settings.setTerminalDefaultFontFamily(e.target.value)}
-                  placeholder="monospace"
+                  onChange={(family) => settings.updateSettings({ terminalDefaultFontFamily: family })}
                 />
               </div>
 
@@ -333,8 +367,41 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                   min="8"
                   max="48"
                   value={settings.terminalDefaultFontSize}
-                  onChange={(e) => settings.setTerminalDefaultFontSize(Number(e.target.value))}
+                  onChange={(e) => settings.updateSettings({ terminalDefaultFontSize: Number(e.target.value) })}
                 />
+              </div>
+
+              <div className="settings-section">
+                <h3>🎨 Default Text Color Theme</h3>
+                <p className="setting-description">Used when spawn options don't specify a theme</p>
+                <TextColorThemeDropdown
+                  value={settings.terminalDefaultTheme}
+                  onChange={(theme) => settings.updateSettings({ terminalDefaultTheme: theme as any })}
+                />
+              </div>
+
+              <div className="settings-section">
+                <h3>🌈 Default Background Gradient</h3>
+                <p className="setting-description">Used when spawn options don't specify a background</p>
+                <BackgroundGradientDropdown
+                  value={settings.terminalDefaultBackground}
+                  onChange={(background) => settings.updateSettings({ terminalDefaultBackground: background })}
+                />
+              </div>
+
+              <div className="settings-section">
+                <h3>✨ Default Transparency</h3>
+                <p className="setting-description">Used when spawn options don't specify transparency</p>
+                <div className="transparency-control">
+                  <span className="transparency-label">{Math.round(settings.terminalDefaultTransparency * 100)}%</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round(settings.terminalDefaultTransparency * 100)}
+                    onChange={(e) => settings.updateSettings({ terminalDefaultTransparency: Number(e.target.value) / 100 })}
+                  />
+                </div>
               </div>
 
               <div className="settings-section">
@@ -344,7 +411,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                   <input
                     type="checkbox"
                     checked={settings.useTmux}
-                    onChange={(e) => settings.setUseTmux(e.target.checked)}
+                    onChange={(e) => settings.updateSettings({ useTmux: e.target.checked })}
                   />
                   Enable tmux by default
                 </label>
@@ -393,7 +460,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                         </div>
                         <div className="option-meta">
                           {option.command || 'bash'} • {option.terminalType}
-                          {option.workingDir && ` • ${option.workingDir}`}
+                          {(option.workingDir || settings.workingDirectory) && ` • ${option.workingDir || settings.workingDirectory}`}
                         </div>
                       </div>
                     </div>
@@ -521,7 +588,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                     type="text"
                     value={formData.workingDir}
                     onChange={(e) => setFormData({ ...formData, workingDir: e.target.value })}
-                    placeholder="~/projects"
+                    placeholder={settings.workingDirectory || '/home/matt'}
                   />
                 </label>
               </div>

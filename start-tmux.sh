@@ -5,6 +5,12 @@
 
 set -e
 
+# Force consistent terminal type regardless of parent terminal
+# This prevents WezTerm/Windows Terminal settings from affecting xterm.js terminals
+export TERM=xterm-256color
+unset WT_SESSION  # Remove Windows Terminal session ID
+unset WT_PROFILE_ID  # Remove Windows Terminal profile ID
+
 # Colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'

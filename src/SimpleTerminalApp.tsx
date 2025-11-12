@@ -18,6 +18,7 @@ import { useTerminalSpawning } from './hooks/useTerminalSpawning'
 import { usePopout } from './hooks/usePopout'
 import { useDragDrop } from './hooks/useDragDrop'
 import { useWebSocketManager } from './hooks/useWebSocketManager'
+import { useTerminalNameSync } from './hooks/useTerminalNameSync'
 import {
   DndContext,
   closestCenter,
@@ -262,6 +263,13 @@ function SimpleTerminalApp() {
     terminalId: string | null
   }>({ show: false, x: 0, y: 0, terminalId: null })
 
+  // Rename dialog state
+  const [renameDialog, setRenameDialog] = useState<{
+    show: boolean
+    terminalId: string | null
+    currentName: string
+  }>({ show: false, terminalId: null, currentName: '' })
+
   // Settings
   const { useTmux, updateSettings } = useSettingsStore()
   const [showCustomizePanel, setShowCustomizePanel] = useState(false)
@@ -440,6 +448,21 @@ function SimpleTerminalApp() {
           setSpawnOptions(data.spawnOptions)
           spawnOptionsRef.current = data.spawnOptions // Update ref immediately
         }
+
+        // Load global defaults from file and apply to settings store
+        if (data.globalDefaults) {
+          const defaults = data.globalDefaults
+          console.log('[SimpleTerminalApp] 📝 Loading global defaults from spawn-options.json:', defaults)
+          updateSettings({
+            workingDirectory: defaults.workingDirectory ?? settings.workingDirectory,
+            terminalDefaultFontFamily: defaults.fontFamily ?? settings.terminalDefaultFontFamily,
+            terminalDefaultFontSize: defaults.fontSize ?? settings.terminalDefaultFontSize,
+            terminalDefaultTheme: defaults.theme ?? settings.terminalDefaultTheme,
+            terminalDefaultBackground: defaults.background ?? settings.terminalDefaultBackground,
+            terminalDefaultTransparency: (defaults.transparency ?? 100) / 100, // Convert % to 0-1
+            useTmux: defaults.useTmux ?? settings.useTmux,
+          })
+        }
       })
       .catch(err => console.error('[SimpleTerminalApp] ❌ Failed to load spawn options:', err))
   }
@@ -478,6 +501,9 @@ function SimpleTerminalApp() {
     setActiveTerminal,
     handleReconnectTerminal
   )
+
+  // Terminal name syncing from tmux pane titles (auto-update tab names)
+  useTerminalNameSync(currentWindowId, useTmux)
 
   // Merge WebSocket agents with stored terminals
   const agents = useMemo(() => {
@@ -626,6 +652,33 @@ function SimpleTerminalApp() {
     if (!contextMenu.terminalId) return
     handlePopOutTab(contextMenu.terminalId)
     setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+  }
+
+  // Handle "Rename Tab" context menu option
+  const handleContextRename = () => {
+    if (!contextMenu.terminalId) return
+    const terminal = storedTerminals.find(t => t.id === contextMenu.terminalId)
+    if (!terminal) return
+
+    setRenameDialog({
+      show: true,
+      terminalId: terminal.id,
+      currentName: terminal.customName || terminal.name
+    })
+    setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+  }
+
+  // Handle rename dialog save
+  const handleRenameSave = (newName: string, autoUpdate: boolean) => {
+    if (!renameDialog.terminalId) return
+
+    updateTerminal(renameDialog.terminalId, {
+      customName: autoUpdate ? undefined : newName, // Clear customName if auto-update is on
+      name: newName,
+      autoUpdateName: autoUpdate
+    })
+
+    setRenameDialog({ show: false, terminalId: null, currentName: '' })
   }
 
   // Handle "Detach" context menu option
@@ -974,10 +1027,24 @@ function SimpleTerminalApp() {
   // Determine which terminal to display in footer
   // If a pane in split is focused, use that; otherwise use active tab
   const displayTerminal = useMemo(() => {
-    if (focusedTerminalId) {
-      return storedTerminals.find(t => t.id === focusedTerminalId)
+    const terminal = focusedTerminalId
+      ? storedTerminals.find(t => t.id === focusedTerminalId)
+      : storedTerminals.find(t => t.id === activeTerminalId)
+
+    // Debug: Log active terminal display values
+    if (terminal) {
+      console.log('[Footer] Active terminal changed:', {
+        terminalId: terminal.id,
+        name: terminal.name,
+        fontSize: terminal.fontSize,
+        fontFamily: terminal.fontFamily,
+        theme: terminal.theme,
+        transparency: terminal.transparency,
+        spawnType: terminal.terminalType,
+      })
     }
-    return storedTerminals.find(t => t.id === activeTerminalId)
+
+    return terminal
   }, [focusedTerminalId, activeTerminalId, storedTerminals])
 
   const activeTerminal = storedTerminals.find(t => t.id === activeTerminalId)
@@ -1689,7 +1756,7 @@ function SimpleTerminalApp() {
               <label>
                 Font Family
                 <FontFamilyDropdown
-                  value={displayTerminal.fontFamily || 'monospace'}
+                  value={displayTerminal.fontFamily || useSettingsStore.getState().terminalDefaultFontFamily || 'monospace'}
                   onChange={handleFontFamilyChange}
                   openUpward={true}
                 />
@@ -1724,6 +1791,12 @@ function SimpleTerminalApp() {
 
             return (
               <>
+                <button
+                  className="context-menu-item"
+                  onClick={handleContextRename}
+                >
+                  Rename Tab...
+                </button>
                 {canDetach && (
                   <button
                     className="context-menu-item"
@@ -1749,6 +1822,65 @@ function SimpleTerminalApp() {
               </>
             )
           })()}
+        </div>
+      )}
+
+      {/* Rename Dialog */}
+      {renameDialog.show && renameDialog.terminalId && (
+        <div
+          className="rename-dialog-overlay"
+          onClick={() => setRenameDialog({ show: false, terminalId: null, currentName: '' })}
+        >
+          <div
+            className="rename-dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>Rename Tab</h3>
+            <input
+              type="text"
+              value={renameDialog.currentName}
+              onChange={(e) => setRenameDialog({ ...renameDialog, currentName: e.target.value })}
+              placeholder="Enter tab name"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const terminal = storedTerminals.find(t => t.id === renameDialog.terminalId)
+                  handleRenameSave(renameDialog.currentName, terminal?.autoUpdateName !== false)
+                } else if (e.key === 'Escape') {
+                  setRenameDialog({ show: false, terminalId: null, currentName: '' })
+                }
+              }}
+            />
+            <label className="rename-auto-update">
+              <input
+                type="checkbox"
+                checked={storedTerminals.find(t => t.id === renameDialog.terminalId)?.autoUpdateName !== false}
+                onChange={(e) => {
+                  if (renameDialog.terminalId) {
+                    updateTerminal(renameDialog.terminalId, { autoUpdateName: e.target.checked })
+                  }
+                }}
+              />
+              Auto-update from tmux
+            </label>
+            <div className="rename-dialog-buttons">
+              <button
+                className="rename-cancel"
+                onClick={() => setRenameDialog({ show: false, terminalId: null, currentName: '' })}
+              >
+                Cancel
+              </button>
+              <button
+                className="rename-save"
+                onClick={() => {
+                  const terminal = storedTerminals.find(t => t.id === renameDialog.terminalId)
+                  handleRenameSave(renameDialog.currentName, terminal?.autoUpdateName !== false)
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -33,6 +33,10 @@ export interface Terminal {
   isHidden?: boolean; // Hide from tab bar (e.g., when part of a split)
   windowId?: string; // Which browser window/tab this terminal belongs to (for multi-window support)
 
+  // Auto-naming from tmux
+  autoUpdateName?: boolean; // Whether to auto-update name from tmux pane title (default: true)
+  customName?: string; // User-provided custom name (disables auto-update when set)
+
   // Split layout data (Phase 1 of split layout system)
   splitLayout?: SplitLayout;
 }

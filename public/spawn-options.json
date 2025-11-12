@@ -1,4 +1,13 @@
 {
+  "globalDefaults": {
+    "workingDirectory": "/home/matt",
+    "fontFamily": "monospace",
+    "fontSize": 16,
+    "theme": "default",
+    "background": "dark-neutral",
+    "transparency": 100,
+    "useTmux": true
+  },
   "spawnOptions": [
     {
       "label": "Bash",

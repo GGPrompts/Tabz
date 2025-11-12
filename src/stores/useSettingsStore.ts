@@ -15,6 +15,7 @@ export type TerminalTheme =
 interface AppSettings {
   theme: "dark" | "light";
   terminalDefaultTheme: TerminalTheme;
+  terminalDefaultBackground: string; // Background gradient key (e.g., 'dark-neutral', 'matrix-depths')
   terminalDefaultTransparency: number;
   terminalDefaultFontSize: number;
   terminalDefaultFontFamily: string;
@@ -40,6 +41,7 @@ interface SettingsStore extends AppSettings {
 const defaultSettings: AppSettings = {
   theme: "dark",
   terminalDefaultTheme: "default",
+  terminalDefaultBackground: "dark-neutral", // Default background gradient
   terminalDefaultTransparency: 0.1,
   terminalDefaultFontSize: 16, // Match Word 12pt standard for better readability
   terminalDefaultFontFamily: "monospace", // System default monospace font

@@ -367,11 +367,14 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
               textarea.setAttribute("data-form-type", "other");
             }
 
-            // Trigger fit and resize to sync with tmux (fixes split pane rendering)
-            // This mimics what happens on font size change
-            if (fitAddon && xterm) {
+            // CRITICAL: Do NOT send resize for tmux on focus!
+            // When clicking between tmux panes, fit() calculates container dimensions (200 cols)
+            // but tmux has split that space (pane1: 99 cols, pane2: 100 cols)
+            // Sending 200 cols corrupts both panes. Tmux manages its own pane dimensions.
+            // ONLY send resize on actual browser window resize (handled by useTerminalResize)
+            if (!useTmux && fitAddon && xterm) {
               fitAddon.fit();
-              // Send current dimensions to backend to ensure tmux viewport is correct
+              // Send current dimensions to backend to ensure viewport is correct
               if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
                 wsRef.current.send(
                   JSON.stringify({

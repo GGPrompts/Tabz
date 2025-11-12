@@ -139,7 +139,8 @@ router.get('/spawn-options', asyncHandler(async (req, res) => {
     res.json({
       success: true,
       count: spawnConfig.spawnOptions.length,
-      data: spawnConfig.spawnOptions
+      data: spawnConfig.spawnOptions,
+      globalDefaults: spawnConfig.globalDefaults || {} // Include globalDefaults
     });
   } catch (error) {
     res.status(500).json({
@@ -157,7 +158,7 @@ router.put('/spawn-options', asyncHandler(async (req, res) => {
   const path = require('path');
 
   try {
-    const { spawnOptions } = req.body;
+    const { spawnOptions, globalDefaults } = req.body;
 
     if (!Array.isArray(spawnOptions)) {
       return res.status(400).json({
@@ -167,7 +168,19 @@ router.put('/spawn-options', asyncHandler(async (req, res) => {
     }
 
     const spawnOptionsPath = path.join(__dirname, '../../public/spawn-options.json');
+
+    // Read existing file to preserve globalDefaults if not provided
+    let existingGlobalDefaults = {};
+    try {
+      const existingData = await fs.readFile(spawnOptionsPath, 'utf-8');
+      const existingConfig = JSON.parse(existingData);
+      existingGlobalDefaults = existingConfig.globalDefaults || {};
+    } catch (err) {
+      // File doesn't exist or is invalid, use empty defaults
+    }
+
     const configData = {
+      globalDefaults: globalDefaults || existingGlobalDefaults,
       spawnOptions
     };
 
@@ -726,6 +739,52 @@ router.post('/tmux/detach/:name', asyncHandler(async (req, res) => {
     });
   } catch (err) {
     console.error(`[API] Failed to detach from tmux session ${name}:`, err.message);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+}));
+
+/**
+ * GET /api/tmux/info/:name - Get information about a tmux session
+ * Returns pane title and window count for tab naming
+ */
+router.get('/tmux/info/:name', asyncHandler(async (req, res) => {
+  const { name } = req.params;
+  const { execSync } = require('child_process');
+
+  try {
+    // Check if session exists
+    try {
+      execSync(`tmux has-session -t "${name}" 2>/dev/null`);
+    } catch {
+      return res.status(404).json({
+        success: false,
+        error: `Session ${name} not found`
+      });
+    }
+
+    // Get pane title and window count in one call
+    // Format: "pane_title|window_count|active_window_index"
+    const info = execSync(
+      `tmux display-message -t "${name}" -p "#{pane_title}|#{session_windows}|#{window_index}"`,
+      { encoding: 'utf-8' }
+    ).trim();
+
+    const [paneTitle, windowCountStr, activeWindowStr] = info.split('|');
+    const windowCount = parseInt(windowCountStr, 10);
+    const activeWindow = parseInt(activeWindowStr, 10);
+
+    res.json({
+      success: true,
+      paneTitle: paneTitle || 'bash',
+      windowCount: windowCount || 1,
+      activeWindow: activeWindow || 0,
+      sessionName: name
+    });
+  } catch (err) {
+    console.error(`[API] Failed to get tmux info for ${name}:`, err.message);
     res.status(500).json({
       success: false,
       error: err.message
