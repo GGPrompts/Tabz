@@ -64,11 +64,20 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
     icon: '💻',
     description: '',
     workingDir: '', // Empty = use global default
-    defaultTheme: 'default',
-    defaultBackground: 'dark-neutral',
-    defaultTransparency: 100,
-    defaultFontFamily: 'monospace',
-    defaultFontSize: 14,
+    defaultTheme: undefined,
+    defaultBackground: undefined,
+    defaultTransparency: undefined,
+    defaultFontFamily: undefined,
+    defaultFontSize: undefined,
+  })
+
+  // Track which fields should use global defaults
+  const [useGlobalDefaults, setUseGlobalDefaults] = useState({
+    theme: true,
+    background: true,
+    transparency: true,
+    fontFamily: true,
+    fontSize: true,
   })
 
   useEffect(() => {
@@ -179,11 +188,17 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
       alert('Label and Command are required')
       return
     }
-    // Clean up empty workingDir (convert to undefined for cleaner JSON)
+    // Clean up fields that should use global defaults
     const cleanedData = { ...formData }
     if (!cleanedData.workingDir) {
       delete cleanedData.workingDir
     }
+    if (useGlobalDefaults.theme) delete cleanedData.defaultTheme
+    if (useGlobalDefaults.background) delete cleanedData.defaultBackground
+    if (useGlobalDefaults.transparency) delete cleanedData.defaultTransparency
+    if (useGlobalDefaults.fontFamily) delete cleanedData.defaultFontFamily
+    if (useGlobalDefaults.fontSize) delete cleanedData.defaultFontSize
+
     setSpawnOptions([...spawnOptions, cleanedData])
     resetForm()
   }
@@ -194,11 +209,17 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
       alert('Label and Command are required')
       return
     }
-    // Clean up empty workingDir (convert to undefined for cleaner JSON)
+    // Clean up fields that should use global defaults
     const cleanedData = { ...formData }
     if (!cleanedData.workingDir) {
       delete cleanedData.workingDir
     }
+    if (useGlobalDefaults.theme) delete cleanedData.defaultTheme
+    if (useGlobalDefaults.background) delete cleanedData.defaultBackground
+    if (useGlobalDefaults.transparency) delete cleanedData.defaultTransparency
+    if (useGlobalDefaults.fontFamily) delete cleanedData.defaultFontFamily
+    if (useGlobalDefaults.fontSize) delete cleanedData.defaultFontSize
+
     const updated = [...spawnOptions]
     updated[editingIndex] = cleanedData
     setSpawnOptions(updated)
@@ -207,15 +228,18 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
 
   const handleEditOption = (index: number) => {
     const option = spawnOptions[index]
-    // Fill in global defaults for any undefined fields
+    // Set form data with actual values (undefined if not set)
     setFormData({
       ...option,
       workingDir: option.workingDir || '', // Convert undefined to empty string to show placeholder
-      defaultFontSize: option.defaultFontSize ?? 16, // Use global default if not set
-      defaultFontFamily: option.defaultFontFamily ?? 'monospace',
-      defaultTheme: option.defaultTheme ?? 'default',
-      defaultBackground: option.defaultBackground ?? 'dark-neutral',
-      defaultTransparency: option.defaultTransparency ?? 100,
+    })
+    // Update useGlobalDefaults flags based on which fields are defined
+    setUseGlobalDefaults({
+      theme: option.defaultTheme === undefined,
+      background: option.defaultBackground === undefined,
+      transparency: option.defaultTransparency === undefined,
+      fontFamily: option.defaultFontFamily === undefined,
+      fontSize: option.defaultFontSize === undefined,
     })
     setEditingIndex(index)
     setIsAdding(true)
@@ -246,11 +270,18 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
       icon: '💻',
       description: '',
       workingDir: '', // Empty = use global default
-      defaultTheme: 'default',
-      defaultBackground: 'dark-neutral',
-      defaultTransparency: 100,
-      defaultFontFamily: 'monospace',
-      defaultFontSize: 14,
+      defaultTheme: undefined,
+      defaultBackground: undefined,
+      defaultTransparency: undefined,
+      defaultFontFamily: undefined,
+      defaultFontSize: undefined,
+    })
+    setUseGlobalDefaults({
+      theme: true,
+      background: true,
+      transparency: true,
+      fontFamily: true,
+      fontSize: true,
     })
     setIsAdding(false)
     setEditingIndex(null)
@@ -606,55 +637,146 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
               <div className="form-row">
                 <label>
                   Text Color Theme
-                  <TextColorThemeDropdown
-                    value={formData.defaultTheme}
-                    onChange={(value) => setFormData({ ...formData, defaultTheme: value })}
-                  />
+                  <div className="field-with-default">
+                    <TextColorThemeDropdown
+                      value={formData.defaultTheme || settings.terminalDefaultTheme}
+                      onChange={(value) => {
+                        setFormData({ ...formData, defaultTheme: value })
+                        setUseGlobalDefaults({ ...useGlobalDefaults, theme: false })
+                      }}
+                      disabled={useGlobalDefaults.theme}
+                    />
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={useGlobalDefaults.theme}
+                        onChange={(e) => {
+                          setUseGlobalDefaults({ ...useGlobalDefaults, theme: e.target.checked })
+                          if (e.target.checked) {
+                            setFormData({ ...formData, defaultTheme: undefined })
+                          }
+                        }}
+                      />
+                      <span className="checkbox-text">Use global default</span>
+                    </label>
+                  </div>
                 </label>
                 <label>
                   Background Gradient
-                  <BackgroundGradientDropdown
-                    value={formData.defaultBackground}
-                    onChange={(value) => setFormData({ ...formData, defaultBackground: value })}
-                  />
+                  <div className="field-with-default">
+                    <BackgroundGradientDropdown
+                      value={formData.defaultBackground || settings.terminalDefaultBackground}
+                      onChange={(value) => {
+                        setFormData({ ...formData, defaultBackground: value })
+                        setUseGlobalDefaults({ ...useGlobalDefaults, background: false })
+                      }}
+                      disabled={useGlobalDefaults.background}
+                    />
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={useGlobalDefaults.background}
+                        onChange={(e) => {
+                          setUseGlobalDefaults({ ...useGlobalDefaults, background: e.target.checked })
+                          if (e.target.checked) {
+                            setFormData({ ...formData, defaultBackground: undefined })
+                          }
+                        }}
+                      />
+                      <span className="checkbox-text">Use global default</span>
+                    </label>
+                  </div>
                 </label>
               </div>
 
               <div className="form-row">
                 <label>
                   Transparency
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.defaultTransparency}
-                    onChange={(e) =>
-                      setFormData({ ...formData, defaultTransparency: parseInt(e.target.value) })
-                    }
-                  />
+                  <div className="field-with-default">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={formData.defaultTransparency ?? Math.round(settings.terminalDefaultTransparency * 100)}
+                      onChange={(e) => {
+                        setFormData({ ...formData, defaultTransparency: parseInt(e.target.value) })
+                        setUseGlobalDefaults({ ...useGlobalDefaults, transparency: false })
+                      }}
+                      disabled={useGlobalDefaults.transparency}
+                    />
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={useGlobalDefaults.transparency}
+                        onChange={(e) => {
+                          setUseGlobalDefaults({ ...useGlobalDefaults, transparency: e.target.checked })
+                          if (e.target.checked) {
+                            setFormData({ ...formData, defaultTransparency: undefined })
+                          }
+                        }}
+                      />
+                      <span className="checkbox-text">Use global default</span>
+                    </label>
+                  </div>
                 </label>
               </div>
 
               <div className="form-row">
                 <label>
                   Font Family
-                  <FontFamilyDropdown
-                    value={formData.defaultFontFamily}
-                    onChange={(value) => setFormData({ ...formData, defaultFontFamily: value })}
-                  />
+                  <div className="field-with-default">
+                    <FontFamilyDropdown
+                      value={formData.defaultFontFamily || settings.terminalDefaultFontFamily}
+                      onChange={(value) => {
+                        setFormData({ ...formData, defaultFontFamily: value })
+                        setUseGlobalDefaults({ ...useGlobalDefaults, fontFamily: false })
+                      }}
+                      disabled={useGlobalDefaults.fontFamily}
+                    />
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={useGlobalDefaults.fontFamily}
+                        onChange={(e) => {
+                          setUseGlobalDefaults({ ...useGlobalDefaults, fontFamily: e.target.checked })
+                          if (e.target.checked) {
+                            setFormData({ ...formData, defaultFontFamily: undefined })
+                          }
+                        }}
+                      />
+                      <span className="checkbox-text">Use global default</span>
+                    </label>
+                  </div>
                 </label>
                 <label>
                   Font Size (px)
-                  <input
-                    type="number"
-                    min="10"
-                    max="24"
-                    placeholder="16 (default)"
-                    value={formData.defaultFontSize}
-                    onChange={(e) =>
-                      setFormData({ ...formData, defaultFontSize: parseInt(e.target.value) })
-                    }
-                  />
+                  <div className="field-with-default">
+                    <input
+                      type="number"
+                      min="10"
+                      max="24"
+                      placeholder={`${settings.terminalDefaultFontSize} (global default)`}
+                      value={formData.defaultFontSize ?? settings.terminalDefaultFontSize}
+                      onChange={(e) => {
+                        setFormData({ ...formData, defaultFontSize: parseInt(e.target.value) })
+                        setUseGlobalDefaults({ ...useGlobalDefaults, fontSize: false })
+                      }}
+                      disabled={useGlobalDefaults.fontSize}
+                    />
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={useGlobalDefaults.fontSize}
+                        onChange={(e) => {
+                          setUseGlobalDefaults({ ...useGlobalDefaults, fontSize: e.target.checked })
+                          if (e.target.checked) {
+                            setFormData({ ...formData, defaultFontSize: undefined })
+                          }
+                        }}
+                      />
+                      <span className="checkbox-text">Use global default</span>
+                    </label>
+                  </div>
                 </label>
               </div>
 

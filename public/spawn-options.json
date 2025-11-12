@@ -1,11 +1,11 @@
 {
   "globalDefaults": {
     "workingDirectory": "/home/matt",
-    "fontFamily": "monospace",
-    "fontSize": 16,
-    "theme": "default",
-    "background": "dark-neutral",
-    "transparency": 100,
+    "fontFamily": "'SauceCodePro Nerd Font', 'SauceCodePro NF', monospace",
+    "fontSize": 18,
+    "theme": "green",
+    "background": "carbon",
+    "transparency": 90,
     "useTmux": true
   },
   "spawnOptions": [
@@ -141,11 +141,9 @@
     {
       "label": "Log Navigator",
       "command": "lnav",
-      "terminalType": "bash",
+      "terminalType": "tui-tool",
       "icon": "📜",
-      "description": "Advanced log file viewer",
-      "defaultTheme": "monokai",
-      "defaultTransparency": 90
+      "description": "Advanced log file viewer"
     },
     {
       "label": "LazyGit",

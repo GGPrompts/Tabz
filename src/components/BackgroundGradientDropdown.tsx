@@ -7,11 +7,12 @@ interface BackgroundGradientDropdownProps {
   value: string
   onChange: (value: string) => void
   openUpward?: boolean
+  disabled?: boolean
 }
 
 type GradientEntry = [string, BackgroundGradient]
 
-export function BackgroundGradientDropdown({ value, onChange, openUpward = false }: BackgroundGradientDropdownProps) {
+export function BackgroundGradientDropdown({ value, onChange, openUpward = false, disabled = false }: BackgroundGradientDropdownProps) {
   const selectedKey = value || 'dark-neutral'
   const selectedBg = backgroundGradients[selectedKey] || backgroundGradients['dark-neutral']
 
@@ -42,6 +43,7 @@ export function BackgroundGradientDropdown({ value, onChange, openUpward = false
       getOptionKey={([key]) => key}
       isSelected={([key], [valueKey]) => key === valueKey}
       openUpward={openUpward}
+      disabled={disabled}
       className="background-gradient-dropdown"
       renderTrigger={([, bg], isOpen) => (
         <div className="gradient-trigger-content">

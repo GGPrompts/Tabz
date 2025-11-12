@@ -222,15 +222,20 @@ export function useTerminalResize(
   }, []); // Empty deps - only run once after mount
 
   /**
-   * Listen for custom container resize events from wrapper
+   * Listen for custom container resize events from split panes
    */
   useEffect(() => {
     const handleContainerResized = (e: Event) => {
-      // Handle both CustomEvent (with detail.id) and plain Event (for splits)
+      // Check if this event is for this specific terminal
       const customEvent = e as CustomEvent;
-      const shouldRefit = !customEvent.detail || customEvent.detail.id === agentId;
+      const terminalIds = customEvent.detail?.terminalIds as string[] | undefined;
 
-      if (shouldRefit && fitAddonRef.current) {
+      // If terminalIds specified, only refit if this terminal is in the list
+      if (terminalIds && !terminalIds.includes(agentId)) {
+        return; // Not for this terminal
+      }
+
+      if (fitAddonRef.current) {
         // Small timeout allows DOM layout to settle
         requestAnimationFrame(() => {
           try {

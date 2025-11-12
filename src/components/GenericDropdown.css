@@ -31,6 +31,16 @@
   outline-offset: 2px;
 }
 
+.generic-dropdown.disabled .generic-dropdown-trigger {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.generic-dropdown.disabled .generic-dropdown-trigger:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
 /* Arrow */
 .generic-dropdown-arrow {
   margin-left: 8px;

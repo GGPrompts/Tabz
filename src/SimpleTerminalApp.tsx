@@ -216,13 +216,6 @@ function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate,
         <span className="tab-icon-single">{terminal.icon || '💻'}</span>
       )}
       <span className="tab-label">{terminal.name}</span>
-      <button
-        className="tab-close"
-        onClick={onClose}
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        ✕
-      </button>
 
       {/* Drop Zone Overlay - shows when dragging over this tab for splits */}
       {isDraggedOver && dropZone && !isBlocked && isEdgeZone && (
@@ -1318,6 +1311,21 @@ function SimpleTerminalApp() {
                   // SHOW regular terminals
                   return true
                 })
+                .sort((a, b) => {
+                  // Sort split panes by their position (left before right, top before bottom)
+                  const aInfo = splitTabInfo.get(a.id)
+                  const bInfo = splitTabInfo.get(b.id)
+
+                  // If both are in the same split container, sort by position
+                  if (aInfo && bInfo && aInfo.splitContainerId === bInfo.splitContainerId && aInfo.splitContainerId !== '') {
+                    const positionOrder = { left: 0, middle: 1, right: 2 }
+                    return (positionOrder[aInfo.position as keyof typeof positionOrder] || 0) -
+                           (positionOrder[bInfo.position as keyof typeof positionOrder] || 0)
+                  }
+
+                  // Otherwise, maintain original order (don't swap)
+                  return 0
+                })
                 .map(terminal => {
                   const splitInfo = splitTabInfo.get(terminal.id)
                   const isSplit = splitInfo && splitInfo.position !== 'single'
@@ -1818,6 +1826,17 @@ function SimpleTerminalApp() {
                   onClick={handleContextPopOut}
                 >
                   Pop out to new window
+                </button>
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    if (contextMenu.terminalId) {
+                      handleCloseTerminal(contextMenu.terminalId)
+                      setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+                    }
+                  }}
+                >
+                  Close Tab
                 </button>
               </>
             )

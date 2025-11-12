@@ -26,9 +26,10 @@ interface FontFamilyDropdownProps {
   value: string
   onChange: (value: string) => void
   openUpward?: boolean
+  disabled?: boolean
 }
 
-export function FontFamilyDropdown({ value, onChange, openUpward = false }: FontFamilyDropdownProps) {
+export function FontFamilyDropdown({ value, onChange, openUpward = false, disabled = false }: FontFamilyDropdownProps) {
   const selectedOption = FONT_OPTIONS.find(opt => opt.value === value) || FONT_OPTIONS[0]
 
   return (
@@ -39,6 +40,7 @@ export function FontFamilyDropdown({ value, onChange, openUpward = false }: Font
       getOptionKey={(option) => option.value}
       isSelected={(option, selected) => option.value === selected.value}
       openUpward={openUpward}
+      disabled={disabled}
       className="font-family-dropdown"
       renderTrigger={(option) => (
         <span style={{ fontFamily: option.fontFamily }}>

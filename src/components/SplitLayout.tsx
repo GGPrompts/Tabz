@@ -40,12 +40,15 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
   // Debounce terminal refit events to prevent excessive re-renders during drag
   const refitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const triggerTerminalRefit = () => {
+  const triggerTerminalRefit = (terminalIds: string[]) => {
     if (refitTimeoutRef.current) {
       clearTimeout(refitTimeoutRef.current);
     }
     refitTimeoutRef.current = setTimeout(() => {
-      window.dispatchEvent(new Event('terminal-container-resized'));
+      // Dispatch CustomEvent with terminal IDs to only refit terminals in this split
+      window.dispatchEvent(new CustomEvent('terminal-container-resized', {
+        detail: { terminalIds }
+      }));
     }, 100); // Wait 100ms after last resize before refitting
   };
 
@@ -216,8 +219,8 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
               },
             });
 
-            // Refit terminals after resize completes
-            triggerTerminalRefit();
+            // Refit only terminals in this split (not all terminals globally)
+            triggerTerminalRefit([leftTerminal.id, rightTerminal.id]);
           }}
           resizeHandles={['e']}
           className={`split-pane split-pane-left ${leftTerminal.id === focusedTerminalId ? 'focused' : ''}`}
@@ -351,8 +354,8 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
               },
             });
 
-            // Refit terminals after resize completes
-            triggerTerminalRefit();
+            // Refit only terminals in this split (not all terminals globally)
+            triggerTerminalRefit([topTerminal.id, bottomTerminal.id]);
           }}
           resizeHandles={['s']}
           className={`split-pane split-pane-top ${topTerminal.id === focusedTerminalId ? 'focused' : ''}`}

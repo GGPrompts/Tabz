@@ -607,6 +607,22 @@
   cursor: pointer;
 }
 
+.checkbox-text {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.field-with-default {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-with-default > input[disabled],
+.field-with-default > .generic-dropdown.disabled {
+  opacity: 0.4;
+}
+
 .priority-info {
   margin-top: 32px;
   padding: 16px;

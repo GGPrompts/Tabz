@@ -464,12 +464,15 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       }, 800); // Consistent delay for proper terminal initialization
 
       // Handle terminal input - send directly to backend via WebSocket
-      // NOTE: We attach this immediately, but filter out data during "spawning" status
-      // to prevent escape sequences from leaking to the shell before PTY is ready
+      // NOTE: We attach this immediately, but filter out data during initialization
+      // to prevent xterm.js device attribute queries from leaking during reconnection
+      let isInitializing = true;
+
       const dataHandler = xterm.onData((data) => {
-        // Don't send data if terminal is still spawning (prevent escape sequence leak)
-        if (agent.status === 'spawning') {
-          console.debug('[Terminal] Ignoring input during spawn:', data.split('').map(c => c.charCodeAt(0).toString(16)).join(' '));
+        // Don't send data if terminal is still spawning or initializing
+        // This prevents xterm.js device queries (?1;2c, >0;276;0c) from showing up
+        if (agent.status === 'spawning' || isInitializing) {
+          console.debug('[Terminal] Ignoring input during initialization:', data.split('').map(c => c.charCodeAt(0).toString(16)).join(' '));
           return;
         }
 
@@ -484,6 +487,11 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
           );
         }
       });
+
+      // Allow input after initialization completes
+      setTimeout(() => {
+        isInitializing = false;
+      }, 1000); // 1 second should be enough for xterm.js queries to complete
 
       // (Removed banner message per user request to avoid flicker during resize)
 
@@ -564,6 +572,34 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
         }, 50);
       }
     }, [isSelected]);
+
+    // Handle reconnection - refit when terminal becomes active after reconnecting
+    useEffect(() => {
+      if (agent.status === 'active' && xtermRef.current && fitAddonRef.current) {
+        // Wait for initialization guard to expire (1000ms) + a bit more for safety
+        setTimeout(() => {
+          try {
+            console.log('[Terminal] Refitting after reconnection:', agent.name);
+            fitAddonRef.current?.fit();
+            xtermRef.current?.refresh(0, xtermRef.current.rows - 1);
+
+            // Send resize to backend to ensure PTY matches
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && xtermRef.current) {
+              wsRef.current.send(
+                JSON.stringify({
+                  type: "resize",
+                  terminalId: agent.id,
+                  cols: xtermRef.current.cols,
+                  rows: xtermRef.current.rows,
+                }),
+              );
+            }
+          } catch (error) {
+            console.warn('[Terminal] Failed to refit after reconnection:', error);
+          }
+        }, 1200); // After initialization guard (1000ms) + 200ms buffer
+      }
+    }, [agent.status]);
 
     // Get theme for CSS styling
     const theme = getThemeForTerminalType(currentTheme);

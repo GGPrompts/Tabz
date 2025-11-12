@@ -302,7 +302,8 @@
   cursor: pointer;
   transition: all 0.2s ease;
   min-width: 120px;
-  max-width: 200px;
+  max-width: 400px;
+  flex: 1 1 auto;
   user-select: none;
 }
 

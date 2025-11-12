@@ -14,6 +14,7 @@ export interface GenericDropdownProps<T> {
   triggerClassName?: string
   menuClassName?: string
   optionClassName?: string
+  disabled?: boolean
 }
 
 export function GenericDropdown<T>({
@@ -29,6 +30,7 @@ export function GenericDropdown<T>({
   triggerClassName = '',
   menuClassName = '',
   optionClassName = '',
+  disabled = false,
 }: GenericDropdownProps<T>) {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -48,16 +50,18 @@ export function GenericDropdown<T>({
   }, [isOpen])
 
   const handleSelect = (option: T) => {
+    if (disabled) return
     onChange(option)
     setIsOpen(false)
   }
 
   return (
-    <div className={`generic-dropdown ${className}`} ref={dropdownRef}>
+    <div className={`generic-dropdown ${className} ${disabled ? 'disabled' : ''}`} ref={dropdownRef}>
       <button
         type="button"
         className={`generic-dropdown-trigger ${triggerClassName}`}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
       >
         {renderTrigger(value, isOpen)}
         <span className="generic-dropdown-arrow">{isOpen ? '▲' : '▼'}</span>
