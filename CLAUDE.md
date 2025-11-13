@@ -63,15 +63,17 @@ backend/
 ### ALWAYS:
 1. **Keep It Simple** - If it adds complexity, think twice
 2. **Test Terminal Types** - Verify Claude Code, Bash, TFE work
-3. **Mobile-First CSS** - Use responsive design patterns
-4. **Document Changes** - Update README.md and this file
-5. **No Canvas Code** - This is the tab-based version, no dragging/zoom
+3. **Run Tests Before Committing** - `npm test` should pass with no failures
+4. **Mobile-First CSS** - Use responsive design patterns
+5. **Document Changes** - Update README.md and this file
+6. **No Canvas Code** - This is the tab-based version, no dragging/zoom
 
 ### NEVER:
 1. **Don't Add Canvas Features** - Dragging, resizing, zoom, pan = NO
 2. **Don't Import from Opustrator Canvas Code** - Keep it independent
 3. **Don't Over-Engineer** - Simple solutions win
 4. **Don't Break WebSocket Protocol** - Backend compatibility is critical
+5. **Don't Skip Tests** - Failing tests = failing features
 
 ---
 
@@ -792,12 +794,92 @@ tmux capture-pane -t tabz:backend -p -S -50 | grep "\[Browser"
 
 ---
 
+## 🧪 Testing Workflow
+
+### Pre-Commit Testing (REQUIRED)
+
+**Before committing ANY code changes, run the test suite:**
+
+```bash
+npm test
+```
+
+**All tests must pass** - No exceptions! If tests fail:
+1. Fix the failing tests (don't skip them)
+2. If your changes intentionally break tests, update the tests
+3. Never commit with failing tests
+
+### Test Suite Overview
+
+**Current Test Coverage:**
+- **15 integration tests** for detach/reattach workflow
+- **35+ integration tests** for split operations
+- **20+ integration tests** for terminal spawning
+- **Unit tests** for hooks, stores, and utilities
+
+**Run specific test suites:**
+```bash
+# Run all tests
+npm test
+
+# Run specific test file
+npm test -- tests/integration/detach-reattach.test.ts
+
+# Run in watch mode (during development)
+npm run test:watch
+
+# Generate coverage report
+npm run test:coverage
+```
+
+### Test-Driven Development
+
+When fixing bugs or adding features:
+
+1. **Write a failing test** that reproduces the bug
+2. **Fix the bug** until the test passes
+3. **Verify all other tests** still pass
+4. **Commit with passing tests**
+
+Example from detach/reattach bug fixes:
+```typescript
+// 1. Write test showing the bug
+it('should reattach whole split when clicking detached pane tab', () => {
+  // Test fails because clicking pane only reattaches that pane
+})
+
+// 2. Fix the code (add detachedSplitContainer check)
+
+// 3. Test now passes - commit!
+```
+
+### Why Testing Matters
+
+**Regression Prevention**: Tests catch bugs we've already fixed:
+- ✅ Detach no longer kills tmux sessions
+- ✅ processedAgentIds cleared properly
+- ✅ Split layout preserved on reattach
+
+**Confidence**: Change code without fear of breaking existing features
+
+**Documentation**: Tests show how features should work
+
+### CI/CD (Future)
+
+When CI is set up, tests will run automatically on:
+- Every push to GitHub
+- Every pull request
+- Pre-merge validation
+
+---
+
 ## 📝 Notes for AI Assistants
 
 ### Project Context
 - This project was extracted from Opustrator to create a simpler tab-based version
 - The backend is shared with Opustrator (same WebSocket protocol)
 - Focus on simplicity - no canvas features should be added
+- **Run `npm test` before committing** - All tests must pass
 - Test spawning terminals after changes (Bash, TFE, Claude Code)
 - Keep dependencies minimal - avoid adding new npm packages
 
