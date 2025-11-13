@@ -289,6 +289,13 @@ function SimpleTerminalApp() {
   const [showSettings, setShowSettings] = useState(false)
   const [headerVisible, setHeaderVisible] = useState(true)
 
+  // Console error tracking
+  const [consoleErrors, setConsoleErrors] = useState<Array<{
+    message: string
+    timestamp: number
+    stack?: string
+  }>>([])
+
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
     show: boolean
@@ -417,6 +424,50 @@ function SimpleTerminalApp() {
       console.log('[Dev] Terminal store exposed to window.terminalStore');
     }
   }, []);
+
+  // Intercept console errors for error indicator
+  useEffect(() => {
+    const originalError = console.error
+    const originalWarn = console.warn
+
+    console.error = (...args: any[]) => {
+      // Call original first
+      originalError.apply(console, args)
+
+      // Track error (limit to last 50)
+      const message = args.map(arg =>
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ')
+
+      const stack = new Error().stack
+
+      setConsoleErrors(prev => {
+        const newErrors = [...prev, { message, timestamp: Date.now(), stack }]
+        return newErrors.slice(-50) // Keep only last 50 errors
+      })
+    }
+
+    console.warn = (...args: any[]) => {
+      // Call original first
+      originalWarn.apply(console, args)
+
+      // Track warning as error too (for debugging)
+      const message = '⚠️ ' + args.map(arg =>
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ')
+
+      setConsoleErrors(prev => {
+        const newErrors = [...prev, { message, timestamp: Date.now() }]
+        return newErrors.slice(-50)
+      })
+    }
+
+    // Restore on cleanup
+    return () => {
+      console.error = originalError
+      console.warn = originalWarn
+    }
+  }, [])
 
   // Set browser tab title based on window and active terminal
   useEffect(() => {
@@ -1084,7 +1135,47 @@ function SimpleTerminalApp() {
   }
 
   const handleClearAllSessions = async () => {
-    if (!confirm('⚠️ Clear all sessions and localStorage?\n\nThis will:\n• Kill all active tmux sessions\n• Close all terminals\n• Clear all stored data\n\nThis cannot be undone!')) {
+    // Gather info about what will be cleared
+    const localStorageKeys: string[] = []
+    let totalSize = 0
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key) {
+        localStorageKeys.push(key)
+        const value = localStorage.getItem(key) || ''
+        totalSize += key.length + value.length
+      }
+    }
+
+    // Get tmux session count
+    let tmuxSessionCount = 0
+    try {
+      const response = await fetch('/api/tmux/list')
+      const result = await response.json()
+      if (result.success && result.sessions) {
+        tmuxSessionCount = result.sessions.filter((s: string) => s.startsWith('tt-')).length
+      }
+    } catch (err) {
+      console.warn('Could not fetch tmux sessions:', err)
+    }
+
+    // Build detailed confirmation message
+    const sizeMB = (totalSize / 1024 / 1024).toFixed(2)
+    const confirmMessage = `⚠️ Clear all sessions and localStorage?
+
+📊 WHAT WILL BE CLEARED:
+
+🗂️ localStorage (${localStorageKeys.length} keys, ${sizeMB} MB):
+${localStorageKeys.map(k => `  • ${k}`).join('\n')}
+
+🖥️ Tmux Sessions: ${tmuxSessionCount} session(s)
+  • Pattern: tt-* (only Tabz sessions)
+
+🗑️ State Files: Claude Code state files will be cleaned up
+
+⚠️ This cannot be undone!`
+
+    if (!confirm(confirmMessage)) {
       return
     }
 
@@ -1137,6 +1228,17 @@ function SimpleTerminalApp() {
       console.warn('[SimpleTerminalApp] Failed to cleanup tmux sessions:', err)
     }
 
+    // Clean up Claude Code state files
+    try {
+      const response = await fetch('/api/claude-status/cleanup', { method: 'POST' })
+      const result = await response.json()
+      if (result.success) {
+        console.log(`[SimpleTerminalApp] 🗑️ Cleaned up ${result.removed} state files`)
+      }
+    } catch (err) {
+      console.warn('[SimpleTerminalApp] Failed to cleanup state files:', err)
+    }
+
     // Close WebSocket connection gracefully
     if (wsRef.current) {
       wsRef.current.close()
@@ -1146,16 +1248,60 @@ function SimpleTerminalApp() {
     // Clear all terminals from store (will also clear localStorage via persist)
     clearAllTerminals()
 
-    // Clear global settings including cached font size (tabz-settings)
-    localStorage.removeItem('tabz-settings')
+    // Clear ALL localStorage keys completely for a fresh start
+    // This includes: tabz-settings, simple-terminal-storage, and any other cached data
+    const keysToRemove: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key) {
+        keysToRemove.push(key)
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key))
+    console.log(`[SimpleTerminalApp] 🗑️ Cleared ${keysToRemove.length} localStorage keys:`, keysToRemove)
 
-    console.log('[SimpleTerminalApp] ✅ All sessions and settings cleared')
+    console.log('[SimpleTerminalApp] ✅ All sessions, settings, and localStorage cleared')
 
     // Wait a bit more before reload to ensure everything is cleaned up
     await new Promise(resolve => setTimeout(resolve, 200))
 
     // Reload page to apply fresh defaults
     window.location.reload()
+  }
+
+  const handleCopyErrorsToClipboard = async () => {
+    if (consoleErrors.length === 0) {
+      alert('📋 No errors to copy')
+      return
+    }
+
+    // Format errors for clipboard
+    const errorReport = `Console Errors Report (${consoleErrors.length} total)
+Generated: ${new Date().toLocaleString()}
+
+${'='.repeat(80)}
+
+${consoleErrors.map((err, idx) => {
+  const date = new Date(err.timestamp).toLocaleTimeString()
+  return `[${idx + 1}] ${date}
+${err.message}
+${err.stack ? `\nStack:\n${err.stack}\n` : ''}
+${'-'.repeat(80)}`
+}).join('\n\n')}
+
+${'='.repeat(80)}
+End of error report
+`
+
+    try {
+      await navigator.clipboard.writeText(errorReport)
+      alert(`✅ Copied ${consoleErrors.length} error(s) to clipboard!`)
+      // Optionally clear errors after copy
+      // setConsoleErrors([])
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err)
+      alert('❌ Failed to copy to clipboard')
+    }
   }
 
   const handleCommand = (command: string, terminalId: string) => {
@@ -1393,6 +1539,16 @@ function SimpleTerminalApp() {
           >
             🗑️
           </button>
+          {consoleErrors.length > 0 && (
+            <button
+              className="error-indicator-button"
+              onClick={handleCopyErrorsToClipboard}
+              title={`Copy ${consoleErrors.length} error(s) to clipboard`}
+            >
+              <span className="error-badge">{consoleErrors.length}</span>
+              ❗
+            </button>
+          )}
           <button
             className="settings-button"
             onClick={() => setShowSettings(true)}

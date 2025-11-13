@@ -747,6 +747,36 @@ router.post('/tmux/detach/:name', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * GET /api/tmux/list - List all active tmux sessions
+ * Returns array of session names for preview before cleanup
+ */
+router.get('/tmux/list', asyncHandler(async (req, res) => {
+  const { execSync } = require('child_process');
+
+  try {
+    // Get list of all tmux sessions
+    const output = execSync('tmux list-sessions -F "#{session_name}" 2>/dev/null || true', {
+      encoding: 'utf-8'
+    }).trim();
+
+    const sessions = output ? output.split('\n').filter(s => s) : [];
+
+    res.json({
+      success: true,
+      sessions,
+      count: sessions.length
+    });
+  } catch (err) {
+    console.error('[API] Failed to list tmux sessions:', err.message);
+    res.json({
+      success: true,
+      sessions: [],
+      count: 0
+    });
+  }
+}));
+
+/**
  * GET /api/tmux/info/:name - Get information about a tmux session
  * Returns pane title and window count for tab naming
  */

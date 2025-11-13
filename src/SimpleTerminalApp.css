@@ -221,6 +221,55 @@
   transform: scale(1.1);
 }
 
+.error-indicator-button {
+  background: rgba(255, 0, 0, 0.15);
+  border: 1px solid rgba(255, 0, 0, 0.3);
+  color: #ff4444;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  animation: pulse-error 2s ease-in-out infinite;
+}
+
+.error-indicator-button:hover {
+  background: rgba(255, 0, 0, 0.3);
+  border-color: rgba(255, 0, 0, 0.5);
+  color: #ff6666;
+  transform: scale(1.15);
+  animation: none;
+}
+
+.error-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #ff0000;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 5px;
+  border-radius: 10px;
+  min-width: 16px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes pulse-error {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(255, 0, 0, 0);
+  }
+}
+
 .connection-status {
   display: flex;
   align-items: center;
