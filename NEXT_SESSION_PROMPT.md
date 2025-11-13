@@ -1,397 +1,613 @@
-# Next Session: Test Fixes + Project-Based Terminal Launcher
+# Next Session: Project Management UI
 
 ## ✅ Completed This Session (Nov 13, 2025)
 
-### 1. BroadcastChannel State Synchronization
-**Implemented**: Real-time state sync across all browser windows
-- Detached terminals appear in all windows immediately (no refresh needed)
-- "Clear all sessions" reloads all windows simultaneously
-- Synthetic StorageEvent triggers Zustand re-hydration from localStorage
+### 1. Fixed All Failing Tests ✅ (214/214 Tests Passing - 100%)
 
-**Modified Files**:
-- `src/SimpleTerminalApp.tsx` (lines 515-543, 908-911, 998-1001, 1078-1081, 1120-1123)
+**Problem:** 10 tests failing due to:
+- `usePopout.ts` window.open signature changes (2 tests)
+- Zustand persist timing issues in multi-window tests (8 tests)
 
-### 2. Popout Mode Selection (Tab vs Separate Window)
-**Implemented**: Context menu options for both popout types
-- 🗂️ Open in New Tab - Uses default browser behavior
-- ↗️ Open in Separate Window - Forces popup window (1200x800)
+**Solution:**
+- Updated `usePopout` test expectations for new `popoutMode` parameter
+- Added `waitFor()` from `@testing-library/react` to wait for Zustand persist to complete
 
-**Modified Files**:
-- `src/hooks/usePopout.ts` - Added `popoutMode` parameter
-- `src/SimpleTerminalApp.tsx` - Updated context menu
+**Files Modified:**
+- `tests/unit/hooks/usePopout.test.ts` - Fixed 2 tests for popout mode
+- `tests/integration/multi-window-popout.test.ts` - Fixed 8 tests with async/await
+- `tests/unit/hooks/useTerminalSpawning.test.ts` - Added 1 new test
+- `tests/integration/terminal-spawning.test.ts` - Added 1 new test
 
-### 3. UI/UX Polish
-- Added icons to context menu (✏️ 📌 ↔️ ❌)
-- Renamed "Close Tab" → "Kill Session", "Rename Tab" → "Update Display Name"
-- Fixed detached dropdown z-index with React Portal
-- Popout windows start with header collapsed by default
-- Fixed false error warnings (console.warn → console.log)
-
-### 4. Integration Tests for Multi-Window Features
-**Added**: `tests/integration/multi-window-popout.test.ts` (15 tests, 7 passing)
-- ✅ Validates BroadcastChannel messaging
-- ✅ Validates popout mode selection
-- ✅ Validates window isolation
-
-**Test Status**: 202/212 tests passing (95%)
+**Test Results:** 206/214 → **214/214 passing** 🎉
 
 ---
 
-## 🐛 TODO: Fix Remaining Test Failures (10 tests)
+### 2. Working Directory Priority Fix ✅
 
-### Problem
-The `usePopout.ts` hook now has a third parameter `popoutMode: 'tab' | 'window'` that defaults to `'tab'`. This changed the `window.open()` call signature from 2 arguments to 3:
+**Problem:** Spawn menu's top-level "Working Directory Override" input overrode ALL spawn options, even those with explicit `workingDir` set (like Dev Logs → `/tmp`).
+
+**Solution:** Changed priority order in `useTerminalSpawning.ts`:
 
 ```typescript
-// OLD (2 args)
-window.open(url, target)
+// BEFORE (broken)
+const effectiveWorkingDir = option.workingDirOverride || option.workingDir || globalWorkingDir
 
-// NEW (3 args - even when undefined for tab mode)
-window.open(url, target, windowFeatures)
-// where windowFeatures = undefined (tab mode) or 'popup,width=1200,height=800' (window mode)
+// AFTER (fixed)
+const effectiveWorkingDir = option.workingDir || option.workingDirOverride || globalWorkingDir
 ```
 
-### Failing Tests Location
-`tests/unit/hooks/usePopout.test.ts` - 10 tests expecting old 2-arg signature
+**New Priority (highest to lowest):**
+1. **Spawn option's explicit `workingDir`** - Dev Logs with `/tmp` always uses `/tmp`
+2. **Spawn menu's override input** - Manual override for options without `workingDir`
+3. **Global default from Settings** - Fallback for everything else
 
-### How to Fix
-Update all `expect(mockWindowOpen).toHaveBeenCalledWith()` assertions to include the third parameter:
+**Files Modified:**
+- `src/hooks/useTerminalSpawning.ts` (line 88) - Changed priority order
+- `tests/unit/hooks/useTerminalSpawning.test.ts` - Updated test + added new test
+- `tests/integration/terminal-spawning.test.ts` - Updated test + added new test
 
-**For pane popouts (currently expect 'width=800,height=600'):**
-```typescript
-// OLD
-expect(mockWindowOpen).toHaveBeenCalledWith(url, target, 'width=800,height=600')
-
-// NEW (popout of panes defaults to 'tab' mode now, which passes undefined)
-expect(mockWindowOpen).toHaveBeenCalledWith(url, target, 'popup,width=1200,height=800')
-```
-
-**For split container popouts (currently use expect.any(String)):**
-```typescript
-// OLD
-expect(mockWindowOpen).toHaveBeenCalledWith(
-  expect.stringContaining('window=window-pane-1'),
-  expect.any(String),
-  expect.any(String)
-)
-
-// NEW (should match the actual window features)
-expect(mockWindowOpen).toHaveBeenCalledWith(
-  expect.stringContaining('window=window-pane-1'),
-  expect.any(String),
-  'popup,width=1200,height=800'
-)
-```
-
-### Test Lines to Update
-Search for `toHaveBeenCalledWith` in `tests/unit/hooks/usePopout.test.ts` and update expectations around lines:
-- Line 378-382 (already fixed)
-- Line 534-543 (split container popout - 2 expectations)
-- Line 945-949 (already fixed)
-- Lines with `expect.any(String)` for window features
-
-### Verification
-After fixes, run:
-```bash
-npm test -- tests/unit/hooks/usePopout.test.ts
-```
-
-Should see **all 37 tests pass** in that file.
+**Impact:**
+- ✅ Spawn options with explicit `workingDir` are never overridden
+- ✅ Spawn menu override works for generic options (Claude Code, Bash)
+- ✅ Global default provides final fallback
 
 ---
 
-## 🚀 NEW FEATURE: Project-Based Terminal Launcher
+### 3. Project Dropdown Implementation ✅
 
-### Goal
-Add project categories to spawn menu so users can:
-1. Filter spawn options by project
-2. Quickly launch all terminals needed for a specific project
-3. Organize terminals by workspace/project
+**Feature:** Added project selector dropdown to Global Settings Modal for quick project switching.
 
-### Use Case Example
-**Project: "Tabz Development"**
-- Launch: Claude Code (~/projects/terminal-tabs)
-- Launch: TFE (~/projects/terminal-tabs)
-- Launch: LazyGit (~/projects/terminal-tabs)
-- Launch: Bash (~/projects/terminal-tabs)
+**Implementation:**
 
-**Project: "Opustrator"**
-- Launch: Claude Code (~/workspace/opustrator)
-- Launch: Dev Server (~/workspace/opustrator)
-- Launch: Bash (~/workspace/opustrator)
-
-### Proposed Implementation
-
-#### 1. Extend spawn-options.json Format
-
-**Key Design: Projects REFERENCE existing spawn options (no duplication!)**
-
+#### Configuration File (Git-Tracked)
+**File:** `public/spawn-options.json`
 ```json
 {
   "projects": [
-    {
-      "name": "Tabz Development",
-      "workingDir": "~/projects/terminal-tabs",
-      "terminals": ["Claude Code", "TFE", "LazyGit", "Bash"]  // References by label
-    },
-    {
-      "name": "Opustrator",
-      "workingDir": "~/workspace/opustrator",
-      "terminals": ["Claude Code", "Dev Logs", "Bash"]  // Reuses same spawn options
-    }
+    {"name": "Tabz Development", "workingDir": "~/projects/terminal-tabs"},
+    {"name": "TUI Classics", "workingDir": "~/projects/TUIClassics"},
+    {"name": "Tmuxplexer", "workingDir": "~/projects/tmuxplexer"}
   ],
-  "spawnOptions": [
-    // Spawn options defined ONCE, referenced by projects
-    {
-      "label": "Claude Code",
-      "command": "claude",
-      "terminalType": "claude-code",
-      "icon": "🤖",
-      "defaultTheme": "amber"
-      // No workingDir here - comes from project when filtered
-    },
-    {
-      "label": "TFE",
-      "command": "tfe",
-      "terminalType": "tui-tool",
-      "icon": "📝"
-    },
-    {
-      "label": "Bash",
-      "command": "bash",
-      "terminalType": "bash",
-      "icon": "🐚"
-    }
-  ]
+  "globalDefaults": { ... },
+  "spawnOptions": [ ... ]
 }
 ```
 
-**Why this is better:**
-- ✅ No duplication of spawn option config (DRY principle)
-- ✅ Update spawn option once, affects all projects
-- ✅ Projects are just metadata (name + workingDir + terminal refs)
-- ✅ Can still use spawn options individually without projects
+#### Backend API Updates
+**File:** `backend/routes/api.js`
+- GET `/api/spawn-options` - Returns `projects` array
+- PUT `/api/spawn-options` - Preserves `projects` when saving (not editable via API yet)
 
-#### 2. Spawn Menu UI Updates
+#### Frontend UI
+**File:** `src/components/SettingsModal.tsx`
 
-**Option A: Tabbed Interface**
+**New UI in Global Defaults Tab:**
 ```
-┌──────────────────────────────────┐
-│ [All] [Tabz] [Opustrator]       │ ← Project tabs
-├──────────────────────────────────┤
-│ Search: ________________         │
-├──────────────────────────────────┤
-│ ☑️ Claude Code (🤖)              │
-│ ☑️ TFE (📝)                       │
-│ ☑️ LazyGit (🦎)                   │
-│ □  Bash (🐚)                      │
-├──────────────────────────────────┤
-│ [Launch Selected (3)] [Close]    │
-└──────────────────────────────────┘
+┌─────────────────────────────────────┐
+│ 📁 Default Working Directory        │
+│                                     │
+│ Project: [Tabz Development ▼]      │ ← Dropdown
+│ Path:    ~/projects/terminal-tabs  │ ← Auto-filled
+└─────────────────────────────────────┘
 ```
 
-**Option B: Dropdown Filter**
-```
-┌──────────────────────────────────┐
-│ Project: [All Projects ▼]        │ ← Filter dropdown
-│ Search: ________________         │
-├──────────────────────────────────┤
-│ ☑️ Claude Code (🤖)              │
-│ ☑️ TFE (📝)                       │
-│ ☑️ LazyGit (🦎)                   │
-├──────────────────────────────────┤
-│ [Launch Selected (3)] [Close]    │
-└──────────────────────────────────┘
+**Behavior:**
+- Dropdown shows "Manual Entry" + all projects from config
+- Selecting a project → auto-fills working directory
+- Manually editing path → switches dropdown back to "Manual Entry"
+
+**Files Modified:**
+- `src/components/SettingsModal.tsx` - Added project dropdown, auto-fill logic
+- `src/components/SettingsModal.css` - Styled project selector and working dir input
+- `backend/routes/api.js` - Return projects from API, preserve on save
+- `public/spawn-options.json` - Added projects array
+
+**Impact:**
+- ✅ Quick project switching without editing config files
+- ✅ Projects persist in git-tracked config
+- ✅ Manual override still works
+- ✅ Simple, clean UI
+
+---
+
+## 📊 Session Summary
+
+**Tests Fixed:** 10 → **All 214 tests passing (100%)**
+**Features Added:** Working directory priority fix + Project dropdown
+**Bugs Fixed:** Bash spawn option working directory + Settings Modal validation
+**Issues Identified:** Tab names don't update for bash/TUI terminals (use window_name not pane_title)
+**Files Modified:** 11 files (tests, hooks, settings modal, backend API, config, spawn-options)
+**Lines Changed:** ~320 lines (test fixes + UI + bug fixes)
+
+---
+
+## 🚀 Next Session: Project Management UI
+
+### Goal
+Make projects **fully editable** in the Settings Modal, similar to how Spawn Options are currently editable.
+
+### Current State
+
+**Projects are read-only:**
+- Defined in `public/spawn-options.json`
+- Loaded and displayed in dropdown
+- Can only be edited by manually editing JSON file
+
+**What users need:**
+- Add new projects
+- Edit existing projects (name, working directory)
+- Delete projects
+- Reorder projects
+
+---
+
+## 🐛 Fixed During Session: Bash Working Directory Issue
+
+### Issue: Bash Spawn Option Always Used `~` Instead of Global Default
+
+**Problem:**
+1. Bash spawn option had `"workingDir": "~"` explicitly set in `spawn-options.json`
+2. Settings Modal validation was too strict - rejected empty command string `""`
+
+**Solution:**
+1. **Removed explicit `workingDir`** from Bash spawn option
+   - Now falls through to global default (as designed)
+2. **Fixed validation** to allow empty command strings
+   - Changed from `!formData.command` to `formData.command === undefined || formData.command === null`
+   - Empty string `""` is valid for bash (spawns plain bash shell)
+
+**Files Modified:**
+- `public/spawn-options.json` - Removed `workingDir` from Bash option
+- `src/components/SettingsModal.tsx` - Fixed validation logic (lines 214, 235)
+
+**Impact:**
+- ✅ Bash terminals now spawn at global default working directory
+- ✅ Can edit Bash spawn option in Settings Modal without validation errors
+- ✅ Empty command string explicitly supported
+
+---
+
+## 🔧 Known Issue: Tab Names Don't Update for Non-Claude Terminals
+
+### Issue: Bash/TUI Terminals Show Static Names
+
+**Problem:**
+When you spawn a Bash terminal and run a TUI app (like lazygit, htop, etc.), the tab name stays "bash" forever. However, tmux's status bar correctly shows the dynamic name:
+- Tmux status: `tt-bash-20:bash*` → `tt-bash-20:lazygit*` (updates!)
+- Tab name: "bash" → "bash" (stays static)
+
+**Root Cause:**
+Current auto-naming system reads `#{pane_title}` which:
+- ✅ Works great for Claude Code (sets pane title via escape sequences)
+- ❌ Doesn't work for bash terminals (pane title stays "bash")
+- ❌ Tmux's **window name** (`#{window_name}`) is what actually updates based on running command
+
+**What Tmux Shows:**
+```bash
+# Format: session:window_name*
+tt-bash-20:bash*      # Initially
+tt-bash-20:lazygit*   # After running lazygit (window name updates automatically!)
+tt-bash-20:htop*      # After running htop
 ```
 
-**Option C: Launch Project Button**
-```
-┌──────────────────────────────────┐
-│ 🚀 Quick Launch:                 │
-│ [📦 Tabz Dev] [📦 Opustrator]    │ ← One-click launch all
-├──────────────────────────────────┤
-│ Individual Terminals:            │
-│ Search: ________________         │
-├──────────────────────────────────┤
-│ □  Claude Code (🤖)              │
-│ □  Bash (🐚)                      │
-└──────────────────────────────────┘
+**Where to Fix:**
+`backend/routes/api.js` - `/api/tmux/info/:sessionName` endpoint
+
+**Current Implementation:**
+```javascript
+// Line ~650 (backend/routes/api.js)
+const output = execSync(
+  `tmux display-message -p -t "${sessionName}" "#{pane_title}|#{session_windows}|#{window_index}"`,
+  { encoding: 'utf-8' }
+).trim()
 ```
 
-#### 3. Code Changes Needed
+**Proposed Fix:**
+Use `#{window_name}` instead of or in addition to `#{pane_title}`:
 
-**Files to Modify:**
-1. `public/spawn-options.json` - Add projects array
-2. `src/SimpleTerminalApp.tsx`:
-   - Add project state: `const [selectedProject, setSelectedProject] = useState('all')`
-   - Filter spawn options by project
-   - Add "Launch Project" handler that spawns all project terminals
-3. `src/components/SpawnMenu.tsx` (if extracted) or inline in SimpleTerminalApp
-   - Add project tabs/dropdown
-   - Update filtering logic
+```javascript
+// Option 1: Prefer window_name, fallback to pane_title
+const output = execSync(
+  `tmux display-message -p -t "${sessionName}" "#{window_name}|#{pane_title}|#{session_windows}|#{window_index}"`,
+  { encoding: 'utf-8' }
+).trim()
 
-**Example Code Sketch:**
+const [windowName, paneTitle, sessionWindows, windowIndex] = output.split('|')
+
+// Use window_name if different from pane_title (means it's a running command)
+// Otherwise use pane_title (for apps like Claude Code that set it explicitly)
+const displayName = (windowName !== paneTitle && windowName !== 'bash')
+  ? windowName
+  : paneTitle
+```
+
+**Frontend Update:**
+`src/hooks/useTerminalNameSync.ts` - Parse both window name and pane title
+
+**Expected Behavior After Fix:**
+- Bash terminal tab shows "bash" initially
+- Run `lazygit` → Tab updates to "lazygit" ✅
+- Run `htop` → Tab updates to "htop" ✅
+- Run `vim file.txt` → Tab updates to "vim" ✅
+- Claude Code terminal → Still shows Claude's pane title (like "Editing: file.tsx") ✅
+
+**Priority:** Medium-High - Improves UX significantly for bash/TUI terminals
+
+---
+
+## 📋 Implementation Steps
+
+### Step 1: Add "Projects" Tab to Settings Modal
+
+**File:** `src/components/SettingsModal.tsx`
+
+**Current tabs:** Spawn Options | Global Defaults
+**New tabs:** Spawn Options | Projects | Global Defaults
+
+**UI mockup:**
+```
+┌────────────────────────────────────────────┐
+│ [Spawn Options] [Projects] [Global Defaults] │
+├────────────────────────────────────────────┤
+│ Projects                                   │
+│                                            │
+│ ┌────────────────────────────────────┐   │
+│ │ ⋮⋮ 📁 Tabz Development             │   │
+│ │    ~/projects/terminal-tabs     [✏️][❌] │
+│ ├────────────────────────────────────┤   │
+│ │ ⋮⋮ 📁 TUI Classics                 │   │
+│ │    ~/projects/TUIClassics       [✏️][❌] │
+│ ├────────────────────────────────────┤   │
+│ │ ⋮⋮ 📁 Tmuxplexer                   │   │
+│ │    ~/projects/tmuxplexer        [✏️][❌] │
+│ └────────────────────────────────────┘   │
+│                                            │
+│ [+ Add New Project]                       │
+└────────────────────────────────────────────┘
+```
+
+**Features:**
+- Drag handle (⋮⋮) for reordering
+- Edit button (✏️) to modify name/path
+- Delete button (❌) to remove project
+- Add button to create new project
+
+**Code changes needed:**
+
+1. **Add new tab state:**
 ```typescript
-// Load projects from spawn-options.json
-const { projects, spawnOptions } = await loadSpawnOptions()
+const [activeTab, setActiveTab] = useState<'spawn-options' | 'projects' | 'global-defaults'>('spawn-options')
+```
 
-// Filter spawn options by selected project (just filter checkboxes!)
-const visibleOptions = selectedProject === 'All'
-  ? spawnOptions  // Show all spawn options
-  : spawnOptions.filter(opt => {
-      const project = projects.find(p => p.name === selectedProject)
-      return project?.terminals.includes(opt.label)
+2. **Add projects state (already exists):**
+```typescript
+const [projects, setProjects] = useState<Project[]>([])
+```
+
+3. **Add project editing state:**
+```typescript
+const [editingProjectIndex, setEditingProjectIndex] = useState<number | null>(null)
+const [isAddingProject, setIsAddingProject] = useState(false)
+const [projectFormData, setProjectFormData] = useState<Project>({ name: '', workingDir: '' })
+```
+
+4. **Add drag-and-drop for reordering (similar to spawn options):**
+```typescript
+const [draggedProjectIndex, setDraggedProjectIndex] = useState<number | null>(null)
+const [dragOverProjectIndex, setDragOverProjectIndex] = useState<number | null>(null)
+```
+
+---
+
+### Step 2: Add Project CRUD Operations
+
+**File:** `src/components/SettingsModal.tsx`
+
+**Add these functions (similar to spawn options):**
+
+```typescript
+// Add new project
+const handleAddProject = () => {
+  setIsAddingProject(true)
+  setProjectFormData({ name: '', workingDir: '' })
+}
+
+// Save new/edited project
+const handleSaveProject = () => {
+  if (editingProjectIndex !== null) {
+    // Edit existing
+    const updated = [...projects]
+    updated[editingProjectIndex] = projectFormData
+    setProjects(updated)
+    setEditingProjectIndex(null)
+  } else {
+    // Add new
+    setProjects([...projects, projectFormData])
+    setIsAddingProject(false)
+  }
+  setProjectFormData({ name: '', workingDir: '' })
+}
+
+// Delete project
+const handleDeleteProject = (index: number) => {
+  if (confirm('Delete this project?')) {
+    setProjects(projects.filter((_, i) => i !== index))
+  }
+}
+
+// Reorder projects (drag and drop)
+const handleProjectDrop = () => {
+  if (draggedProjectIndex === null || dragOverProjectIndex === null) return
+
+  const reordered = [...projects]
+  const [removed] = reordered.splice(draggedProjectIndex, 1)
+  reordered.splice(dragOverProjectIndex, 0, removed)
+
+  setProjects(reordered)
+  setDraggedProjectIndex(null)
+  setDragOverProjectIndex(null)
+}
+```
+
+---
+
+### Step 3: Update Backend API to Save Projects
+
+**File:** `backend/routes/api.js`
+
+**Currently:** PUT `/api/spawn-options` preserves existing projects (doesn't save edits)
+
+**Update to accept projects in request body:**
+
+```typescript
+router.put('/spawn-options', asyncHandler(async (req, res) => {
+  const fs = require('fs').promises;
+  const path = require('path');
+
+  try {
+    const { spawnOptions, globalDefaults, projects } = req.body; // Add projects
+
+    if (!Array.isArray(spawnOptions)) {
+      return res.status(400).json({
+        error: 'Invalid format',
+        message: 'spawnOptions must be an array'
+      });
+    }
+
+    const spawnOptionsPath = path.join(__dirname, '../../public/spawn-options.json');
+
+    // Read existing file to preserve projects/globalDefaults if not provided
+    let existingGlobalDefaults = {};
+    let existingProjects = [];
+    try {
+      const existingData = await fs.readFile(spawnOptionsPath, 'utf-8');
+      const existingConfig = JSON.parse(existingData);
+      existingGlobalDefaults = existingConfig.globalDefaults || {};
+      existingProjects = existingConfig.projects || [];
+    } catch (err) {
+      // File doesn't exist or is invalid, use empty defaults
+    }
+
+    const configData = {
+      projects: projects !== undefined ? projects : existingProjects, // Use provided projects or preserve existing
+      globalDefaults: globalDefaults || existingGlobalDefaults,
+      spawnOptions
+    };
+
+    await fs.writeFile(
+      spawnOptionsPath,
+      JSON.stringify(configData, null, 2),
+      'utf-8'
+    );
+
+    res.json({
+      success: true,
+      message: 'Configuration updated successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to save configuration',
+      message: error.message
+    });
+  }
+}));
+```
+
+**Validation to add:**
+```typescript
+// Validate projects array if provided
+if (projects !== undefined) {
+  if (!Array.isArray(projects)) {
+    return res.status(400).json({
+      error: 'Invalid format',
+      message: 'projects must be an array'
+    });
+  }
+
+  // Validate each project has name and workingDir
+  for (const project of projects) {
+    if (!project.name || !project.workingDir) {
+      return res.status(400).json({
+        error: 'Invalid project',
+        message: 'Each project must have name and workingDir'
+      });
+    }
+  }
+}
+```
+
+---
+
+### Step 4: Update Save Function in Settings Modal
+
+**File:** `src/components/SettingsModal.tsx`
+
+**Update `saveSpawnOptions` to include projects:**
+
+```typescript
+const saveSpawnOptions = async () => {
+  setIsSaving(true)
+  setError(null)
+  try {
+    // Build globalDefaults from current settings store
+    const globalDefaults = {
+      workingDirectory: settings.workingDirectory,
+      fontFamily: settings.terminalDefaultFontFamily,
+      fontSize: settings.terminalDefaultFontSize,
+      theme: settings.terminalDefaultTheme,
+      background: settings.terminalDefaultBackground,
+      transparency: Math.round(settings.terminalDefaultTransparency * 100),
+      useTmux: settings.useTmux,
+    }
+
+    const response = await fetch('/api/spawn-options', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        spawnOptions,
+        globalDefaults,
+        projects // Add projects to save
+      }),
     })
 
-// When spawning with project selected, inject working directory
-const spawnWithProject = async (option: SpawnOption) => {
-  const project = projects.find(p => p.name === selectedProject)
+    const result = await response.json()
 
-  const optionWithWorkingDir = {
-    ...option,
-    workingDirOverride: project ? project.workingDir : option.workingDir
-  }
-
-  await spawnTerminal(optionWithWorkingDir)
-}
-
-// Quick launch all terminals for a project
-const handleLaunchProject = async (projectName: string) => {
-  const project = projects.find(p => p.name === projectName)
-  if (!project) return
-
-  for (const terminalLabel of project.terminals) {
-    // Find the spawn option by label reference
-    const option = spawnOptions.find(opt => opt.label === terminalLabel)
-    if (!option) continue
-
-    // Spawn with project's working directory
-    const optionWithWorkingDir = {
-      ...option,
-      workingDirOverride: project.workingDir
+    if (result.success) {
+      setOriginalOptions(JSON.parse(JSON.stringify(spawnOptions)))
+      onSave() // Notify parent that settings were saved
+    } else {
+      setError(result.message || 'Failed to save settings')
     }
-    await spawnTerminal(optionWithWorkingDir)
-    await new Promise(resolve => setTimeout(resolve, 150)) // Stagger spawns
+  } catch (err: any) {
+    setError(err.message || 'Failed to save settings')
+  } finally {
+    setIsSaving(false)
   }
 }
 ```
 
-#### 4. Benefits
-- ✅ **Fast project switching** - One click to launch all terminals for a project
-- ✅ **Organized spawn menu** - Filter by project reduces clutter
-- ✅ **Consistent working dirs** - Project defines default working directory
-- ✅ **Backward compatible** - Existing `spawnOptions` still work for individual terminals
-- ✅ **Multi-project workflows** - Easily switch between Tabz, Opustrator, personal projects
+---
 
-#### 5. Optional Enhancements
-- Save last used project in localStorage
-- Add "Edit Projects" button in Settings Modal
-- Visual indicator on tabs showing which project they belong to
-- Context menu: "Add to Project..." to categorize existing terminals
+### Step 5: Add Styling for Projects Tab
+
+**File:** `src/components/SettingsModal.css`
+
+**Copy and adapt styles from spawn options:**
+- `.project-list` (similar to `.spawn-options-list`)
+- `.project-item` (similar to `.spawn-option-item`)
+- `.project-drag-handle` (similar to `.option-drag-handle`)
+- `.project-form` (similar to `.option-form`)
+
+**Key differences:**
+- Projects have only 2 fields (name, workingDir) vs spawn options with many fields
+- Simpler form UI
+- No icon picker needed
 
 ---
 
-## 📁 Architecture Notes
+### Step 6: Update hasUnsavedChanges Check
 
-### Spawn Menu Current State
-- Located in `SimpleTerminalApp.tsx` (lines ~1900-2100)
-- ✅ **Already has checkboxes** + select all
-- ✅ **Already has search/filter input bar**
-- ✅ **Already spawns multiple terminals** with staggered delays (150ms)
+**File:** `src/components/SettingsModal.tsx`
 
-**What's needed:**
-- Add project selector (tabs or dropdown) - ~20 lines
-- Filter `spawnOptions` by `project.terminals` array - ~5 lines
-- Inject `workingDirOverride` from project - ~3 lines
+**Track project changes too:**
 
-**Total code addition: ~30-50 lines** (mostly UI for project selector)
+```typescript
+const [originalProjects, setOriginalProjects] = useState<Project[]>([])
 
-### Project State Management
-**Where to Store:**
-- `public/spawn-options.json` - Project definitions (checked into git)
-- `localStorage` - User's last selected project (ephemeral)
+// When loading:
+setProjects(result.projects || [])
+setOriginalProjects(JSON.parse(JSON.stringify(result.projects || [])))
 
-**Data Flow:**
+// Update check:
+const hasUnsavedChanges = () => {
+  const spawnOptionsChanged = JSON.stringify(spawnOptions) !== JSON.stringify(originalOptions)
+  const projectsChanged = JSON.stringify(projects) !== JSON.stringify(originalProjects)
+  return spawnOptionsChanged || projectsChanged
+}
+
+// After save:
+setOriginalProjects(JSON.parse(JSON.stringify(projects)))
 ```
-spawn-options.json → SimpleTerminalApp state → SpawnMenu UI
-                                              ↓
-                                         spawn terminals
-```
-
-### Working Directory Priority
-With projects, the priority becomes:
-1. **Per-terminal override** (footer controls) - highest priority
-2. **Project working directory** (from projects array) - NEW
-3. **Spawn option default** (from terminal definition)
-4. **Global default** (from Settings Store) - lowest priority
 
 ---
 
-## 🔜 Implementation Steps
+## 🎯 Expected Behavior After Implementation
 
-### Phase 1: Test Fixes (30 min)
-1. Update `tests/unit/hooks/usePopout.test.ts` expectations
-2. Run `npm test` and verify 212/212 tests pass
-3. Commit: "fix: update usePopout tests for popoutMode parameter"
+**User Workflow:**
 
-### Phase 2: Project Launcher MVP (2-3 hours)
-1. Design UI mockup (choose between tabbed/dropdown/buttons)
-2. Extend `spawn-options.json` format with projects array
-3. Update spawn menu to show project filter
-4. Implement "Launch Project" functionality
-5. Test with 2-3 projects
-6. Update CLAUDE.md documentation
-7. Commit: "feat: project-based terminal launcher"
+1. **Open Settings Modal** (⚙️ button)
+2. **Click "Projects" tab**
+3. **See list of projects** with drag handles, edit/delete buttons
+4. **Drag to reorder** projects
+5. **Click ✏️ to edit** - Opens inline form with name/path inputs
+6. **Click ❌ to delete** - Removes project after confirmation
+7. **Click "+ Add New Project"** - Opens inline form for new project
+8. **Fill in name and working directory**
+9. **Click Save** - Persists all changes to `spawn-options.json`
+10. **Close modal** - Projects dropdown in Global Defaults reflects changes
 
-### Phase 3: Polish (optional)
-1. Add project management UI in Settings Modal
-2. Visual project indicators on tabs
-3. Context menu: "Add to Project"
-4. Save/restore last selected project
-
----
-
-## ⚠️ Important Considerations
-
-### Performance
-- Loading spawn-options.json is already done on mount - no extra overhead
-- Filtering by project is just a JS filter operation - instant
-- Spawning multiple terminals already has staggered delays (safe)
-
-### User Experience
-- Should work seamlessly with existing workflow
-- Individual spawn options still available (backward compatible)
-- Projects are optional - users can ignore if they want
-
-### Testing
-- Unit tests for project filtering logic
-- Integration tests for multi-terminal spawn
-- Manual testing with 2-3 real projects
+**Benefits:**
+- ✅ No more manual JSON editing
+- ✅ Drag-and-drop reordering
+- ✅ Inline editing (same pattern as spawn options)
+- ✅ Changes saved atomically with other settings
+- ✅ Git-trackable configuration
 
 ---
 
-## 📝 Questions to Resolve
+## 📝 Files to Modify
 
-1. **UI Preference**: Tabs, dropdown, or quick launch buttons?
-2. **Auto-launch**: Should projects auto-launch on first window open?
-3. **Tab organization**: Should spawned project terminals be grouped visually?
-4. **Persistence**: Remember last project across sessions?
+1. **`src/components/SettingsModal.tsx`** - Add Projects tab, CRUD operations
+2. **`src/components/SettingsModal.css`** - Style project list and forms
+3. **`backend/routes/api.js`** - Accept and save projects in PUT endpoint
+4. **`CLAUDE.md`** - Document new project management UI
+
+**Estimated Lines of Code:** ~200-300 lines (mostly UI + CRUD handlers)
 
 ---
 
-## 🎯 Success Criteria
+## 🧪 Testing Checklist
 
-**Tests Fixed:**
-- ✅ All 212 tests pass
-- ✅ No test warnings or errors
+After implementation, verify:
 
-**Project Launcher:**
-- ✅ Can define projects in spawn-options.json
-- ✅ Can filter spawn menu by project
-- ✅ Can launch all terminals for a project with one action
-- ✅ Working directory inherited from project definition
-- ✅ Backward compatible with existing spawn-options.json format
-- ✅ Documented in CLAUDE.md
+**Project Management:**
+- [ ] Projects tab shows all projects from config
+- [ ] Can add new project (name + working dir)
+- [ ] Can edit existing project
+- [ ] Can delete project
+- [ ] Can drag-and-drop to reorder
+- [ ] Save persists changes to `spawn-options.json`
+- [ ] Unsaved changes warning works
+- [ ] Projects dropdown in Global Defaults updates after save
+- [ ] Selecting project from dropdown still auto-fills working dir
+
+**Dynamic Tab Names (if implemented):**
+- [ ] Bash terminal shows "bash" initially
+- [ ] Running lazygit updates tab to "lazygit"
+- [ ] Running htop updates tab to "htop"
+- [ ] Claude Code terminals still show pane title (e.g., "Editing: file.tsx")
+- [ ] Tab names update every 2 seconds while app is running
+
+---
+
+## 💡 Optional Enhancements
+
+Consider adding in future sessions:
+
+### High Priority
+1. **Dynamic Tab Names for Bash/TUI Terminals** - Use `#{window_name}` instead of `#{pane_title}` (see "Known Issue" above)
+   - Significantly improves UX for non-Claude terminals
+   - Simple fix: ~10-20 lines of code
+
+### Medium Priority
+2. **Project Templates** - Predefined project structures
+3. **Working Dir Validation** - Check if directory exists before spawning
+4. **Import/Export Projects** - Share project configs as JSON files
+
+### Lower Priority
+5. **Project Icons** - Visual differentiation (like spawn options)
+6. **Terminal Filtering by Project** - Show only terminals in current project
+7. **Project-Specific Spawn Options** - Different spawn options per project
 
 ---
 

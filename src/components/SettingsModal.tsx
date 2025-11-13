@@ -20,6 +20,11 @@ interface SpawnOption {
   defaultFontSize?: number
 }
 
+interface Project {
+  name: string
+  workingDir: string
+}
+
 interface SettingsModalProps {
   isOpen: boolean
   onClose: () => void
@@ -46,6 +51,8 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<'spawn-options' | 'global-defaults'>('spawn-options')
   const [spawnOptions, setSpawnOptions] = useState<SpawnOption[]>([])
   const [originalOptions, setOriginalOptions] = useState<SpawnOption[]>([]) // Track original state
+  const [projects, setProjects] = useState<Project[]>([])
+  const [selectedProject, setSelectedProject] = useState<string>('') // Empty = manual entry
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -110,6 +117,11 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
         setSpawnOptions(result.data)
         setOriginalOptions(JSON.parse(JSON.stringify(result.data))) // Deep copy for comparison
 
+        // Load projects from file
+        if (result.projects) {
+          setProjects(result.projects)
+        }
+
         // Load global defaults from file and apply to settings store
         if (result.globalDefaults) {
           const defaults = result.globalDefaults
@@ -149,6 +161,21 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
     }
   }
 
+  // Handle project selection - auto-fills working directory
+  const handleProjectSelect = (projectName: string) => {
+    setSelectedProject(projectName)
+
+    if (projectName === '') {
+      // Manual entry - don't change working directory
+      return
+    }
+
+    const project = projects.find(p => p.name === projectName)
+    if (project) {
+      settings.updateSettings({ workingDirectory: project.workingDir })
+    }
+  }
+
   const saveSpawnOptions = async () => {
     setIsSaving(true)
     setError(null)
@@ -184,8 +211,8 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
   }
 
   const handleAddOption = () => {
-    if (!formData.label || !formData.command) {
-      alert('Label and Command are required')
+    if (!formData.label || formData.command === undefined || formData.command === null) {
+      alert('Label is required (Command can be empty for bash)')
       return
     }
     // Clean up fields that should use global defaults
@@ -205,8 +232,8 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
 
   const handleUpdateOption = () => {
     if (editingIndex === null) return
-    if (!formData.label || !formData.command) {
-      alert('Label and Command are required')
+    if (!formData.label || formData.command === undefined || formData.command === null) {
+      alert('Label is required (Command can be empty for bash)')
       return
     }
     // Clean up fields that should use global defaults
@@ -373,12 +400,39 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
               <div className="settings-section">
                 <h3>📁 Default Working Directory</h3>
                 <p className="setting-description">Used when spawn options don't specify a directory</p>
-                <input
-                  type="text"
-                  value={settings.workingDirectory}
-                  onChange={(e) => settings.updateSettings({ workingDirectory: e.target.value })}
-                  placeholder="/home/matt"
-                />
+
+                {/* Project dropdown */}
+                {projects.length > 0 && (
+                  <div className="project-selector">
+                    <label>Project:</label>
+                    <select
+                      value={selectedProject}
+                      onChange={(e) => handleProjectSelect(e.target.value)}
+                      className="project-dropdown"
+                    >
+                      <option value="">Manual Entry</option>
+                      {projects.map((project) => (
+                        <option key={project.name} value={project.name}>
+                          {project.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Working directory input */}
+                <div className="working-dir-input">
+                  <label>Path:</label>
+                  <input
+                    type="text"
+                    value={settings.workingDirectory}
+                    onChange={(e) => {
+                      settings.updateSettings({ workingDirectory: e.target.value })
+                      setSelectedProject('') // Switch to manual entry if user edits
+                    }}
+                    placeholder="/home/matt"
+                  />
+                </div>
               </div>
 
               <div className="settings-section">

@@ -82,9 +82,10 @@ export function useTerminalSpawning(
       const sessionName = useTmux ? generateSessionName(option.terminalType, option.label, option.command) : undefined
 
       // Create placeholder terminal IMMEDIATELY (before spawn)
-      // 3-tier priority: override > option > global default
+      // 3-tier priority: option > override > global default
+      // This ensures spawn options with explicit workingDir (like Dev Logs → /tmp) are never overridden
       const globalWorkingDir = useSettingsStore.getState().workingDirectory || '~'
-      const effectiveWorkingDir = option.workingDirOverride || option.workingDir || globalWorkingDir
+      const effectiveWorkingDir = option.workingDir || option.workingDirOverride || globalWorkingDir
 
       // Get global defaults for 3-tier priority system
       const globalSettings = useSettingsStore.getState()

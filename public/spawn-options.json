@@ -1,7 +1,21 @@
 {
+  "projects": [
+    {
+      "name": "Tabz Development",
+      "workingDir": "~/projects/terminal-tabs"
+    },
+    {
+      "name": "TUI Classics",
+      "workingDir": "~/projects/TUIClassics"
+    },
+    {
+      "name": "Tmuxplexer",
+      "workingDir": "~/projects/tmuxplexer"
+    }
+  ],
   "globalDefaults": {
     "workingDirectory": "/home/matt/projects/terminal-tabs",
-    "fontFamily": "'SauceCodePro Nerd Font', 'SauceCodePro NF', monospace",
+    "fontFamily": "'JetBrainsMono Nerd Font', 'JetBrainsMono NF', monospace",
     "fontSize": 16,
     "theme": "holographic",
     "background": "carbon",
@@ -13,7 +27,6 @@
       "label": "Bash",
       "command": "",
       "terminalType": "bash",
-      "workingDir": "~",
       "icon": "💻",
       "description": "Plain bash terminal",
       "defaultTheme": "matrix",
@@ -157,7 +170,6 @@
       "label": "LazyGit",
       "command": "lazygit",
       "terminalType": "tui-tool",
-      "workingDir": "~/projects",
       "icon": "🌿",
       "description": "Terminal UI for git",
       "defaultTheme": "github-dark",

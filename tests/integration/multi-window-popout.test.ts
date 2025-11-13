@@ -132,7 +132,7 @@ describe('Multi-Window Popout Integration', () => {
       expect(popoutWindowTerminals[0].id).toBe('term-popout')
     })
 
-    it('should show detached terminals in all windows', () => {
+    it('should show detached terminals in all windows', async () => {
       const store = getStore()
 
       const detachedTerminal: Terminal = {
@@ -149,13 +149,18 @@ describe('Multi-Window Popout Integration', () => {
 
       store.addTerminal(detachedTerminal)
 
+      // Wait for store mutation to complete (Zustand persist is async)
+      await waitFor(() => {
+        const allDetached = getStore().terminals.filter(t => t.status === 'detached')
+        expect(allDetached).toHaveLength(1)
+      })
+
       // Detached terminals should be visible to all windows
-      const allDetached = store.terminals.filter(t => t.status === 'detached')
-      expect(allDetached).toHaveLength(1)
+      const allDetached = getStore().terminals.filter(t => t.status === 'detached')
       expect(allDetached[0].id).toBe('term-detached')
     })
 
-    it('should not show terminals from other windows in visible terminals list', () => {
+    it('should not show terminals from other windows in visible terminals list', async () => {
       const store = getStore()
 
       // Add terminals in different windows
@@ -189,8 +194,13 @@ describe('Multi-Window Popout Integration', () => {
         splitLayout: { type: 'single', panes: [] },
       })
 
+      // Wait for store mutations to complete
+      await waitFor(() => {
+        expect(getStore().terminals).toHaveLength(3)
+      })
+
       // Window 1 should only see its own terminal (not detached, not window 2)
-      const window1Visible = store.terminals.filter(t => {
+      const window1Visible = getStore().terminals.filter(t => {
         if (t.status === 'detached') return false
         return (t.windowId || 'main') === 'window-1'
       })
@@ -330,7 +340,7 @@ describe('Multi-Window Popout Integration', () => {
   })
 
   describe('Detach/Reattach Across Windows', () => {
-    it('should detach terminal and clear windowId', () => {
+    it('should detach terminal and clear windowId', async () => {
       const store = getStore()
 
       const terminal: Terminal = {
@@ -347,6 +357,11 @@ describe('Multi-Window Popout Integration', () => {
 
       store.addTerminal(terminal)
 
+      // Wait for add to complete
+      await waitFor(() => {
+        expect(getStore().terminals).toHaveLength(1)
+      })
+
       // Detach (simulating handleContextDetach)
       store.updateTerminal(terminal.id, {
         status: 'detached',
@@ -354,13 +369,18 @@ describe('Multi-Window Popout Integration', () => {
         windowId: undefined,
       })
 
-      const updated = store.terminals.find(t => t.id === terminal.id)
-      expect(updated?.status).toBe('detached')
+      // Wait for update to complete
+      await waitFor(() => {
+        const updated = getStore().terminals.find(t => t.id === terminal.id)
+        expect(updated?.status).toBe('detached')
+      })
+
+      const updated = getStore().terminals.find(t => t.id === terminal.id)
       expect(updated?.agentId).toBeUndefined()
       expect(updated?.windowId).toBeUndefined()
     })
 
-    it('should reattach terminal to different window', () => {
+    it('should reattach terminal to different window', async () => {
       const store = getStore()
 
       // Start with detached terminal
@@ -377,18 +397,28 @@ describe('Multi-Window Popout Integration', () => {
 
       store.addTerminal(terminal)
 
+      // Wait for add to complete
+      await waitFor(() => {
+        expect(getStore().terminals).toHaveLength(1)
+      })
+
       // Reattach to window-456
       store.updateTerminal(terminal.id, {
         status: 'spawning',
         windowId: 'window-456',
       })
 
-      const updated = store.terminals.find(t => t.id === terminal.id)
-      expect(updated?.status).toBe('spawning')
+      // Wait for update to complete
+      await waitFor(() => {
+        const updated = getStore().terminals.find(t => t.id === terminal.id)
+        expect(updated?.status).toBe('spawning')
+      })
+
+      const updated = getStore().terminals.find(t => t.id === terminal.id)
       expect(updated?.windowId).toBe('window-456')
     })
 
-    it('should preserve terminal state during detach/reattach cycle', () => {
+    it('should preserve terminal state during detach/reattach cycle', async () => {
       const store = getStore()
 
       const terminal: Terminal = {
@@ -407,13 +437,24 @@ describe('Multi-Window Popout Integration', () => {
 
       store.addTerminal(terminal)
 
+      // Wait for add to complete
+      await waitFor(() => {
+        expect(getStore().terminals).toHaveLength(1)
+      })
+
       // Detach
       store.updateTerminal(terminal.id, {
         status: 'detached',
         windowId: undefined,
       })
 
-      let updated = store.terminals.find(t => t.id === terminal.id)
+      // Wait for detach update
+      await waitFor(() => {
+        const updated = getStore().terminals.find(t => t.id === terminal.id)
+        expect(updated?.status).toBe('detached')
+      })
+
+      let updated = getStore().terminals.find(t => t.id === terminal.id)
       expect(updated?.name).toBe('Test Terminal')
       expect(updated?.theme).toBe('amber')
       expect(updated?.fontSize).toBe(18)
@@ -425,7 +466,13 @@ describe('Multi-Window Popout Integration', () => {
         windowId: 'window-999',
       })
 
-      updated = store.terminals.find(t => t.id === terminal.id)
+      // Wait for reattach update
+      await waitFor(() => {
+        const updated = getStore().terminals.find(t => t.id === terminal.id)
+        expect(updated?.status).toBe('active')
+      })
+
+      updated = getStore().terminals.find(t => t.id === terminal.id)
       expect(updated?.name).toBe('Test Terminal')
       expect(updated?.theme).toBe('amber')
       expect(updated?.fontSize).toBe(18)
@@ -472,7 +519,7 @@ describe('Multi-Window Popout Integration', () => {
   })
 
   describe('Split Container Popout', () => {
-    it('should detach all panes when detaching split container', () => {
+    it('should detach all panes when detaching split container', async () => {
       const store = getStore()
 
       // Create split with 2 panes
@@ -520,6 +567,11 @@ describe('Multi-Window Popout Integration', () => {
       store.addTerminal(rightPane)
       store.addTerminal(splitContainer)
 
+      // Wait for all additions to complete
+      await waitFor(() => {
+        expect(getStore().terminals).toHaveLength(3)
+      })
+
       // Detach all panes
       store.updateTerminal('pane-left', {
         status: 'detached',
@@ -539,10 +591,16 @@ describe('Multi-Window Popout Integration', () => {
         windowId: undefined,
       })
 
+      // Wait for all updates to complete
+      await waitFor(() => {
+        const updatedContainer = getStore().terminals.find(t => t.id === 'split-1')
+        expect(updatedContainer?.status).toBe('detached')
+      })
+
       // Verify all are detached
-      const updatedLeft = store.terminals.find(t => t.id === 'pane-left')
-      const updatedRight = store.terminals.find(t => t.id === 'pane-right')
-      const updatedContainer = store.terminals.find(t => t.id === 'split-1')
+      const updatedLeft = getStore().terminals.find(t => t.id === 'pane-left')
+      const updatedRight = getStore().terminals.find(t => t.id === 'pane-right')
+      const updatedContainer = getStore().terminals.find(t => t.id === 'split-1')
 
       expect(updatedLeft?.status).toBe('detached')
       expect(updatedRight?.status).toBe('detached')
@@ -550,7 +608,7 @@ describe('Multi-Window Popout Integration', () => {
       expect(updatedContainer?.splitLayout?.type).toBe('vertical') // Layout preserved
     })
 
-    it('should reattach all panes when reattaching split container', () => {
+    it('should reattach all panes when reattaching split container', async () => {
       const store = getStore()
 
       // Start with detached split
@@ -598,6 +656,11 @@ describe('Multi-Window Popout Integration', () => {
       store.addTerminal(rightPane)
       store.addTerminal(splitContainer)
 
+      // Wait for all additions to complete
+      await waitFor(() => {
+        expect(getStore().terminals).toHaveLength(3)
+      })
+
       // Reattach all to window-789
       store.updateTerminal('pane-left', {
         status: 'spawning',
@@ -612,10 +675,16 @@ describe('Multi-Window Popout Integration', () => {
         windowId: 'window-789',
       })
 
+      // Wait for all updates to complete
+      await waitFor(() => {
+        const updatedContainer = getStore().terminals.find(t => t.id === 'split-1')
+        expect(updatedContainer?.status).toBe('active')
+      })
+
       // Verify all reattached to same window
-      const updatedLeft = store.terminals.find(t => t.id === 'pane-left')
-      const updatedRight = store.terminals.find(t => t.id === 'pane-right')
-      const updatedContainer = store.terminals.find(t => t.id === 'split-1')
+      const updatedLeft = getStore().terminals.find(t => t.id === 'pane-left')
+      const updatedRight = getStore().terminals.find(t => t.id === 'pane-right')
+      const updatedContainer = getStore().terminals.find(t => t.id === 'split-1')
 
       expect(updatedLeft?.windowId).toBe('window-789')
       expect(updatedRight?.windowId).toBe('window-789')
@@ -646,7 +715,7 @@ describe('Multi-Window Popout Integration', () => {
       channel2.close()
     })
 
-    it('should clear all terminals from all windows', () => {
+    it('should clear all terminals from all windows', async () => {
       const store = getStore()
 
       // Add terminals in different windows
@@ -670,12 +739,18 @@ describe('Multi-Window Popout Integration', () => {
         splitLayout: { type: 'single', panes: [] },
       })
 
-      expect(store.terminals).toHaveLength(2)
+      // Wait for additions to complete
+      await waitFor(() => {
+        expect(getStore().terminals).toHaveLength(2)
+      })
 
       // Clear all
       store.clearAllTerminals()
 
-      expect(store.terminals).toHaveLength(0)
+      // Wait for clear to complete
+      await waitFor(() => {
+        expect(getStore().terminals).toHaveLength(0)
+      })
     })
   })
 })

@@ -368,7 +368,7 @@ describe('useTerminalSpawning', () => {
       expect(message.config.workingDir).toBe('/home/custom')
     })
 
-    it('should use workingDirOverride when provided (highest priority)', async () => {
+    it('should use spawn option workingDir even when override is provided (spawn option has priority)', async () => {
       const { result } = renderHook(() =>
         useTerminalSpawning('main', true, wsRef, pendingSpawns)
       )
@@ -380,6 +380,31 @@ describe('useTerminalSpawning', () => {
         workingDir: '/home/default',
         workingDirOverride: '/home/override',
       })
+
+      await act(async () => {
+        await result.current.handleSpawnTerminal(spawnOption)
+      })
+
+      const terminal = useSimpleTerminalStore.getState().terminals[0]
+      expect(terminal.workingDir).toBe('/home/default')
+
+      const sentMessages = mockWs.getSentMessages()
+      const message = JSON.parse(sentMessages[0] as string)
+      expect(message.config.workingDir).toBe('/home/default')
+    })
+
+    it('should use workingDirOverride when spawn option has no workingDir', async () => {
+      const { result } = renderHook(() =>
+        useTerminalSpawning('main', true, wsRef, pendingSpawns)
+      )
+
+      // Set global default
+      useSettingsStore.getState().updateSettings({ workingDirectory: '/home/global' })
+
+      const spawnOption = createSpawnOption({
+        workingDirOverride: '/home/override',
+      })
+      delete spawnOption.workingDir // Ensure no workingDir set
 
       await act(async () => {
         await result.current.handleSpawnTerminal(spawnOption)

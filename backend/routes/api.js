@@ -140,7 +140,8 @@ router.get('/spawn-options', asyncHandler(async (req, res) => {
       success: true,
       count: spawnConfig.spawnOptions.length,
       data: spawnConfig.spawnOptions,
-      globalDefaults: spawnConfig.globalDefaults || {} // Include globalDefaults
+      globalDefaults: spawnConfig.globalDefaults || {}, // Include globalDefaults
+      projects: spawnConfig.projects || [] // Include projects
     });
   } catch (error) {
     res.status(500).json({
@@ -169,17 +170,20 @@ router.put('/spawn-options', asyncHandler(async (req, res) => {
 
     const spawnOptionsPath = path.join(__dirname, '../../public/spawn-options.json');
 
-    // Read existing file to preserve globalDefaults if not provided
+    // Read existing file to preserve projects, globalDefaults if not provided
     let existingGlobalDefaults = {};
+    let existingProjects = [];
     try {
       const existingData = await fs.readFile(spawnOptionsPath, 'utf-8');
       const existingConfig = JSON.parse(existingData);
       existingGlobalDefaults = existingConfig.globalDefaults || {};
+      existingProjects = existingConfig.projects || [];
     } catch (err) {
       // File doesn't exist or is invalid, use empty defaults
     }
 
     const configData = {
+      projects: existingProjects, // Always preserve projects (not editable via this endpoint)
       globalDefaults: globalDefaults || existingGlobalDefaults,
       spawnOptions
     };

@@ -378,7 +378,7 @@ describe('usePopout - Split Terminal Popout', () => {
       expect(mockWindowOpen).toHaveBeenCalledWith(
         'http://localhost:5173/?window=window-new-456&active=pane-left',
         'tabz-window-new-456',
-        'popup,width=1200,height=800' // Updated to match new popout window features
+        undefined // Tab mode (default) passes undefined for window features
       )
     })
   })
@@ -533,13 +533,13 @@ describe('usePopout - Split Terminal Popout', () => {
       expect(mockWindowOpen).toHaveBeenCalledTimes(2)
       expect(mockWindowOpen).toHaveBeenCalledWith(
         expect.stringContaining('window=window-pane-1'),
-        expect.any(String),
-        expect.any(String)
+        expect.stringMatching(/^tabz-window-pane-/),
+        undefined // Tab mode (default) passes undefined for window features
       )
       expect(mockWindowOpen).toHaveBeenCalledWith(
         expect.stringContaining('window=window-pane-2'),
-        expect.any(String),
-        expect.any(String)
+        expect.stringMatching(/^tabz-window-pane-/),
+        undefined // Tab mode (default) passes undefined for window features
       )
     })
 
