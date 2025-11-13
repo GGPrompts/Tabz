@@ -124,48 +124,38 @@ Add project categories to spawn menu so users can:
 
 #### 1. Extend spawn-options.json Format
 
+**Key Design: Projects REFERENCE existing spawn options (no duplication!)**
+
 ```json
 {
   "projects": [
     {
       "name": "Tabz Development",
       "workingDir": "~/projects/terminal-tabs",
-      "terminals": [
-        {
-          "label": "Claude Code",
-          "terminalType": "claude-code",
-          "command": "claude",
-          "icon": "🤖"
-        },
-        {
-          "label": "TFE",
-          "terminalType": "tui-tool",
-          "command": "tfe",
-          "icon": "📝"
-        },
-        {
-          "label": "LazyGit",
-          "terminalType": "tui-tool",
-          "command": "lazygit",
-          "icon": "🦎"
-        }
-      ]
+      "terminals": ["Claude Code", "TFE", "LazyGit", "Bash"]  // References by label
     },
     {
       "name": "Opustrator",
       "workingDir": "~/workspace/opustrator",
-      "terminals": [
-        {
-          "label": "Claude Code",
-          "terminalType": "claude-code",
-          "command": "claude",
-          "icon": "🤖"
-        }
-      ]
+      "terminals": ["Claude Code", "Dev Logs", "Bash"]  // Reuses same spawn options
     }
   ],
   "spawnOptions": [
-    // Existing individual options (no project) can still exist
+    // Spawn options defined ONCE, referenced by projects
+    {
+      "label": "Claude Code",
+      "command": "claude",
+      "terminalType": "claude-code",
+      "icon": "🤖",
+      "defaultTheme": "amber"
+      // No workingDir here - comes from project when filtered
+    },
+    {
+      "label": "TFE",
+      "command": "tfe",
+      "terminalType": "tui-tool",
+      "icon": "📝"
+    },
     {
       "label": "Bash",
       "command": "bash",
@@ -175,6 +165,12 @@ Add project categories to spawn menu so users can:
   ]
 }
 ```
+
+**Why this is better:**
+- ✅ No duplication of spawn option config (DRY principle)
+- ✅ Update spawn option once, affects all projects
+- ✅ Projects are just metadata (name + workingDir + terminal refs)
+- ✅ Can still use spawn options individually without projects
 
 #### 2. Spawn Menu UI Updates
 
@@ -239,22 +235,42 @@ Add project categories to spawn menu so users can:
 // Load projects from spawn-options.json
 const { projects, spawnOptions } = await loadSpawnOptions()
 
-// Filter options by project
-const visibleOptions = selectedProject === 'all'
-  ? spawnOptions
-  : projects.find(p => p.name === selectedProject)?.terminals || []
+// Filter spawn options by selected project (just filter checkboxes!)
+const visibleOptions = selectedProject === 'All'
+  ? spawnOptions  // Show all spawn options
+  : spawnOptions.filter(opt => {
+      const project = projects.find(p => p.name === selectedProject)
+      return project?.terminals.includes(opt.label)
+    })
 
-// Launch all terminals for a project
+// When spawning with project selected, inject working directory
+const spawnWithProject = async (option: SpawnOption) => {
+  const project = projects.find(p => p.name === selectedProject)
+
+  const optionWithWorkingDir = {
+    ...option,
+    workingDirOverride: project ? project.workingDir : option.workingDir
+  }
+
+  await spawnTerminal(optionWithWorkingDir)
+}
+
+// Quick launch all terminals for a project
 const handleLaunchProject = async (projectName: string) => {
   const project = projects.find(p => p.name === projectName)
   if (!project) return
 
-  for (const terminal of project.terminals) {
-    const option = {
-      ...terminal,
+  for (const terminalLabel of project.terminals) {
+    // Find the spawn option by label reference
+    const option = spawnOptions.find(opt => opt.label === terminalLabel)
+    if (!option) continue
+
+    // Spawn with project's working directory
+    const optionWithWorkingDir = {
+      ...option,
       workingDirOverride: project.workingDir
     }
-    await spawnTerminal(option)
+    await spawnTerminal(optionWithWorkingDir)
     await new Promise(resolve => setTimeout(resolve, 150)) // Stagger spawns
   }
 }
@@ -279,9 +295,16 @@ const handleLaunchProject = async (projectName: string) => {
 
 ### Spawn Menu Current State
 - Located in `SimpleTerminalApp.tsx` (lines ~1900-2100)
-- Uses multi-select with checkboxes
-- Supports search filtering
-- Spawns terminals with staggered delays (150ms)
+- ✅ **Already has checkboxes** + select all
+- ✅ **Already has search/filter input bar**
+- ✅ **Already spawns multiple terminals** with staggered delays (150ms)
+
+**What's needed:**
+- Add project selector (tabs or dropdown) - ~20 lines
+- Filter `spawnOptions` by `project.terminals` array - ~5 lines
+- Inject `workingDirOverride` from project - ~3 lines
+
+**Total code addition: ~30-50 lines** (mostly UI for project selector)
 
 ### Project State Management
 **Where to Store:**
