@@ -36,3 +36,4 @@ workspace-data/
 .logs/
 PERSISTENCE_*.txt
 PERSISTENCE_*.md
+test-colors.sh

@@ -44,6 +44,10 @@
 - **Critical bug fix #2**: Clear agentId from processedAgentIds when detaching
   - Previously, reattaching got "Already processed agentId" and was ignored
   - Now clears the agentId so reconnection works properly
+- **Critical bug fix #3**: Reattaching split pane now restores whole split
+  - Previously, clicking detached pane tab only reattached that one pane
+  - Now checks if pane is part of detached split and reattaches container instead
+  - All panes reconnect and split layout restored correctly
 - Modified: `src/SimpleTerminalApp.tsx` (handleContextDetach, handleReattachTerminal)
 - Modified: `src/hooks/useWebSocketManager.ts` (added clearProcessedAgentId function)
 

@@ -795,14 +795,19 @@ router.get('/tmux/info/:name', asyncHandler(async (req, res) => {
 }));
 
 /**
- * GET /api/claude-status?dir=<path> - Get Claude Code status from state-tracker file
- * Returns status (idle, working, tool_use, awaiting_input) for a working directory
+ * GET /api/claude-status?dir=<path>&sessionName=<name> - Get Claude Code status from state-tracker file
+ * Returns status (idle, working, tool_use, awaiting_input) for a specific terminal
+ *
+ * Matching strategy:
+ * 1. If sessionName provided: Match by tmux pane ID (most specific, handles multiple sessions in same dir)
+ * 2. Otherwise: Match by working_dir and return most recent (fallback for non-tmux)
  */
 router.get('/claude-status', asyncHandler(async (req, res) => {
   const workingDir = req.query.dir;
-  const { execSync } = require('child_process');
+  const sessionName = req.query.sessionName;
   const fs = require('fs');
-  const crypto = require('crypto');
+  const path = require('path');
+  const { execSync } = require('child_process');
 
   if (!workingDir) {
     return res.status(400).json({
@@ -812,39 +817,190 @@ router.get('/claude-status', asyncHandler(async (req, res) => {
   }
 
   try {
-    // Calculate session ID (md5 hash of working dir, first 12 chars)
-    const sessionId = crypto
-      .createHash('md5')
-      .update(workingDir)
-      .digest('hex')
-      .substring(0, 12);
+    const stateDir = '/tmp/claude-code-state';
+    let tmuxPaneId = null;
 
-    const stateFile = `/tmp/claude-code-state/${sessionId}.json`;
-
-    // Check if state file exists
-    if (!fs.existsSync(stateFile)) {
-      return res.json({
-        success: true,
-        status: 'unknown',
-        sessionId
-      });
+    // If sessionName provided, get the tmux pane ID for precise matching
+    if (sessionName) {
+      try {
+        // Get pane ID for this session (format: %123)
+        tmuxPaneId = execSync(`tmux list-panes -t "${sessionName}" -F "#{pane_id}"`, { encoding: 'utf-8' }).trim().split('\n')[0];
+      } catch (err) {
+        // Session might not exist or not be tmux-based, fall back to dir matching
+        console.warn(`[API] Could not get pane ID for session ${sessionName}:`, err.message);
+      }
     }
 
-    // Read state file
-    const stateData = JSON.parse(fs.readFileSync(stateFile, 'utf-8'));
+    // Search all state files for matching terminal
+    const files = fs.existsSync(stateDir) ? fs.readdirSync(stateDir) : [];
+    let bestMatch = null;
+    let bestMatchTime = 0;
 
-    res.json({
-      success: true,
-      status: stateData.status || 'unknown',
-      current_tool: stateData.current_tool || '',
-      last_updated: stateData.last_updated || '',
-      sessionId
-    });
+    for (const file of files) {
+      if (!file.endsWith('.json') || file.startsWith('.')) continue;
+
+      try {
+        const filePath = path.join(stateDir, file);
+        const stateData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+
+        // Match by tmux pane if we have it (most specific)
+        if (tmuxPaneId && stateData.tmux_pane === tmuxPaneId) {
+          const updateTime = stateData.last_updated ? new Date(stateData.last_updated).getTime() : 0;
+
+          if (!bestMatch || updateTime > bestMatchTime) {
+            bestMatch = {
+              success: true,
+              status: stateData.status || 'unknown',
+              current_tool: stateData.current_tool || '',
+              last_updated: stateData.last_updated || '',
+              sessionId: stateData.session_id || file.replace('.json', ''),
+              tmuxPane: stateData.tmux_pane
+            };
+            bestMatchTime = updateTime;
+          }
+        }
+        // Fallback: Match by working directory only if no pane ID
+        else if (!tmuxPaneId && stateData.working_dir === workingDir) {
+          const updateTime = stateData.last_updated ? new Date(stateData.last_updated).getTime() : 0;
+
+          if (!bestMatch || updateTime > bestMatchTime) {
+            bestMatch = {
+              success: true,
+              status: stateData.status || 'unknown',
+              current_tool: stateData.current_tool || '',
+              last_updated: stateData.last_updated || '',
+              sessionId: stateData.session_id || file.replace('.json', '')
+            };
+            bestMatchTime = updateTime;
+          }
+        }
+      } catch (err) {
+        // Skip invalid JSON files
+        continue;
+      }
+    }
+
+    // Return best match or unknown if no match found
+    if (bestMatch) {
+      res.json(bestMatch);
+    } else {
+      res.json({
+        success: true,
+        status: 'unknown',
+        sessionId: null
+      });
+    }
   } catch (err) {
     console.error(`[API] Failed to get Claude status for ${workingDir}:`, err.message);
     res.json({
       success: true,
       status: 'unknown'
+    });
+  }
+}));
+
+/**
+ * POST /api/claude-status/cleanup - Clean up stale state files
+ * Removes state files for:
+ * 1. Tmux sessions that no longer exist
+ * 2. Files older than 7 days
+ * 3. Files with "none" as tmux_pane (non-tmux sessions older than 1 day)
+ */
+router.post('/claude-status/cleanup', asyncHandler(async (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  const { execSync } = require('child_process');
+
+  try {
+    const stateDir = '/tmp/claude-code-state';
+
+    if (!fs.existsSync(stateDir)) {
+      return res.json({
+        success: true,
+        removed: 0,
+        message: 'State directory does not exist'
+      });
+    }
+
+    // Get all active tmux panes
+    let activePanes = new Set();
+    try {
+      const panes = execSync('tmux list-panes -a -F "#{pane_id}"', { encoding: 'utf-8' });
+      activePanes = new Set(panes.trim().split('\n').filter(p => p));
+    } catch (err) {
+      console.warn('[API] Could not list tmux panes:', err.message);
+    }
+
+    const files = fs.readdirSync(stateDir);
+    const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const sevenDaysMs = 7 * oneDayMs;
+    let removed = 0;
+
+    for (const file of files) {
+      if (!file.endsWith('.json') || file.startsWith('.')) continue;
+
+      try {
+        const filePath = path.join(stateDir, file);
+        const stats = fs.statSync(filePath);
+        const fileAge = now - stats.mtimeMs;
+
+        // Read file to check tmux_pane
+        let shouldDelete = false;
+        let reason = '';
+
+        try {
+          const stateData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+          const tmuxPane = stateData.tmux_pane;
+
+          // Delete if:
+          // 1. File older than 7 days
+          if (fileAge > sevenDaysMs) {
+            shouldDelete = true;
+            reason = 'older than 7 days';
+          }
+          // 2. Tmux pane specified but no longer exists
+          else if (tmuxPane && tmuxPane !== 'none' && !activePanes.has(tmuxPane)) {
+            shouldDelete = true;
+            reason = 'tmux session ended';
+          }
+          // 3. Non-tmux session (pane: "none") not updated in last hour (likely stale)
+          else if (tmuxPane === 'none') {
+            const lastUpdated = stateData.last_updated ? new Date(stateData.last_updated).getTime() : 0;
+            const hourAgo = now - (60 * 60 * 1000);
+            if (lastUpdated < hourAgo || fileAge > oneDayMs) {
+              shouldDelete = true;
+              reason = 'non-tmux session inactive for 1+ hour';
+            }
+          }
+        } catch (jsonErr) {
+          // Invalid JSON - delete if older than 1 day
+          if (fileAge > oneDayMs) {
+            shouldDelete = true;
+            reason = 'invalid JSON';
+          }
+        }
+
+        if (shouldDelete) {
+          fs.unlinkSync(filePath);
+          removed++;
+          console.log(`[API] Deleted state file ${file} (${reason})`);
+        }
+      } catch (err) {
+        console.warn(`[API] Error processing ${file}:`, err.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      removed,
+      message: `Cleaned up ${removed} stale state file(s)`
+    });
+  } catch (err) {
+    console.error('[API] Failed to clean up state files:', err.message);
+    res.status(500).json({
+      success: false,
+      error: err.message
     });
   }
 }));

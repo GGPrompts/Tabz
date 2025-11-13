@@ -861,6 +861,22 @@ function SimpleTerminalApp() {
     const terminal = storedTerminals.find(t => t.id === terminalId)
     if (!terminal || terminal.status !== 'detached') return
 
+    // Check if this terminal is a PANE in a detached split (not the container)
+    // If so, reattach the whole split container instead
+    const detachedSplitContainer = storedTerminals.find(t =>
+      t.status === 'detached' &&
+      t.splitLayout &&
+      t.splitLayout.type !== 'single' &&
+      t.splitLayout.panes.some(p => p.terminalId === terminalId)
+    )
+
+    if (detachedSplitContainer) {
+      console.log(`[SimpleTerminalApp] Pane is part of detached split, reattaching container instead:`, detachedSplitContainer.id)
+      // Reattach the container, which will reattach all panes
+      // This ensures clicking any pane tab restores the whole split
+      return handleReattachTerminal(detachedSplitContainer.id)
+    }
+
     // Check if this is a split container
     if (terminal.splitLayout && terminal.splitLayout.type !== 'single') {
       console.log(`[SimpleTerminalApp] Re-attaching split container ${terminal.name} with ${terminal.splitLayout.panes.length} panes`)

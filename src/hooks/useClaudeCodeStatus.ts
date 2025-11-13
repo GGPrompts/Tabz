@@ -37,9 +37,11 @@ export function useClaudeCodeStatus(
       await Promise.all(
         claudeTerminals.map(async (terminal) => {
           try {
-            // Pass working directory as query parameter
+            // Pass working directory and session name for precise matching
+            // Session name allows matching specific tmux panes when multiple Claude sessions exist in same dir
             const encodedDir = encodeURIComponent(terminal.workingDir!)
-            const response = await fetch(`/api/claude-status?dir=${encodedDir}`)
+            const sessionParam = terminal.sessionName ? `&sessionName=${encodeURIComponent(terminal.sessionName)}` : ''
+            const response = await fetch(`/api/claude-status?dir=${encodedDir}${sessionParam}`)
             const result = await response.json()
 
             if (result.success && result.status !== 'unknown') {

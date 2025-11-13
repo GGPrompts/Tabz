@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.2] - 2025-11-12
+
+### ✨ Enhanced Tab Naming & Hook Status Fixes
+
+#### Tab Naming Improvements
+- **Smart tab names for TUI tools** - Tabs now display meaningful information instead of generic hostnames
+  - TUI tools (lazygit, htop, lazydocker, etc.) now show: `command - ~/working/dir`
+  - Example: `🦎 lazygit - ~/projects/terminal-tabs` instead of "MattDesktop"
+  - Claude Code tabs preserve dynamic status updates (e.g., "Editing: Terminal.tsx")
+  - Uses actual command name from spawn options for clarity
+  - Modified: `src/hooks/useTerminalNameSync.ts`
+
+#### Claude Code Hook Integration Fixes
+- **Fixed hook status tracking** - Resolved critical bugs preventing live status updates
+  - **Session ID mismatch**: `state-tracker.sh` now uses working directory hash (matching `statusline-script.sh`)
+  - **Stdin reading broken**: Changed from unreliable pipe detection to `timeout 0.1 cat` for proper JSON data capture
+  - **Tool name extraction**: Now correctly extracts and displays tool names (Bash, Read, Edit, etc.)
+  - **Debug logging**: Added debug output to `/tmp/claude-code-state/debug/` for troubleshooting
+  - Result: Statusline now shows detailed updates like "🔧 Bash...", "⚙️ Working...", "✓ Ready"
+  - Modified: `~/.claude/hooks/state-tracker.sh`
+
+### 🐛 Bug Fixes
+- Fixed tmux pane title fallback for non-Claude Code terminals
+- Improved auto-naming detection logic to identify generic titles (hostname, shell names)
+- Working directory paths now properly collapse home directory to `~`
+
+---
+
 ## [1.2.1] - 2025-11-10
 
 ### 🏗️ Major Refactoring - Code Quality Sprint (COMPLETE) 🎉

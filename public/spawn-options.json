@@ -1,8 +1,8 @@
 {
   "globalDefaults": {
-    "workingDirectory": "/home/matt",
+    "workingDirectory": "/home/matt/projects/terminal-tabs",
     "fontFamily": "'SauceCodePro Nerd Font', 'SauceCodePro NF', monospace",
-    "fontSize": 18,
+    "fontSize": 16,
     "theme": "green",
     "background": "carbon",
     "transparency": 90,
@@ -20,23 +20,9 @@
       "defaultTransparency": 90
     },
     {
-      "label": "TFE",
-      "command": "tfe",
-      "terminalType": "tui-tool",
-      "workingDir": "~/projects",
-      "icon": "📁",
-      "description": "Terminal File Explorer",
-      "defaultTheme": "vaporwave",
-      "defaultTransparency": 95,
-      "defaultFontSize": 16,
-      "defaultFontFamily": "'Fira Code', monospace",
-      "defaultBackground": "dark-neutral"
-    },
-    {
       "label": "Claude (skip permissions)",
       "command": "claude --dangerously-skip-permissions",
       "terminalType": "claude-code",
-      "workingDir": "~/projects",
       "icon": "⚡",
       "description": "Claude Code with no permission prompts",
       "defaultTheme": "matrix",
@@ -44,6 +30,28 @@
       "defaultFontSize": 20,
       "defaultFontFamily": "'JetBrains Mono', monospace",
       "defaultBackground": "carbon"
+    },
+    {
+      "label": "TFE",
+      "command": "tfe",
+      "terminalType": "tui-tool",
+      "icon": "📁",
+      "description": "Terminal File Explorer",
+      "defaultTransparency": 95,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "'Fira Code', monospace",
+      "defaultBackground": "carbon"
+    },
+    {
+      "label": "GIT UI",
+      "command": "gitui",
+      "terminalType": "tui-tool",
+      "icon": "💻",
+      "description": "",
+      "defaultTheme": "dracula",
+      "defaultBackground": "amber-warmth",
+      "defaultTransparency": 95,
+      "defaultFontFamily": "Consolas, monospace"
     },
     {
       "label": "Codex",

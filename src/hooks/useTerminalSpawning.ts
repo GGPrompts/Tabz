@@ -111,6 +111,7 @@ export function useTerminalSpawning(
       const newTerminal: StoredTerminal = {
         id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: option.label,
+        spawnLabel: option.label, // Preserve original label for fallback
         terminalType: option.terminalType,
         command: option.command, // Store original command for matching during reconnection
         icon: option.icon,

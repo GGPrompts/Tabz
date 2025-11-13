@@ -199,4 +199,85 @@ tmux ls | grep tt-cc-
 
 ---
 
+## Split Terminal Operations
+
+### Scenario: Closing vs Detaching Panes
+
+**Split Container with 2 panes: Claude Code (left) + Bash (right)**
+
+#### Closing a Pane (X button):
+```
+1. Find split container
+2. Remove pane from split.panes array
+3. If only 1 pane left → convert to single terminal
+4. Send WebSocket 'close' → KILLS tmux session
+5. removeTerminal() → removes from localStorage
+Result: Pane gone forever, tmux session destroyed
+```
+
+#### Detaching a Pane (Right-click → Detach):
+```
+1. Find split container
+2. Remove pane from split.panes array
+3. If only 1 pane left → convert to single terminal
+4. Call /api/tmux/detach → keeps tmux session alive
+5. Mark pane as 'detached' → stays in localStorage
+Result: Pane becomes detached tab, tmux session survives, can reattach
+```
+
+#### Detaching Whole Container (Right-click container → Detach):
+```
+1. Detach ALL panes in split
+2. Mark each pane as 'detached'
+3. Mark container as 'detached'
+4. Preserve splitLayout
+Result: All panes detached, split layout preserved, can reattach and restore split
+```
+
+**Key Difference**:
+- Close = permanent deletion + kills tmux
+- Detach = temporary suspension + preserves tmux
+
+### Bug: Clicking Detached Pane Tab Only Reattached One Terminal (Nov 13, 2025)
+
+**Problem**: After detaching a split, clicking on a **pane tab** (not container) only reconnected that one pane as a single terminal. The split was lost.
+
+**What Happened**:
+```
+1. Detach split → creates 3 detached tabs:
+   - Pane 1 (detached)
+   - Pane 2 (detached)
+   - Container (detached, with splitLayout preserved)
+
+2. Click Pane 1 tab to reattach
+3. handleReattachTerminal(pane1.id) called
+4. Code checked: is this a split container? NO
+5. Reconnected as single terminal (no split!)
+6. SplitLayout waiting for other pane → stuck "Waiting for agents"
+```
+
+**Root Cause**: Code didn't check if the terminal being reattached was a PANE in a detached split. It only checked if the terminal itself was a container.
+
+**Solution**: Before reattaching, check if terminal is part of a detached split container. If yes, reattach the container instead:
+
+```typescript
+// Check if this terminal is a PANE in a detached split
+const detachedSplitContainer = storedTerminals.find(t =>
+  t.status === 'detached' &&
+  t.splitLayout?.type !== 'single' &&
+  t.splitLayout?.panes.some(p => p.terminalId === terminalId)
+)
+
+if (detachedSplitContainer) {
+  // Reattach the whole container, which reattaches all panes
+  return handleReattachTerminal(detachedSplitContainer.id)
+}
+```
+
+**Result**: Clicking any detached pane tab now restores the entire split with all panes!
+
+**Files**: `src/SimpleTerminalApp.tsx:864-878`
+
+---
+
 **Last Updated**: November 13, 2025

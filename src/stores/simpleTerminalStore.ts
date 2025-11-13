@@ -16,6 +16,7 @@ export interface SplitLayout {
 export interface Terminal {
   id: string;
   name: string;
+  spawnLabel?: string; // Original spawn option label (e.g., "Bash", "TFE") - never changes
   terminalType: string;
   command?: string; // Original command (e.g., 'tfe', 'lazygit') for matching during reconnection
   icon?: string;

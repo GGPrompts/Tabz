@@ -448,6 +448,29 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                 </label>
               </div>
 
+              <div className="settings-section">
+                <h3>🧹 Maintenance</h3>
+                <p className="setting-description">Clean up stale Claude Code state files</p>
+                <button
+                  className="cleanup-btn"
+                  onClick={async () => {
+                    try {
+                      const response = await fetch('/api/claude-status/cleanup', { method: 'POST' })
+                      const result = await response.json()
+                      if (result.success) {
+                        alert(`✅ ${result.message}`)
+                      } else {
+                        alert(`❌ Cleanup failed: ${result.error}`)
+                      }
+                    } catch (err) {
+                      alert(`❌ Error: ${(err as Error).message}`)
+                    }
+                  }}
+                >
+                  🗑️ Clean Up State Files
+                </button>
+              </div>
+
               <div className="priority-info">
                 <h4>⚡ Priority System</h4>
                 <p>Settings are applied in this order:</p>

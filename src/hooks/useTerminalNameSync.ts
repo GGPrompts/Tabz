@@ -37,28 +37,22 @@ export function useTerminalNameSync(
             if (result.success) {
               let newName = result.paneTitle || terminal.name
 
-              // Check if pane title is generic (hostname, 'bash', etc.)
-              // Claude Code sets useful titles, but most TUI tools just show hostname
-              const isGenericTitle = [
-                'bash', 'zsh', 'sh', 'fish',
-                'mattdesktop', 'localhost',
-                terminal.sessionName // Session name itself
-              ].some(generic =>
-                newName.toLowerCase().includes(generic.toLowerCase())
-              )
+              // Check if pane title is generic (hostname, shell name, session name, or single word)
+              // Claude Code sets useful titles like "Editing: file.ts", others typically show hostname
+              const isGenericTitle =
+                // Common shell names
+                ['bash', 'zsh', 'sh', 'fish', 'ksh', 'tcsh'].includes(newName.toLowerCase()) ||
+                // Session name itself (e.g., 'tt-bash-abc')
+                newName === terminal.sessionName ||
+                // Single word with no spaces or special chars (likely hostname)
+                !/[\s\-:\/]/.test(newName) ||
+                // Starts with common hostname patterns
+                /^(localhost|[\w]+-desktop|[\w]+-laptop|ip-[\d-]+)$/i.test(newName)
 
-              // For generic titles on non-Claude Code terminals, show command name + directory
+              // For generic titles on non-Claude Code terminals, use spawn label
               if (isGenericTitle && terminal.terminalType !== 'claude-code') {
-                // Use command name (e.g., 'lazygit', 'htop') instead of generic terminalType
-                const toolName = terminal.command || terminal.terminalType
-
-                // Shorten working dir: /home/matt → ~
-                const dir = terminal.workingDir
-                  ? terminal.workingDir.replace(/^\/home\/[^\/]+/, '~')
-                  : ''
-
-                // Combine: "lazygit - ~/dir" or just "lazygit"
-                newName = dir ? `${toolName} - ${dir}` : toolName
+                // Fall back to original spawn label (e.g., "Bash", "TFE", "LazyGit")
+                newName = terminal.spawnLabel || terminal.name
               }
 
               // Add window/pane count if multiple exist
