@@ -280,4 +280,126 @@ if (detachedSplitContainer) {
 
 ---
 
+## React Hooks & Refactoring
+
+### Lesson: Identify Shared Refs Before Extracting Hooks (Nov 10, 2025)
+
+**Problem:** After extracting `useWebSocketManager` hook, all terminal input stopped working. Typing, TUI tools, everything was broken.
+
+**Root Cause:** Hook created its own internal `wsRef` instead of using the shared one from parent component. Terminal components had `null` WebSocket reference.
+
+**Key Insight:**
+- **Identify shared refs BEFORE extracting hooks**:
+  - If a ref is used by both hook AND child components → pass as parameter
+  - WebSocket refs, DOM refs, library instance refs must be shared
+  - **Rule:** If a ref is used by both the hook AND child components, pass it as a parameter!
+
+**Wrong Approach:**
+```typescript
+// WRONG - creates new ref
+export function useWebSocketManager(...) {
+  const wsRef = useRef<WebSocket | null>(null)
+  // Hook creates its own WebSocket
+}
+
+// Parent component passes different ref to children
+<Terminal wsRef={wsRef} />  // Terminal gets null!
+```
+
+**Right Approach:**
+```typescript
+// RIGHT - uses shared ref
+export function useWebSocketManager(
+  wsRef: React.MutableRefObject<WebSocket | null>,  // Pass as parameter
+  ...
+) {
+  // Hook uses parent's ref, all components share same WebSocket
+}
+```
+
+**Prevention:**
+- Map out all refs before refactoring (diagram which components use which refs)
+- Check if ref is used outside the hook
+- Test with real usage immediately after extraction:
+  ```bash
+  npm run build              # 1. Check TypeScript
+  # Open http://localhost:5173
+  # Spawn terminal            # 2. Test spawning
+  # Type in terminal          # 3. Test input (WebSocket)
+  # Resize window             # 4. Test resize
+  # Spawn TUI tool            # 5. Test complex interactions
+  ```
+
+**Files to Remember:**
+- `src/hooks/useWebSocketManager.ts` - wsRef parameter pattern
+- `src/SimpleTerminalApp.tsx` - Parent passes wsRef to hook
+
+---
+
+### Lesson: useEffect Dependencies Must Include ref.current for Initialization (Nov 10, 2025)
+
+**Problem:** Terminals stayed at tiny size after refactoring resize logic.
+
+**Root Cause:** ResizeObserver setup had early return if `terminalRef.current` was null, but `terminalRef.current` wasn't in dependency array. If null at mount, ResizeObserver was NEVER set up.
+
+**Key Insight:**
+- **Early returns need corresponding dependencies**:
+  ```typescript
+  // WRONG - only runs once, may return early forever
+  useEffect(() => {
+    if (!terminalRef.current) return  // Returns if null
+    // Setup ResizeObserver
+  }, [])  // Never re-runs!
+
+  // RIGHT - re-runs when ref becomes available
+  useEffect(() => {
+    if (!terminalRef.current) return
+    // Setup ResizeObserver
+  }, [terminalRef.current])  // Re-runs when ref changes!
+  ```
+
+**Prevention:**
+- If useEffect checks a ref and returns early → add `ref.current` to dependencies
+- Test initialization timing (refs may be null on first render)
+- Use React DevTools to verify effects re-run when expected
+- Common pattern: Wait for DOM refs AND library instances (xterm) before setup
+
+**Files to Remember:**
+- `src/hooks/useTerminalResize.ts` - ResizeObserver retry pattern
+
+---
+
+### Lesson: Test Real Usage Immediately After Refactoring (Nov 10, 2025)
+
+**Problem:** TypeScript compiled successfully after refactoring, but terminals were completely broken in production.
+
+**Key Insight:**
+- **TypeScript compilation ≠ working code** - Always test with real usage:
+  ```bash
+  # After refactoring:
+  npm run build              # 1. Check TypeScript
+  # Open http://localhost:5173
+  # Spawn terminal            # 2. Test spawning
+  # Type in terminal          # 3. Test input (WebSocket)
+  # Resize window             # 4. Test resize (ResizeObserver)
+  # Spawn TUI tool            # 5. Test complex interactions
+  ```
+
+**Refactoring Checklist:**
+- [ ] TypeScript compilation succeeds
+- [ ] Spawn a terminal (test spawning logic)
+- [ ] Type in terminal (test WebSocket communication)
+- [ ] Resize window (test ResizeObserver)
+- [ ] Spawn TUI tool like htop (test complex ANSI sequences)
+- [ ] Check browser console for errors
+- [ ] Check backend logs via `tmux capture-pane -t tabz:backend -p -S -50`
+- [ ] Run test suite: `npm test`
+
+**Prevention:**
+- Don't batch multiple hook extractions (extract one, test, commit)
+- Create refactoring checklist and follow it religiously
+- If something breaks, rollback immediately and extract smaller pieces
+
+---
+
 **Last Updated**: November 13, 2025

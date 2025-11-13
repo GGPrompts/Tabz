@@ -888,7 +888,8 @@ router.get('/claude-status', asyncHandler(async (req, res) => {
               current_tool: stateData.current_tool || '',
               last_updated: stateData.last_updated || '',
               sessionId: stateData.session_id || file.replace('.json', ''),
-              tmuxPane: stateData.tmux_pane
+              tmuxPane: stateData.tmux_pane,
+              details: stateData.details || null
             };
             bestMatchTime = updateTime;
           }
@@ -903,7 +904,8 @@ router.get('/claude-status', asyncHandler(async (req, res) => {
               status: stateData.status || 'unknown',
               current_tool: stateData.current_tool || '',
               last_updated: stateData.last_updated || '',
-              sessionId: stateData.session_id || file.replace('.json', '')
+              sessionId: stateData.session_id || file.replace('.json', ''),
+              details: stateData.details || null
             };
             bestMatchTime = updateTime;
           }
@@ -939,6 +941,7 @@ router.get('/claude-status', asyncHandler(async (req, res) => {
  * 1. Tmux sessions that no longer exist
  * 2. Files older than 7 days
  * 3. Files with "none" as tmux_pane (non-tmux sessions older than 1 day)
+ * 4. Debug files older than 1 hour (accumulate 400+ files/day!)
  */
 router.post('/claude-status/cleanup', asyncHandler(async (req, res) => {
   const fs = require('fs');
@@ -1025,10 +1028,49 @@ router.post('/claude-status/cleanup', asyncHandler(async (req, res) => {
       }
     }
 
+    // Clean up debug directory (debug logs from hooks)
+    let debugRemoved = 0;
+    const debugDir = path.join(stateDir, 'debug');
+    if (fs.existsSync(debugDir)) {
+      try {
+        const debugFiles = fs.readdirSync(debugDir);
+        const oneHourMs = 60 * 60 * 1000; // 1 hour
+
+        for (const file of debugFiles) {
+          if (!file.endsWith('.json')) continue;
+
+          try {
+            const filePath = path.join(debugDir, file);
+            const stats = fs.statSync(filePath);
+            const fileAge = now - stats.mtimeMs;
+
+            // Delete debug files older than 1 hour (they accumulate VERY quickly)
+            // Debug files are only useful for active debugging anyway
+            if (fileAge > oneHourMs) {
+              fs.unlinkSync(filePath);
+              debugRemoved++;
+            }
+          } catch (err) {
+            console.warn(`[API] Error processing debug file ${file}:`, err.message);
+          }
+        }
+        console.log(`[API] Deleted ${debugRemoved} debug files`);
+      } catch (err) {
+        console.warn('[API] Error cleaning debug directory:', err.message);
+      }
+    }
+
+    const totalRemoved = removed + debugRemoved;
+    const message = debugRemoved > 0
+      ? `Cleaned up ${removed} state file(s) and ${debugRemoved} debug file(s)`
+      : `Cleaned up ${removed} stale state file(s)`;
+
     res.json({
       success: true,
-      removed,
-      message: `Cleaned up ${removed} stale state file(s)`
+      removed: totalRemoved,
+      stateFilesRemoved: removed,
+      debugFilesRemoved: debugRemoved,
+      message
     });
   } catch (err) {
     console.error('[API] Failed to clean up state files:', err.message);

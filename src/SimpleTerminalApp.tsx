@@ -243,7 +243,29 @@ function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate,
               statusClass = 'status-processing'
               break
             case 'tool_use':
-              statusText = status.current_tool ? `🔧 ${status.current_tool}` : '🔧 Tool'
+              // Extract detail from args for more informative display
+              let detail = ''
+              if (status.details?.args) {
+                const args = status.details.args
+                // Extract based on tool type
+                if (args.file_path) {
+                  // Show just filename for Read/Edit/Write
+                  const parts = args.file_path.split('/')
+                  detail = `: ${parts[parts.length - 1]}`
+                } else if (args.command) {
+                  // Show truncated command for Bash
+                  const cmd = args.command
+                  detail = `: ${cmd.length > 25 ? cmd.substring(0, 25) + '...' : cmd}`
+                } else if (args.pattern) {
+                  // Show search pattern for Grep/Glob
+                  const pattern = args.pattern
+                  detail = `: ${pattern.length > 20 ? pattern.substring(0, 20) + '...' : pattern}`
+                } else if (args.description) {
+                  // Show task description for Task
+                  detail = `: ${args.description}`
+                }
+              }
+              statusText = status.current_tool ? `🔧 ${status.current_tool}${detail}` : '🔧 Tool'
               statusClass = 'status-tool'
               break
             case 'working':

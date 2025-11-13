@@ -5,6 +5,16 @@ export interface ClaudeCodeStatus {
   status: 'idle' | 'awaiting_input' | 'processing' | 'tool_use' | 'working' | 'unknown'
   current_tool?: string
   last_updated?: string
+  details?: {
+    args?: {
+      file_path?: string
+      command?: string
+      pattern?: string
+      description?: string
+      [key: string]: any
+    }
+    [key: string]: any
+  }
 }
 
 /**
@@ -48,7 +58,8 @@ export function useClaudeCodeStatus(
               newStatuses.set(terminal.id, {
                 status: result.status,
                 current_tool: result.current_tool,
-                last_updated: result.last_updated
+                last_updated: result.last_updated,
+                details: result.details
               })
             }
           } catch (error) {

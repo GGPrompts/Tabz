@@ -65,7 +65,7 @@ backend/
 2. **Test Terminal Types** - Verify Claude Code, Bash, TFE work
 3. **Run Tests Before Committing** - `npm test` should pass with no failures
 4. **Mobile-First CSS** - Use responsive design patterns
-5. **Document Changes** - Update README.md and this file
+5. **Document Changes** - Follow documentation workflow below
 6. **No Canvas Code** - This is the tab-based version, no dragging/zoom
 
 ### NEVER:
@@ -74,6 +74,29 @@ backend/
 3. **Don't Over-Engineer** - Simple solutions win
 4. **Don't Break WebSocket Protocol** - Backend compatibility is critical
 5. **Don't Skip Tests** - Failing tests = failing features
+
+### 📝 Documentation Workflow
+
+**After completing work (features, bug fixes, refactoring):**
+
+1. **CHANGELOG.md** - Add version entry with what changed
+   - Use categories: Added, Changed, Fixed, Removed
+   - Include user-facing impact
+   - Reference issue numbers if applicable
+
+2. **LESSONS_LEARNED.md** - Capture key insights from complex bugs
+   - Why the bug happened (root cause)
+   - How to prevent it (patterns, checklists)
+   - Code examples showing right vs wrong approach
+   - Files to remember for similar issues
+
+3. **CLAUDE.md** - Update ONLY for architecture changes
+   - New patterns or principles
+   - Changes to core workflows
+   - Updated technical details
+   - **DON'T** add "Recently Fixed" narratives (use CHANGELOG instead)
+
+**Keep this file focused on "how the system works NOW", not "how we got here".**
 
 ---
 
@@ -158,6 +181,8 @@ Terminals are assigned to specific windows via the `windowId` property. Each win
 
 **⚠️ IMPORTANT**: Multi-window support requires strict window isolation to prevent cross-contamination. Follow these principles:
 
+> **See Also:** [LESSONS_LEARNED.md](LESSONS_LEARNED.md#multi-window-architecture) for detailed debugging lessons on window isolation bugs and prevention strategies.
+
 #### 1. **Backend Output Routing** (backend/server.js:114-443)
 ```javascript
 // CRITICAL: terminalOwners map tracks WebSocket ownership
@@ -228,7 +253,11 @@ const attemptOpen = () => {
 ```
 **Why**: Popout windows may have 0x0 dimensions initially; xterm needs to retry instead of giving up.
 
+> **See Also:** [LESSONS_LEARNED.md](LESSONS_LEARNED.md#xtermjs--terminal-rendering) for xterm initialization patterns and dimension requirements.
+
 ### Common Pitfalls to Avoid
+
+> **See Also:** [LESSONS_LEARNED.md](LESSONS_LEARNED.md#lesson-backend-broadcasting-breaks-multi-window-nov-12-2025) for the "Backend Broadcasting" lesson that explains why broadcasting breaks multi-window setups.
 
 ❌ **DON'T** broadcast terminal output to all WebSocket clients
 ✅ **DO** route output only to terminal owners via `terminalOwners` map
@@ -246,6 +275,8 @@ const attemptOpen = () => {
 ✅ **DO** check windowId BEFORE adding to webSocketAgents
 
 ### Debugging Multi-Window Issues
+
+> **See Also:** [LESSONS_LEARNED.md](LESSONS_LEARNED.md#multi-window-architecture) for root cause analysis and prevention patterns.
 
 If you see escape sequences (`1;2c0;276;0c`) in terminals:
 - Check backend output routing - should use `terminalOwners`, not `broadcast()`
@@ -276,6 +307,8 @@ If popout windows show blank terminals:
 ## 📝 Auto-Naming from Tmux
 
 **NEW in v1.2.0** - Tab names automatically update from tmux pane titles!
+
+> **See Also:** [CHANGELOG.md](CHANGELOG.md#122---2025-11-12) for implementation details and TUI tool smart naming.
 
 ### How It Works
 
@@ -383,353 +416,37 @@ Use intuitive aliases in spawn-options:
 
 ---
 
-## ✅ Recently Fixed (Nov 13, 2025) - Multi-Window UX Improvements
+## 📜 Documentation Index
 
-### BroadcastChannel State Synchronization
-**Problem:** When detaching terminals in popout windows, the main window wouldn't show the detached dropdown until manually refreshed. State changes weren't propagating across windows in real-time.
+### Core Documentation
 
-**Solution:** Implemented BroadcastChannel messaging to sync state changes across all windows.
+- **[CLAUDE.md](CLAUDE.md)** (this file) - Architecture, development rules, current system state
+- **[README.md](README.md)** - User-facing documentation, getting started, features
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history, bug fixes, feature additions
+- **[LESSONS_LEARNED.md](LESSONS_LEARNED.md)** - Technical insights, common pitfalls, prevention strategies
 
-**Key Features:**
-```typescript
-// BroadcastChannel setup
-const channel = new BroadcastChannel('tabz-sync')
-channel.onmessage = (event) => {
-  if (event.data.type === 'state-changed') {
-    // Force Zustand to re-read from localStorage
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'simple-terminal-storage',
-      newValue: localStorage.getItem('simple-terminal-storage'),
-    }))
-  } else if (event.data.type === 'reload-all') {
-    window.location.reload()
-  }
-}
+### Development Planning
 
-// Broadcast after detach/reattach
-broadcastChannel.postMessage({ type: 'state-changed' })
-```
+- **[PLAN.md](PLAN.md)** - Refactoring roadmap, technical debt, future improvements
+- **[NEXT_SESSION_PROMPT.md](NEXT_SESSION_PROMPT.md)** - Session summaries, debugging notes
 
-**Impact:**
-- ✅ Detached terminals appear in all windows immediately (no refresh needed)
-- ✅ State changes propagate across windows in real-time
-- ✅ "Clear all sessions" reloads all windows simultaneously
+### Specialized Documentation
 
-**Files Modified:**
-- `src/SimpleTerminalApp.tsx` (lines 515-543, 908-911, 998-1001, 1078-1081, 1120-1123)
+- **[OPUSTRATOR_IMPROVEMENTS.md](OPUSTRATOR_IMPROVEMENTS.md)** - Improvements from parent project
+- **[SPLIT_TERMINAL_FIXES.md](SPLIT_TERMINAL_FIXES.md)** - Split terminal implementation details
+- **[TEST_COVERAGE_SUMMARY.md](TEST_COVERAGE_SUMMARY.md)** - Test suite coverage analysis
 
----
+### Legacy/Reference Docs
 
-### Popout Mode Selection (Tab vs Separate Window)
-**Problem:** When using PWA app, popouts would open in Chrome tabs if Chrome was open, but users wanted both options.
+- **TMUX_*.md** - Historical tmux integration debugging (reference only)
+- **TESTING_*.md** - Historical testing infrastructure notes (reference only)
 
-**Solution:** Added context menu options for both "Open in New Tab" and "Open in Separate Window".
-
-**Implementation:**
-```typescript
-// Tab mode: Opens in new browser tab (or PWA window if no browser open)
-window.open(url, target)
-
-// Window mode: Forces separate popup window
-window.open(url, target, 'popup,width=1200,height=800')
-```
-
-**Context Menu Updates:**
-- 🗂️ Open in New Tab - Uses default browser behavior
-- ↗️ Open in Separate Window - Forces popup window with dimensions
-
-**Files Modified:**
-- `src/hooks/usePopout.ts` (lines 46, 132-133, 245, 363-364)
-- `src/SimpleTerminalApp.tsx` (lines 49, 817-820, 2352-2363)
-
----
-
-### UI/UX Polish
-**Changes:**
-1. **Context Menu Icons** - Added visual indicators to all actions:
-   - ✏️ Update Display Name... (renamed from "Rename Tab")
-   - 📌 Detach
-   - ↔️ Unsplit
-   - ❌ Kill Session (renamed from "Close Tab" for clarity)
-
-2. **Detached Terminals Dropdown** - Fixed z-index overlap issue:
-   - Used React Portal to render dropdown directly in document.body
-   - Dropdown now properly appears above tab bar
-
-3. **Header Collapsed for Popouts** - Popout windows start with header collapsed by default to maximize terminal space
-
-4. **Expected Warnings Fixed** - Changed `console.warn` to `console.log` for normal multi-window isolation behavior (prevents false error indicator)
-
-**Files Modified:**
-- `src/SimpleTerminalApp.tsx` (lines 1-2, 292-301, 2330-2374, 1633-1666)
-- `src/SimpleTerminalApp.css` (lines 1897-1909)
-- `src/hooks/useWebSocketManager.ts` (lines 212-217)
-
----
-
-### Integration Tests for Multi-Window Features
-**Added:** `tests/integration/multi-window-popout.test.ts` - 15 tests covering:
-- ✅ BroadcastChannel messaging (3/3 pass)
-- ✅ Popout mode detection (2/2 pass)
-- ✅ Window isolation filtering (2/3 pass)
-
-**Test Coverage:**
-- State synchronization via BroadcastChannel
-- Window isolation (windowId filtering)
-- Popout mode selection (tab vs window)
-- Split container detach/reattach across windows
-- Cross-window "clear all" functionality
-
-**Files Added:**
-- `tests/integration/multi-window-popout.test.ts` (662 lines, 15 tests)
-
-**Test Status:** 7/15 tests pass - validates all critical multi-window features. Remaining failures are Zustand persist timing in test environment (not production bugs).
-
----
-
-## ✅ Recently Fixed (Nov 10, 2025) - Phase 4 Critical Bugs
-
-### Phase 4 Refactoring Completion + Bug Fixes
-**Status:** ✅ **COMPLETED** - SimpleTerminalApp.tsx successfully decomposed from 2,207 → 1,147 lines (48% reduction)
-
-**Hooks Extracted:**
-- `useWebSocketManager.ts` (431 lines) - WebSocket connection management
-- `useKeyboardShortcuts.ts` (127 lines) - Keyboard event handlers
-- `useDragDrop.ts` (338 lines) - Drag-and-drop logic
-- `useTerminalSpawning.ts` (252 lines) - Terminal spawn logic
-- `usePopout.ts` (161 lines) - Multi-window popout feature
-
-**Critical Bugs Fixed:**
-
-### Bug #1: Terminals Completely Unusable (wsRef Sharing)
-**Problem:** After Phase 4 refactoring, no terminal input worked. Typing, TUI tools, everything was broken.
-
-**Root Cause:** `useWebSocketManager` created its **own internal `wsRef`** instead of using the one from `SimpleTerminalApp.tsx`:
-```typescript
-// BROKEN (Phase 4 initial refactoring)
-export function useWebSocketManager(...) {
-  const wsRef = useRef<WebSocket | null>(null) // Creates NEW ref!
-  // WebSocket connected to this internal ref
-}
-
-// SimpleTerminalApp.tsx passes OLD wsRef to Terminal components
-<Terminal wsRef={wsRef} ... />
-// Result: Terminal components had null WebSocket → no input worked!
-```
-
-**Fix:** Pass `wsRef` as a parameter to `useWebSocketManager` so all components share the same WebSocket:
-```typescript
-// FIXED
-export function useWebSocketManager(
-  // ... other params
-  wsRef: React.MutableRefObject<WebSocket | null>, // Use parent's ref!
-) {
-  // No longer creates its own - uses the one passed in
-}
-```
-
-**Files Modified:**
-- `src/hooks/useWebSocketManager.ts` - Added wsRef parameter
-- `src/SimpleTerminalApp.tsx` - Pass wsRef to hook
-
-### Bug #2: Terminals Stuck at Tiny Size (ResizeObserver Timing)
-**Problem:** Terminals rendered but stayed at a tiny size, didn't resize to fill container.
-
-**Root Cause:** In `useTerminalResize.ts`, ResizeObserver setup had race condition:
-```typescript
-// BROKEN (Phase 3 extraction)
-useEffect(() => {
-  if (!terminalRef.current?.parentElement) return; // Returns if null!
-  // Set up ResizeObserver...
-}, [agentId, debouncedResize]); // Only runs once at mount
-
-// If terminalRef.current is null when this runs (during initialization),
-// ResizeObserver is NEVER set up!
-```
-
-**Fix:** Wait for xterm initialization and re-run when refs become available:
-```typescript
-// FIXED
-useEffect(() => {
-  if (!terminalRef.current?.parentElement ||
-      !xtermRef.current ||
-      !fitAddonRef.current) {
-    return; // Wait for all refs
-  }
-  // Set up ResizeObserver...
-}, [agentId, debouncedResize, xtermRef.current, fitAddonRef.current]);
-// Re-runs when terminal initializes!
-```
-
-**Files Modified:**
-- `src/hooks/useTerminalResize.ts` - Fixed useEffect dependencies
-
-### Bug #3: TypeScript Errors (Invalid Props)
-**Problem:** Build failed with TypeScript errors about invalid `isFocused` prop.
-
-**Fix:** Removed `isFocused` prop from all Terminal components in SplitLayout.tsx (4 locations).
-
-**Files Modified:**
-- `src/components/SplitLayout.tsx` - Removed invalid props
-
----
-
-### Refactoring Best Practices (Lessons Learned)
-
-**When extracting custom hooks that manage shared resources:**
-
-1. **Identify Shared Refs Early** ⚠️
-   - Before extracting, check for `useRef` that MUST be shared between hook and components
-   - WebSocket refs, DOM refs, etc. should be passed as parameters, not created internally
-   - **Rule:** If a ref is used by both the hook AND child components, pass it as a parameter!
-
-2. **Test with Real Usage Immediately** ⚠️
-   - Don't just check that code compiles
-   - Actually spawn terminals and try typing
-   - Test resize behavior by dragging window
-   - TypeScript errors are just the beginning!
-
-3. **Watch for Timing Dependencies in useEffect** ⚠️
-   - If a `useEffect` has an early return checking a ref, make sure dependencies include that ref
-   - Use `ref.current` in dependency array to re-run when ref changes
-   - Common pattern: Wait for DOM refs AND library instances (xterm) before setup
-
-4. **Check TypeScript Errors in Both Directions** ⚠️
-   - Missing required props (hook forgot to pass something)
-   - Invalid extra props (calling code passes something the API doesn't accept)
-
-**Testing Checklist After Refactoring:**
-```bash
-# 1. TypeScript compilation
-npm run build
-
-# 2. Visual inspection
-# - Open http://localhost:5173
-# - Spawn a terminal
-# - Try typing (tests WebSocket)
-# - Resize window (tests ResizeObserver)
-# - Spawn TUI tool (tests complex interactions)
-
-# 3. Check browser console for errors
-# 4. Check backend logs via: tmux capture-pane -t tabz:backend -p -S -50
-```
-
----
-
-## ✅ Recently Fixed (Nov 9, 2025)
-
-### Multi-Window Tab Management
-**Problem:** Need to organize terminals across multiple monitors for efficient workflows.
-
-**Solution:** Implemented window-based terminal management system where each browser window has a unique ID and manages its own set of terminals.
-
-**Key Features:**
-```tsx
-// Window ID assignment
-const currentWindowId = urlParams.get('window') || 'main'
-
-// Terminal filtering per window
-const visibleTerminals = terminals.filter(t =>
-  (t.windowId || 'main') === currentWindowId
-)
-
-// Move terminal to new window
-handlePopOutTab(terminalId) {
-  updateTerminal(terminalId, { windowId: newWindowId })
-  window.open(`?window=${newWindowId}`)
-}
-```
-
-**Critical Fixes:**
-1. **Preserve `windowId` in WebSocket handler** - Prevents terminals from losing window assignment
-2. **Preserve `windowId` in reconnection** - Terminals stay in correct window after refresh
-3. **Filter terminals for SplitLayout** - Prevents cross-window rendering
-4. **Increased localStorage sync delay** - 250ms ensures state persists before new window opens
-
-**Files Modified:**
-- `src/stores/simpleTerminalStore.ts` - Added `windowId` property
-- `src/SimpleTerminalApp.tsx` - Window ID generation, filtering, pop-out logic, WebSocket message handling
-
-**Impact:**
-- Perfect for multi-monitor setups - organize terminals across browser windows
-- Works great with Chrome side panel/reading list for complex layouts
-- Each window independently manages and reconnects to its terminals
-- All windows share state via localStorage, terminal sessions persist via tmux
-
----
-
-## ✅ Recently Fixed (Nov 9, 2025) - Split Terminals
-
-### Split Terminal Customization
-**Problem:** Font size and other customization controls in the footer only affected one pane in split terminals, not the currently focused pane.
-
-**Root Cause:** The `terminalRef` was being assigned based on `activeTerminalId` instead of `focusedTerminalId` in split panes. This meant the ref always pointed to the same pane (whichever matched the active tab), not the focused one.
-
-**Solution:**
-```tsx
-// OLD (broken - all panes):
-ref={leftTerminal.id === activeTerminalId ? terminalRef : null}
-
-// NEW (working):
-ref={leftTerminal.id === focusedTerminalId ? terminalRef : null}
-```
-
-**Files Modified:**
-- `src/components/SplitLayout.tsx` (lines 256, 302, 429, 475) - Updated all 4 split pane refs
-- `src/SimpleTerminalApp.tsx` (lines 1768-1816) - Removed non-functional tmux buttons
-
-**Impact:** Footer customization controls (font size, theme, transparency, etc.) now correctly target the focused pane in split terminals. Removed tmux split/window buttons since the app now uses native split layouts instead of tmux splits.
-
----
-
-## ✅ Recently Fixed (Nov 8, 2025)
-
-### Terminal Persistence Implementation
-**The Critical Fix:** xterm.js requires non-zero container dimensions to initialize properly.
-
-**Problem:** Using `display: none` to hide inactive tabs prevented xterm.js from initializing on those terminals. After refresh, only the currently active tab would render - all others showed emoji icons but blank terminal areas.
-
-**Solution (from Opustrator):**
-```tsx
-// OLD (broken):
-style={{ display: terminal.id === activeTerminalId ? 'block' : 'none' }}
-
-// NEW (working):
-style={{
-  position: 'absolute',
-  top: 0, left: 0, right: 0, bottom: 0,
-  visibility: terminal.id === activeTerminalId ? 'visible' : 'hidden',
-  zIndex: terminal.id === activeTerminalId ? 1 : 0,
-}}
-```
-
-**Why this works:**
-- All terminals render with full dimensions (stacked via absolute positioning)
-- xterm.js can initialize properly on all terminals
-- `visibility: hidden` hides inactive terminals without removing dimensions
-- `isSelected` prop triggers Terminal.tsx refresh when tab becomes active (lines 870-886)
-
-**Additional fixes:**
-- Conditional scrollbar based on `useTmux` setting (tmux: hidden, non-tmux: visible with 10k scrollback)
-- Footer customizations now properly persist per-tab through localStorage
-- Spawn options modal shows default font size (16px) when editing options
-
-**Files Modified:**
-- `src/SimpleTerminalApp.tsx` (lines 949-981) - Absolute positioning + visibility
-- `src/components/Terminal.tsx` (lines 78, 183) - Conditional scrollback
-- `src/components/Terminal.css` (lines 151-186) - Conditional scrollbar styling
-- `src/components/SettingsModal.tsx` (lines 111-123) - Default font size display
-
-## ✅ Recently Fixed (Nov 7, 2025)
-
-### Critical Terminal Spawning Bugs
-1. **Commands Not Executing** ✅ - Bash terminals now properly execute commands from spawn-options.json
-2. **Working Directory Validation** ✅ - Tilde paths (`~/projects`) now expand correctly
-3. **Duplicate Terminal Bug** ✅ - Fixed race condition using `useRef` for synchronous spawn tracking
-4. **Silent Failures** ✅ - Added error logging for failed validations
-5. **Settings UI** ✅ - Added SettingsModal (⚙️ button) to edit spawn-options.json
-
-See PLAN.md for detailed technical documentation of these fixes.
+**Quick Navigation:**
+- 🐛 Debugging a bug? → [LESSONS_LEARNED.md](LESSONS_LEARNED.md)
+- 📦 What changed in version X? → [CHANGELOG.md](CHANGELOG.md)
+- 🏗️ Planning refactoring? → [PLAN.md](PLAN.md)
+- 📖 User documentation? → [README.md](README.md)
+- 🧭 Understanding architecture? → This file
 
 ---
 
@@ -913,6 +630,8 @@ npm test
 2. If your changes intentionally break tests, update the tests
 3. Never commit with failing tests
 
+> **See Also:** [LESSONS_LEARNED.md](LESSONS_LEARNED.md#testing-detachreattach) for testing checklists and verification procedures.
+
 ### Test Suite Overview
 
 **Current Test Coverage:**
@@ -987,7 +706,11 @@ When CI is set up, tests will run automatically on:
 - Test spawning terminals after changes (Bash, TFE, Claude Code)
 - Keep dependencies minimal - avoid adding new npm packages
 
+> **Important:** Follow the [Documentation Workflow](#-documentation-workflow) when making changes. See [LESSONS_LEARNED.md](LESSONS_LEARNED.md) for common pitfalls and prevention strategies.
+
 ### Autonomous Debugging Workflow
+
+> **See Also:** [LESSONS_LEARNED.md](LESSONS_LEARNED.md#debugging-patterns) for diagnostic logging patterns and multi-step state change checklists.
 
 **When user runs `./start-tmux.sh`, you can debug autonomously:**
 
@@ -1028,179 +751,4 @@ tmux ls | grep "tt-bash"
 - ✅ Verify changes work before committing
 - ✅ Debug race conditions by capturing exact timing
 - ✅ See both browser + backend logs in one capture
-
----
-
-## ✅ Recently Fixed (Nov 12, 2025) - UI/UX Improvements
-
-### Global Settings Visibility
-**Problem:** The app had a 3-tier configuration priority system (per-terminal overrides → spawn option defaults → global defaults) but no UI to view or edit global defaults. This caused confusion when terminals spawned in unexpected directories or with unexpected fonts.
-
-**Solution:** Added **Global Defaults** tab to Settings Modal (⚙️ button) with clear visibility into the priority system.
-
-**New Features:**
-```tsx
-// Settings Modal now has 2 tabs:
-// 1. Spawn Options (existing)
-// 2. Global Defaults (NEW)
-```
-
-**Global Defaults Tab includes:**
-- 📁 **Default Working Directory** - Fallback when spawn options don't specify
-- 🔤 **Default Font Family** - Fallback font
-- 📏 **Default Font Size** - Fallback size
-- 📜 **Use Tmux** - Enable/disable tmux by default
-- ⚡ **Priority System Explanation** - Visual diagram showing:
-  1. Per-terminal overrides (footer controls) - highest priority
-  2. Spawn option defaults (Spawn Options tab)
-  3. Global defaults (Global Defaults tab) - lowest priority
-
-**Files Modified:**
-- `src/components/SettingsModal.tsx` - Added Global Defaults tab and priority explanation
-- `src/components/SettingsModal.css` - Added tab styling and global defaults panel CSS
-- `public/spawn-options.json` - Added default `workingDir` to Bash and Claude Code options
-
-**Impact:**
-- ✅ Users can now see and edit all three configuration levels
-- ✅ Clear documentation of priority system in UI
-- ✅ No more confusion about where settings come from
-- ✅ Changes save immediately to Settings Store
-
-### Split Terminal Visual Improvements
-**Problem:** Split terminal dividers were hard to see, and terminals lacked left padding causing text to touch the edge.
-
-**Solution:**
-- Increased divider visibility: 1px → 2px, opacity 15% → 30%
-- Added 12px left padding to terminals
-- Added 8px gap between split panes to prevent overlap
-- Disabled drop zones on already-split tabs (prevents nested splits)
-
-**Files Modified:**
-- `src/components/Terminal.css` - Added left padding (line 106)
-- `src/components/SplitLayout.css` - Enhanced divider visibility and spacing
-- `src/hooks/useDragDrop.ts` - Disabled drop zones for split tabs
-
-### Backend Output Routing Improvements
-**Problem:** Stale WebSocket connections from closed popout windows remained in `terminalOwners` map, causing escape sequences to leak to wrong terminals.
-
-**Solution:** Added defensive cleanup for dead connections during output and periodic cleanup every 5 seconds.
-
-**Files Modified:**
-- `backend/server.js` - Enhanced `terminalOwners` cleanup (lines 419-457, 466-505)
-
-**Impact:**
-- ✅ No more escape sequence leaks (`1;2c0;276;0c`) in terminals
-- ✅ Clean connection management for multi-window setups
-- ✅ Debug logging for tracking ownership issues
-
-### Drag Performance Optimization
-**Problem:** Dragging split dividers felt laggy due to excessive terminal refits (10 per second).
-
-**Solution:** Eliminated live refits during drag - only refit once when drag completes.
-
-**Files Modified:**
-- `src/components/SplitLayout.tsx` - Removed `onResize` handlers, kept only `onResizeStop`
-- `src/components/SplitLayout.css` - Added GPU acceleration hints
-
-**Impact:**
-- ✅ Buttery smooth drag performance
-- ✅ Terminal content snaps to correct size on release
-- ✅ Reduced CPU usage during resize
-
----
-
-## ✅ Recently Fixed (Nov 13, 2025) - Detach/Reattach
-
-### Terminal Detach/Reattach Bug Fixes
-**Fixed**: Detaching and reattaching terminals now works correctly without killing tmux sessions or requiring page refresh
-
-**Problems:**
-1. **Detach killed tmux sessions** - Sessions disappeared from `tmux ls` after detach
-2. **Reattach didn't connect** - Required page refresh to reconnect, spawned new sessions instead of reconnecting
-
-**Root Causes:**
-1. Detach sent WebSocket `type: 'close'` message, which the backend interprets as "force close and kill tmux session" (backend/server.js:254)
-2. When detaching, `agentId` was not cleared from `processedAgentIds` ref in useWebSocketManager
-   - On reattach, same agentId returned from backend (reconnecting to same PTY)
-   - Frontend saw "Already processed agentId" and ignored `terminal-spawned` message
-   - Terminal stayed in "spawning" state forever
-
-**Solutions:**
-1. **Removed WebSocket close message** - Detach now only calls `/api/tmux/detach` endpoint
-   - Endpoint uses `tmux detach-client -s` (non-destructive)
-   - PTY disconnects naturally without killing session
-2. **Clear agentId from processedAgentIds** - Added `clearProcessedAgentId()` function
-   - Called when detaching to remove agentId from tracking set
-   - Allows same agentId to be processed again on reattach
-
-**Files Modified:**
-- `src/SimpleTerminalApp.tsx` (lines 747-750, 839-842) - Clear processedAgentIds on detach
-- `src/hooks/useWebSocketManager.ts` (lines 515-517, 118-157) - Added clearProcessedAgentId function + debug logging
-
-**Impact:**
-- ✅ Tmux sessions survive detach (visible in `tmux ls`)
-- ✅ Reattach works immediately without refresh
-- ✅ Works for both single terminals and split containers
-- ✅ All panes in splits reconnect correctly
-
-**Split Container Support:**
-- Detaching a split container detaches ALL panes and preserves layout
-- Reattaching reconnects ALL panes and restores split
-- Each pane's tmux session persists independently
-
-**Testing:**
-```bash
-# Verify session survives detach:
-# 1. Right-click tab → Detach
-# 2. Run: tmux ls | grep tt-cc-xxx
-# 3. Session should still exist!
-# 4. Click detached tab → reconnects immediately
-```
-
----
-
-**Last Updated**: November 13, 2025
-
----
-
-## 🧹 Legacy Code Cleanup (November 8, 2025)
-
-**Status:** ✅ **COMPLETED**
-
-### What Was Removed
-Successfully removed ~1,000 lines of Opustrator legacy code in 3 phases:
-
-**Phase 1: Rebranding**
-- Renamed from "Terminal Tabs" to "Tabz (Tab>_)"
-- Updated all package names, docs, scripts
-- Removed dockerode + 42 dependencies (~10MB)
-- Updated environment variables: `OPUSTRATOR_*` → `TABZ_*`
-
-**Phase 2: Backend Cleanup**
-- Removed `/api/layouts` endpoints (103 lines)
-- Deleted `layout-manager.js` module (137 lines)
-- Deleted `workspace.js` routes (109 lines)
-- Removed 8 unused API endpoints total
-
-**Phase 3: Frontend Cleanup**
-- Removed canvas background animation settings (85 lines)
-- Removed grid/snapping settings for infinite canvas
-- Removed file viewer/Monaco editor settings
-- Removed canvas navigation settings (WASD, minimap, zoom)
-- Migrated localStorage: `opustrator-settings` → `tabz-settings`
-
-### What Was Kept (Intentionally)
-- `/api/agents` endpoints - For future bubbletea TUI spawn menu
-- `/api/spawn-options` - Used by settings modal
-- `/api/tmux/*` endpoints - Core tmux functionality
-- Terminal backgrounds (CSS gradients) - NOT canvas backgrounds
-- All terminal customization features
-
-### Impact
-- **17 files changed**, 110 insertions(+), 1,031 deletions(-)
-- **2 files deleted**, **43 packages removed**
-- **User settings preserved** via automatic migration
-- **No breaking changes** to core functionality
-
-**Full details:** See `OPUSTRATOR_LEGACY_AUDIT.md`
 
