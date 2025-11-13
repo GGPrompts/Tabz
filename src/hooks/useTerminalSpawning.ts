@@ -89,7 +89,9 @@ export function useTerminalSpawning(
       // Get global defaults for 3-tier priority system
       const globalSettings = useSettingsStore.getState()
       const effectiveTheme = option.defaultTheme ?? globalSettings.terminalDefaultTheme
-      const effectiveBackground = option.defaultBackground ?? globalSettings.terminalDefaultBackground
+      // Note: effectiveBackground should NOT include global default here
+      // Global default is only used as final fallback after theme-based mapping
+      const effectiveBackground = option.defaultBackground // Explicit background only
       const effectiveTransparency = option.defaultTransparency ?? Math.round(globalSettings.terminalDefaultTransparency * 100)
 
       // Debug: Log priority resolution
@@ -117,7 +119,7 @@ export function useTerminalSpawning(
         icon: option.icon,
         workingDir: effectiveWorkingDir,
         theme: effectiveTheme,
-        background: effectiveBackground || THEME_BACKGROUNDS[effectiveTheme] || 'dark-neutral',
+        background: effectiveBackground ?? THEME_BACKGROUNDS[effectiveTheme] ?? globalSettings.terminalDefaultBackground ?? 'dark-neutral',
         transparency: effectiveTransparency,
         fontSize: option.defaultFontSize ?? globalSettings.terminalDefaultFontSize,
         fontFamily: option.defaultFontFamily ?? globalSettings.terminalDefaultFontFamily,
