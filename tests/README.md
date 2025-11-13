@@ -16,6 +16,9 @@ tests/
 │   ├── stores/                # Unit tests for Zustand stores
 │   └── utils/                 # Unit tests for utility functions
 └── integration/               # Integration tests
+    ├── split-operations.test.ts    # Split creation/close tests
+    ├── terminal-spawning.test.ts   # Terminal spawning tests
+    └── detach-reattach.test.ts     # Detach/reattach tests (15 tests)
 ```
 
 ## Running Tests
@@ -178,6 +181,43 @@ Coverage reports are generated in the `coverage/` directory:
 | @vitest/coverage-v8 | ^4.0.8 | Coverage reporter |
 | jsdom | ^27.2.0 | DOM environment |
 | happy-dom | ^20.0.10 | Alternative DOM environment |
+
+## Test Coverage
+
+### Integration Tests
+
+#### detach-reattach.test.ts (15 tests)
+
+Tests the complete detach/reattach workflow, covering critical bugs fixed in Nov 13, 2025:
+
+**Bug Fix #1**: Detach no longer kills tmux sessions
+- Verifies no WebSocket 'close' messages sent
+- Checks /api/tmux/detach endpoint called correctly
+- Tests tmux session preservation
+
+**Bug Fix #2**: processedAgentIds cleared on detach
+- Verifies clearProcessedAgentId() called
+- Tests reconnection with same agentId works
+- Prevents "Already processed" errors
+
+**Bug Fix #3**: Reattaching pane tab restores whole split
+- Tests clicking detached pane tab finds container
+- Verifies all panes reconnect
+- Ensures split layout fully restored
+
+**Test Categories**:
+- Split container detach (all panes)
+- Single pane detach from split
+- Split container reattach
+- Pane tab reattach (bug fix #3)
+- processedAgentIds management
+- Edge cases (missing sessions, unknown types)
+- localStorage persistence
+
+**Run specific test suite**:
+```bash
+npm test -- tests/integration/detach-reattach.test.ts
+```
 
 ## Notes
 
