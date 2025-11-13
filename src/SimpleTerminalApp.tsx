@@ -19,6 +19,7 @@ import { usePopout } from './hooks/usePopout'
 import { useDragDrop } from './hooks/useDragDrop'
 import { useWebSocketManager } from './hooks/useWebSocketManager'
 import { useTerminalNameSync } from './hooks/useTerminalNameSync'
+import { useClaudeCodeStatus, ClaudeCodeStatus } from './hooks/useClaudeCodeStatus'
 import {
   DndContext,
   closestCenter,
@@ -79,9 +80,10 @@ interface SortableTabProps {
   isDraggedOver: boolean
   mousePosition: React.MutableRefObject<{ x: number; y: number }>
   splitPosition?: 'single' | 'left' | 'middle' | 'right'
+  claudeCodeStatuses: Map<string, ClaudeCodeStatus>
 }
 
-function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate, onClose, onContextMenu, dropZone, isDraggedOver, mousePosition, splitPosition = 'single' }: SortableTabProps) {
+function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate, onClose, onContextMenu, dropZone, isDraggedOver, mousePosition, splitPosition = 'single', claudeCodeStatuses }: SortableTabProps) {
   // LOCK SPLIT PANES: Disable dragging for terminals that are part of a split (but not the container)
   const isPartOfSplit = splitPosition !== 'single'
   const isDraggable = !isPartOfSplit
@@ -216,6 +218,45 @@ function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate,
         <span className="tab-icon-single">{terminal.icon || '💻'}</span>
       )}
       <span className="tab-label">{terminal.name}</span>
+
+      {/* Claude Code Status Badge */}
+      {terminal.terminalType === 'claude-code' && (() => {
+        const status = claudeCodeStatuses.get(terminal.id)
+
+        let statusText = ''
+        let statusClass = ''
+
+        if (!status || status.status === 'unknown') {
+          // Show idle/ready when no status file exists yet
+          statusText = '✓ Ready'
+          statusClass = 'status-ready'
+        } else {
+          switch (status.status) {
+            case 'idle':
+            case 'awaiting_input':
+              statusText = '✓ Ready'
+              statusClass = 'status-ready'
+              break
+            case 'processing':
+              statusText = '⏳ Processing'
+              statusClass = 'status-processing'
+              break
+            case 'tool_use':
+              statusText = status.current_tool ? `🔧 ${status.current_tool}` : '🔧 Tool'
+              statusClass = 'status-tool'
+              break
+            case 'working':
+              statusText = '⚙️ Working'
+              statusClass = 'status-working'
+              break
+            default:
+              statusText = '✓ Ready'
+              statusClass = 'status-ready'
+          }
+        }
+
+        return <span className={`claude-status-badge ${statusClass}`}>{statusText}</span>
+      })()}
 
       {/* Drop Zone Overlay - shows when dragging over this tab for splits */}
       {isDraggedOver && dropZone && !isBlocked && isEdgeZone && (
@@ -480,7 +521,7 @@ function SimpleTerminalApp() {
   // WebSocket connection management (extracted to custom hook)
   // Must be called after useTerminalSpawning to use handleReconnectTerminal
   // CRITICAL: Pass wsRef so Terminal components can send input via same WebSocket!
-  const { webSocketAgents, connectionStatus, setWebSocketAgents } = useWebSocketManager(
+  const { webSocketAgents, connectionStatus, setWebSocketAgents, clearProcessedAgentId } = useWebSocketManager(
     currentWindowId,
     storedTerminals,
     activeTerminalId,
@@ -497,6 +538,9 @@ function SimpleTerminalApp() {
 
   // Terminal name syncing from tmux pane titles (auto-update tab names)
   useTerminalNameSync(currentWindowId, useTmux)
+
+  // Status badges - tracks Claude Code terminal status from state-tracker hook
+  const claudeCodeStatuses = useClaudeCodeStatus(storedTerminals, currentWindowId)
 
   // Merge WebSocket agents with stored terminals
   const agents = useMemo(() => {
@@ -678,17 +722,68 @@ function SimpleTerminalApp() {
   const handleContextDetach = async () => {
     if (!contextMenu.terminalId) return
     const terminal = storedTerminals.find(t => t.id === contextMenu.terminalId)
-    if (!terminal || !terminal.sessionName) return
+    if (!terminal) return
+
+    // Check if this terminal IS a split container (not just part of one)
+    if (terminal.splitLayout && terminal.splitLayout.type !== 'single') {
+      // This is a split container - detach ALL panes and preserve layout
+      console.log(`[SimpleTerminalApp] Detaching split container ${terminal.id} with ${terminal.splitLayout.panes.length} panes`)
+
+      // Detach each pane terminal individually
+      for (const pane of terminal.splitLayout.panes) {
+        const paneTerminal = storedTerminals.find(t => t.id === pane.terminalId)
+        if (paneTerminal && paneTerminal.sessionName) {
+          console.log(`[SimpleTerminalApp] Detaching pane ${pane.terminalId} (${paneTerminal.sessionName})`)
+
+          // Call backend to detach from tmux (keeps session alive)
+          await fetch(`/api/tmux/detach/${paneTerminal.sessionName}`, {
+            method: 'POST',
+          })
+
+          // DON'T close PTY - let it disconnect naturally
+          // Sending 'close' would kill the tmux session!
+
+          // Clear from processedAgentIds so it can reconnect
+          if (paneTerminal.agentId) {
+            console.log(`[SimpleTerminalApp] Clearing processedAgentId: ${paneTerminal.agentId.slice(-8)}`)
+            clearProcessedAgentId(paneTerminal.agentId)
+          }
+
+          // Mark pane as detached (clear agentId so it reconnects properly)
+          updateTerminal(pane.terminalId, {
+            status: 'detached',
+            agentId: undefined,
+          })
+        }
+      }
+
+      // Mark the container as detached too (preserves split layout)
+      updateTerminal(contextMenu.terminalId, {
+        status: 'detached',
+        agentId: undefined,
+      })
+
+      console.log(`[SimpleTerminalApp] ✓ Detached split container with preserved layout`)
+      setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+      return
+    }
+
+    // For non-split terminals, must have a sessionName
+    if (!terminal.sessionName) {
+      console.warn(`[SimpleTerminalApp] Cannot detach terminal without sessionName`)
+      setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+      return
+    }
 
     console.log(`[SimpleTerminalApp] Detaching from tmux session: ${terminal.sessionName}`)
 
-    // Check if this terminal is part of a split
+    // Check if this terminal is part of a split (as a pane)
     const splitContainer = storedTerminals.find(t =>
       t.splitLayout?.panes?.some(p => p.terminalId === terminal.id)
     )
 
     if (splitContainer && splitContainer.splitLayout) {
-      // Terminal is part of a split - remove it from the split first
+      // Terminal is a pane in a split - remove it from the split first
       console.log(`[SimpleTerminalApp] Detaching split pane ${terminal.id} from split ${splitContainer.id}`)
 
       const remainingPanes = splitContainer.splitLayout.panes.filter(
@@ -736,19 +831,20 @@ function SimpleTerminalApp() {
       if (result.success) {
         console.log(`[SimpleTerminalApp] ✓ Detached from session: ${terminal.sessionName}`)
 
-        // Close the PTY process via WebSocket (but keep terminal in store)
-        if (terminal.agentId && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          console.log(`[SimpleTerminalApp] Closing PTY for agent: ${terminal.agentId}`)
-          wsRef.current.send(JSON.stringify({
-            type: 'close',
-            terminalId: terminal.agentId,
-          }))
+        // DON'T close PTY via WebSocket - let it disconnect naturally
+        // Sending 'close' would kill the tmux session!
+        // The backend's /api/tmux/detach already handled detaching the client safely
+
+        // Clear from processedAgentIds so it can reconnect
+        if (terminal.agentId) {
+          console.log(`[SimpleTerminalApp] Clearing processedAgentId: ${terminal.agentId.slice(-8)}`)
+          clearProcessedAgentId(terminal.agentId)
         }
 
         // Mark terminal as detached (keeps in localStorage, shows as grayed tab)
         updateTerminal(contextMenu.terminalId, {
           status: 'detached',
-          agentId: undefined, // Clear PTY connection
+          agentId: undefined, // Clear PTY connection so it can reconnect
         })
       } else {
         console.error(`[SimpleTerminalApp] Failed to detach:`, result.error)
@@ -765,6 +861,48 @@ function SimpleTerminalApp() {
     const terminal = storedTerminals.find(t => t.id === terminalId)
     if (!terminal || terminal.status !== 'detached') return
 
+    // Check if this is a split container
+    if (terminal.splitLayout && terminal.splitLayout.type !== 'single') {
+      console.log(`[SimpleTerminalApp] Re-attaching split container ${terminal.name} with ${terminal.splitLayout.panes.length} panes`)
+
+      // Reattach each pane
+      for (const pane of terminal.splitLayout.panes) {
+        const paneTerminal = storedTerminals.find(t => t.id === pane.terminalId)
+        if (paneTerminal) {
+          // Find matching spawn option for this pane
+          const option = spawnOptions.find(opt =>
+            opt.command === paneTerminal.command ||
+            opt.terminalType === paneTerminal.terminalType
+          )
+
+          if (option) {
+            console.log(`[SimpleTerminalApp] Re-attaching pane ${pane.terminalId} (${paneTerminal.terminalType})`)
+
+            // Mark as spawning and assign to current window
+            updateTerminal(pane.terminalId, {
+              windowId: currentWindowId,
+              status: 'spawning',
+            })
+
+            // Reconnect the pane
+            await handleReconnectTerminal(paneTerminal, option)
+          }
+        }
+      }
+
+      // Mark container as active and assign to window
+      updateTerminal(terminalId, {
+        windowId: currentWindowId,
+        status: 'active',
+      })
+
+      // Set as active after all panes reconnected
+      setActiveTerminal(terminalId)
+      console.log(`[SimpleTerminalApp] ✓ Re-attached split container with restored layout`)
+      return
+    }
+
+    // Single terminal reattach
     console.log(`[SimpleTerminalApp] Re-attaching terminal ${terminal.name} to session ${terminal.sessionName}`)
 
     // Find matching spawn option
@@ -1368,6 +1506,7 @@ function SimpleTerminalApp() {
                     isDraggedOver={dropZoneState?.terminalId === terminal.id}
                     mousePosition={mousePosition}
                     splitPosition={splitInfo?.position}
+                    claudeCodeStatuses={claudeCodeStatuses}
                   />
                 )
               })}

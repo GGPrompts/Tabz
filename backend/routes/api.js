@@ -765,22 +765,24 @@ router.get('/tmux/info/:name', asyncHandler(async (req, res) => {
       });
     }
 
-    // Get pane title and window count in one call
-    // Format: "pane_title|window_count|active_window_index"
+    // Get pane title, window count, and pane count in one call
+    // Format: "pane_title|window_count|active_window_index|pane_count"
     const info = execSync(
-      `tmux display-message -t "${name}" -p "#{pane_title}|#{session_windows}|#{window_index}"`,
+      `tmux display-message -t "${name}" -p "#{pane_title}|#{session_windows}|#{window_index}|#{window_panes}"`,
       { encoding: 'utf-8' }
     ).trim();
 
-    const [paneTitle, windowCountStr, activeWindowStr] = info.split('|');
+    const [paneTitle, windowCountStr, activeWindowStr, paneCountStr] = info.split('|');
     const windowCount = parseInt(windowCountStr, 10);
     const activeWindow = parseInt(activeWindowStr, 10);
+    const paneCount = parseInt(paneCountStr, 10);
 
     res.json({
       success: true,
       paneTitle: paneTitle || 'bash',
       windowCount: windowCount || 1,
       activeWindow: activeWindow || 0,
+      paneCount: paneCount || 1,
       sessionName: name
     });
   } catch (err) {
@@ -788,6 +790,61 @@ router.get('/tmux/info/:name', asyncHandler(async (req, res) => {
     res.status(500).json({
       success: false,
       error: err.message
+    });
+  }
+}));
+
+/**
+ * GET /api/claude-status?dir=<path> - Get Claude Code status from state-tracker file
+ * Returns status (idle, working, tool_use, awaiting_input) for a working directory
+ */
+router.get('/claude-status', asyncHandler(async (req, res) => {
+  const workingDir = req.query.dir;
+  const { execSync } = require('child_process');
+  const fs = require('fs');
+  const crypto = require('crypto');
+
+  if (!workingDir) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing dir parameter'
+    });
+  }
+
+  try {
+    // Calculate session ID (md5 hash of working dir, first 12 chars)
+    const sessionId = crypto
+      .createHash('md5')
+      .update(workingDir)
+      .digest('hex')
+      .substring(0, 12);
+
+    const stateFile = `/tmp/claude-code-state/${sessionId}.json`;
+
+    // Check if state file exists
+    if (!fs.existsSync(stateFile)) {
+      return res.json({
+        success: true,
+        status: 'unknown',
+        sessionId
+      });
+    }
+
+    // Read state file
+    const stateData = JSON.parse(fs.readFileSync(stateFile, 'utf-8'));
+
+    res.json({
+      success: true,
+      status: stateData.status || 'unknown',
+      current_tool: stateData.current_tool || '',
+      last_updated: stateData.last_updated || '',
+      sessionId
+    });
+  } catch (err) {
+    console.error(`[API] Failed to get Claude status for ${workingDir}:`, err.message);
+    res.json({
+      success: true,
+      status: 'unknown'
     });
   }
 }));

@@ -923,7 +923,57 @@ tmux ls | grep "tt-bash"
 
 ---
 
-**Last Updated**: November 12, 2025
+## ✅ Recently Fixed (Nov 13, 2025) - Detach/Reattach
+
+### Terminal Detach/Reattach Bug Fixes
+**Fixed**: Detaching and reattaching terminals now works correctly without killing tmux sessions or requiring page refresh
+
+**Problems:**
+1. **Detach killed tmux sessions** - Sessions disappeared from `tmux ls` after detach
+2. **Reattach didn't connect** - Required page refresh to reconnect, spawned new sessions instead of reconnecting
+
+**Root Causes:**
+1. Detach sent WebSocket `type: 'close'` message, which the backend interprets as "force close and kill tmux session" (backend/server.js:254)
+2. When detaching, `agentId` was not cleared from `processedAgentIds` ref in useWebSocketManager
+   - On reattach, same agentId returned from backend (reconnecting to same PTY)
+   - Frontend saw "Already processed agentId" and ignored `terminal-spawned` message
+   - Terminal stayed in "spawning" state forever
+
+**Solutions:**
+1. **Removed WebSocket close message** - Detach now only calls `/api/tmux/detach` endpoint
+   - Endpoint uses `tmux detach-client -s` (non-destructive)
+   - PTY disconnects naturally without killing session
+2. **Clear agentId from processedAgentIds** - Added `clearProcessedAgentId()` function
+   - Called when detaching to remove agentId from tracking set
+   - Allows same agentId to be processed again on reattach
+
+**Files Modified:**
+- `src/SimpleTerminalApp.tsx` (lines 747-750, 839-842) - Clear processedAgentIds on detach
+- `src/hooks/useWebSocketManager.ts` (lines 515-517, 118-157) - Added clearProcessedAgentId function + debug logging
+
+**Impact:**
+- ✅ Tmux sessions survive detach (visible in `tmux ls`)
+- ✅ Reattach works immediately without refresh
+- ✅ Works for both single terminals and split containers
+- ✅ All panes in splits reconnect correctly
+
+**Split Container Support:**
+- Detaching a split container detaches ALL panes and preserves layout
+- Reattaching reconnects ALL panes and restores split
+- Each pane's tmux session persists independently
+
+**Testing:**
+```bash
+# Verify session survives detach:
+# 1. Right-click tab → Detach
+# 2. Run: tmux ls | grep tt-cc-xxx
+# 3. Session should still exist!
+# 4. Click detached tab → reconnects immediately
+```
+
+---
+
+**Last Updated**: November 13, 2025
 
 ---
 

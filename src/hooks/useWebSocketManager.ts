@@ -115,33 +115,45 @@ export function useWebSocketManager(
     switch (message.type) {
       case 'terminal-spawned':
         if (message.data) {
+          console.log('[useWebSocketManager] 📨 Received terminal-spawned:', {
+            agentId: message.data.id,
+            requestId: message.requestId,
+            sessionName: message.data.sessionName,
+            pendingSpawnsSize: pendingSpawns.current.size
+          })
+
           if (processedAgentIds.current.has(message.data.id)) {
+            console.log('[useWebSocketManager] ⏭️ Already processed agentId:', message.data.id)
             return
           }
 
           // Find matching terminal - check pendingSpawns ref first (synchronous)
           let existingTerminal = pendingSpawns.current.get(message.requestId)
+          console.log('[useWebSocketManager] 🔍 Checking pendingSpawns:', existingTerminal ? 'FOUND' : 'NOT FOUND')
 
           // Fallback: Check state by requestId
           if (!existingTerminal) {
             existingTerminal = storedTerminals.find(t => t.requestId === message.requestId)
+            console.log('[useWebSocketManager] 🔍 Checking storedTerminals by requestId:', existingTerminal ? 'FOUND' : 'NOT FOUND')
           }
 
           // Fallback: Check by agentId (reconnection case)
           if (!existingTerminal) {
             existingTerminal = storedTerminals.find(t => t.agentId === message.data.id)
+            console.log('[useWebSocketManager] 🔍 Checking storedTerminals by agentId:', existingTerminal ? 'FOUND' : 'NOT FOUND')
           }
 
           // Fallback: Find most recent spawning terminal of same type IN THIS WINDOW
           // CRITICAL: Filter by windowId to prevent cross-window contamination with fast-spawning terminals (bash)
           if (!existingTerminal) {
-            existingTerminal = storedTerminals
-              .filter(t =>
-                t.status === 'spawning' &&
-                t.terminalType === message.data.terminalType &&
-                (t.windowId || 'main') === currentWindowId
-              )
-              .sort((a, b) => b.createdAt - a.createdAt)[0]
+            const spawningTerminals = storedTerminals.filter(t =>
+              t.status === 'spawning' &&
+              t.terminalType === message.data.terminalType &&
+              (t.windowId || 'main') === currentWindowId
+            )
+            console.log('[useWebSocketManager] 🔍 Spawning terminals of type', message.data.terminalType, ':', spawningTerminals.length)
+            existingTerminal = spawningTerminals.sort((a, b) => b.createdAt - a.createdAt)[0]
+            console.log('[useWebSocketManager] 🔍 Checking spawning terminals by type:', existingTerminal ? 'FOUND' : 'NOT FOUND')
           }
 
           // CRITICAL: Only update terminals that belong to THIS window
@@ -191,7 +203,13 @@ export function useWebSocketManager(
           } else {
             // CRITICAL: Do NOT create terminal for unmatched spawns
             // Prevents cross-window contamination
-            console.warn('[useWebSocketManager] ⏭️ Ignoring terminal-spawned - no matching terminal')
+            console.warn('[useWebSocketManager] ⏭️ Ignoring terminal-spawned - no matching terminal', {
+              requestId: message.requestId,
+              agentId: message.data.id,
+              sessionName: message.data.sessionName,
+              allStoredTerminals: storedTerminals.length,
+              pendingSpawns: Array.from(pendingSpawns.current.keys())
+            })
             return
           }
         }
@@ -493,6 +511,9 @@ export function useWebSocketManager(
   return {
     webSocketAgents,
     connectionStatus,
-    setWebSocketAgents
+    setWebSocketAgents,
+    clearProcessedAgentId: (agentId: string) => {
+      processedAgentIds.current.delete(agentId)
+    }
   }
 }
