@@ -37,6 +37,10 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
   const [containerHeight, setContainerHeight] = useState(0);
   const { updateTerminal, focusedTerminalId, setFocusedTerminal, removeTerminal } = useSimpleTerminalStore();
 
+  // Track drag width for smooth dragging (only update expensive operations on drag end)
+  const [verticalDragWidth, setVerticalDragWidth] = useState<number | null>(null);
+  const [horizontalDragHeight, setHorizontalDragHeight] = useState<number | null>(null);
+
   // Debounce terminal refit events to prevent excessive re-renders during drag
   const refitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -202,12 +206,19 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
     return (
       <div ref={containerRef} className="split-layout-container split-vertical">
         <ResizableBox
-          width={leftWidth || containerWidth * 0.5}
+          width={verticalDragWidth ?? (leftWidth || containerWidth * 0.5)}
           height={containerHeight}
           axis="x"
           minConstraints={[200, containerHeight]}
           maxConstraints={[containerWidth - 200, containerHeight]}
+          onResize={(e, data) => {
+            // Update visual width during drag (smooth, no state updates)
+            setVerticalDragWidth(data.size.width);
+          }}
           onResizeStop={(e, data) => {
+            // Clear drag width
+            setVerticalDragWidth(null);
+
             const newSize = (data.size.width / containerWidth) * 100;
             updateTerminal(terminal.id, {
               splitLayout: {
@@ -338,11 +349,18 @@ const SplitLayoutComponent: React.FC<SplitLayoutProps> = ({
       <div ref={containerRef} className="split-layout-container split-horizontal">
         <ResizableBox
           width={containerWidth}
-          height={topHeight || containerHeight * 0.5}
+          height={horizontalDragHeight ?? (topHeight || containerHeight * 0.5)}
           axis="y"
           minConstraints={[containerWidth, 200]}
           maxConstraints={[containerWidth, containerHeight - 200]}
+          onResize={(e, data) => {
+            // Update visual height during drag (smooth, no state updates)
+            setHorizontalDragHeight(data.size.height);
+          }}
           onResizeStop={(e, data) => {
+            // Clear drag height
+            setHorizontalDragHeight(null);
+
             const newSize = (data.size.height / containerHeight) * 100;
             updateTerminal(terminal.id, {
               splitLayout: {
