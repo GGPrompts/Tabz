@@ -1,176 +1,302 @@
-# Continuation Prompt: Split Terminal UX + Auto-Cleanup Complete
+# Continuation Prompt: Multi-Window Detach/Reattach + Working Directory Display Complete
 
-## What Was Completed (November 11, 2025)
+## What Was Completed (November 13, 2025)
 
 ### Session Summary
-This session completed the split terminal implementation with full drag-locking, proper cleanup, and automatic terminal cleanup on process exit.
+This session fixed critical cross-window state synchronization for the detach/reattach feature and added working directory display to tab names and tmux status bar.
 
-### Split Terminals Show as Merged Tabs ✅
-- Split panes no longer hidden - each shows as a separate tab
-- Tabs styled to look merged with orange ↔ separator
-- CSS classes: `.split-left`, `.split-middle`, `.split-right`
-- Visual: `[💻 TFE] ↔ [🐚 Bash]` (connected appearance)
-- Split container tabs now hidden - only pane tabs show in tab bar
+### Cross-Window State Sync Fix ✅ (Codex-Assisted)
 
-### Context Menu for All Actions ✅
-- **Detach** - Detaches terminal, keeps tmux session alive, shows grayed 📌 tab
-- **Unsplit** - Converts split pane back to regular tab (split tabs only)
-- **Pop out to new window** - Moves tab/split to new browser window
-- Removed all pane buttons (✕📌↗) from split views - everything through context menu
+**Problem:** When detaching a terminal in a popped-out window, the main window didn't see the update in real-time (only after manual refresh). Same issue when reattaching from main window - popout window didn't update.
 
-### Detached Terminal System ✅
-- Detached terminals stay in localStorage (not removed like close)
-- Show as grayed tabs with 📌 icon in ALL windows
-- Click to re-attach from any window/monitor
-- Works for both split panes and regular terminals
+**Root Cause (discovered via Codex):**
+1. **localStorage is process-cached per window in Chrome** - Other windows don't see new values until browser delivers a real storage event that refreshes the cache
+2. **Reading localStorage directly returns stale data** - The receiver window's cache isn't refreshed by BroadcastChannel messages
+3. **Zustand persist doesn't auto-sync across tabs** - It writes on every set but doesn't listen to storage events to update other tabs
+4. **No debounce exists in persist** - The 100ms delay assumption was incorrect; setItem happens synchronously
 
-### Split Pane Locking ✅ (FIXED November 11, 2025)
-- **Split panes cannot be dragged individually** - Dragging disabled via `useSortable({ disabled: true })`
-- **Split panes cannot be split again** - Blocking logic prevents edge zone operations on any terminal that is part of a split
-- **No corruption from nested splits** - Both source AND target checked before allowing merge
-- **Visual feedback** - Cursor changes to `default` (non-draggable) for split panes
-- **Clear messaging** - Blocked overlay shows 🔒 "Split panes are locked" with "Unsplit" hint
+**Fix Applied:**
+- **Sender:** Include full state payload in broadcast message (not just notification)
+- **Receiver:** Apply state directly from payload to Zustand store (bypass localStorage read)
+- **Result:** Instant cross-window sync without refresh
 
-### Visual Focus States ✅ (FIXED November 11, 2025)
-- **Active border on both split tabs** - CSS `.split-active` class applies orange border to all siblings
-- **Focused tab name turns orange** - CSS `.focused .tab-label` turns focused pane's name orange
-- **Fixed emoji display** - Each split pane tab shows its own `terminal.icon`
-- **Split container tabs hidden** - Only pane tabs render in tab bar
-
-### Implementation Details
-
-**Files Modified (November 11, 2025):**
-
-**Split Terminal Implementation:**
+**Files Modified:**
 - `src/SimpleTerminalApp.tsx`:
-  - Added `disabled` flag to `useSortable` for split pane tabs (lines 84-100)
-  - **CRITICAL FIX**: Fixed tab bar filter to show both panes (lines 1112-1132)
-  - **CRITICAL FIX**: Fixed rendering filter to show both panes (lines 1400-1413)
-  - Fixed `onActivate` to set container as active for split panes (lines 1142-1151)
-  - Enhanced `handleCloseTerminal` to clean up splits properly (lines 693-762)
-  - Enhanced `handleContextDetach` to clean up splits before detaching (lines 632-715)
-  - Fixed context menu to show "Unsplit" on both tabs (lines 1667-1691)
-  - Improved `handleContextUnsplit` to work on either tab (lines 602-622)
-  - Updated cursor style for non-draggable tabs (line 203)
-  - Added `.locked` class for split panes (line 206)
-  - Updated blocked overlay message (lines 241-247)
+  - Lines 549-581: Updated receiver to parse payload and apply directly to store
+  - Lines 674-683: Added payload to window-closing detach broadcast
+  - Lines 1013-1024: Added payload to split container detach broadcast
+  - Lines 1112-1125: Added payload to single terminal detach broadcast
+  - Lines 1206-1217: Added payload to split container reattach broadcast
+  - Lines 1256-1267: Added payload to single terminal reattach broadcast
 
-- `src/hooks/useDragDrop.ts`:
-  - Added `isTerminalPartOfSplit()` helper function (lines 48-56)
-  - Updated blocking logic to check both source AND target (lines 83-109, 180-209, 224-240)
-  - Enhanced error messages for locked split panes (lines 236-239)
-  - **CRITICAL FIX**: Removed `isHidden: true` when creating splits (line 274-276)
-  - Order panes by visual position - left before right, top before bottom (lines 253-281)
+**Broadcast Message Format (NEW):**
+```typescript
+{
+  type: 'state-changed',
+  payload: localStorage.getItem('simple-terminal-storage'), // Full state JSON
+  from: currentWindowId, // Sender window ID (to ignore self)
+  at: Date.now() // Timestamp
+}
+```
 
-- `src/SimpleTerminalApp.css`:
-  - Added `.locked` cursor styles (lines 410-417)
-  - Visual focus states already implemented (lines 395-408)
+**Receiver Logic (NEW):**
+```typescript
+// Parse payload and apply directly (no localStorage read)
+const parsed = JSON.parse(event.data.payload)
+const next = parsed?.state
+if (next && next.terminals) {
+  useSimpleTerminalStore.setState({
+    terminals: next.terminals,
+    activeTerminalId: next.activeTerminalId,
+    focusedTerminalId: next.focusedTerminalId
+  })
+}
+```
 
-**Auto-Cleanup on Terminal Exit:**
-- `src/hooks/useWebSocketManager.ts`:
-  - Added import for `useSimpleTerminalStore` (line 3)
-  - Enhanced `terminal-closed` handler to clean up splits (lines 212-324)
-  - **CRITICAL FIX**: Use fresh state from Zustand store, not closure variable (lines 217, 239, 259, 287)
-  - Updated terminal switching filter to use new split logic (lines 288-307)
-  - Added debug logging for terminal lookup issues (lines 214-232)
+### WebSocket Disconnect on Detach Fix ✅
 
-- `backend/modules/terminal-registry.js`:
-  - **CRITICAL FIX**: Check if tmux session actually ended vs just detached (lines 135-159)
-  - Emit 'closed' event when tmux session ends (not just PTY) (line 151)
-  - Only mark as 'disconnected' if session still exists (line 146)
+**Problem:** When reattaching a terminal in the main window after detaching in popout window, the terminal would spawn in BOTH windows and the main window would hang on "Connecting to terminal..."
 
-**Key Architecture:**
-- `splitTabInfo` map tracks each tab's position (left/middle/right/single)
-- Split panes have `disabled: true` in useSortable - cannot be dragged
-- Drag blocking checks if either source OR target is part of a split
-- Clicking any split tab focuses its corresponding pane (`setFocusedTerminal`)
-- Context menu actions use `contextMenu.terminalId` and `focusedTerminalId`
-- Detach: calls `/api/tmux/detach`, sends WebSocket close, marks `status: 'detached'`
+**Root Cause:**
+- When detaching, we weren't sending WebSocket `disconnect` message to backend
+- Backend's `terminalOwners` map still had popout window as owner
+- When main window reattached and spawned, backend sent `terminal-spawned` to BOTH windows
+- Both windows tried to connect, creating a race condition
 
-## All Issues Resolved ✅
+**Fix Applied:**
+- Added WebSocket disconnect message when detaching (both single and split)
+- Uses `type: 'disconnect'` (not `close` which would kill tmux session)
+- Backend removes window from terminalOwners map
+- Only requesting window receives `terminal-spawned` on reattach
 
-### Split Terminal Implementation (Complete)
-1. ✅ **Split panes locked together** - Cannot be dragged individually (disabled in useSortable)
-2. ✅ **No nested splits** - Cannot split into or from split panes (edge zone blocking)
-3. ✅ **No duplicates** - Dragging split panes is completely blocked
-4. ✅ **Emoji display correct** - Each pane shows its own icon
-5. ✅ **Visual focus states** - Orange border on all split tabs when active, orange name for focused pane
-6. ✅ **Both pane tabs visible** - Fixed rendering filter to show both panes (MAJOR BUG FIX)
-7. ✅ **Tab order matches layout** - Left before right, top before bottom
-8. ✅ **Close cleanup** - Closing a pane properly converts remaining pane to single tab
-9. ✅ **Unsplit on both tabs** - Context menu shows "Unsplit" on either tab in a split
-10. ✅ **Detach cleanup** - Detaching a split pane removes it from split, no escape sequence corruption
+**Files Modified:**
+- `src/SimpleTerminalApp.tsx`:
+  - Lines 1092-1100: Send disconnect for single terminal detach
+  - Lines 984-992: Send disconnect for each pane in split container detach
 
-### Auto-Cleanup on Terminal Exit (Complete)
-11. ✅ **Backend detection** - Detects when tmux session ends vs just detached
-12. ✅ **Frontend cleanup** - Receives terminal-closed WebSocket message and removes tab
-13. ✅ **Split cleanup on exit** - If exited terminal is in split, properly cleans up split structure
-14. ✅ **Fresh state handling** - Uses Zustand store directly to avoid stale closure state
-15. ✅ **Auto-switch terminals** - Automatically switches to next available terminal after exit
+**Disconnect Message:**
+```typescript
+if (terminal.agentId && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+  wsRef.current.send(JSON.stringify({
+    type: 'disconnect',
+    data: { terminalId: terminal.agentId }
+  }))
+}
+```
+
+### Working Directory Display ✅
+
+**Feature:** Tab names and tmux status bar now show current working directory
+
+**Implementation:**
+- Backend API now fetches `#{pane_current_path}` from tmux
+- Shortens home directory to `~` for display
+- Appends to tab names as `@ ~/path`
+- Filters out directory-like window names (e.g., `./script`, `../dir`)
+- Shows in both Tabz tab names AND green tmux status bar
+
+**Files Modified:**
+- `backend/routes/api.js`:
+  - Lines 802-807: Added `#{pane_current_path}` to tmux display-message query
+  - Lines 814-816: Shorten home dir to `~`
+  - Lines 825-827: Filter directory-like window names
+  - Lines 829-846: Build display name with optional directory context
+
+- `.tmux-terminal-tabs.conf`:
+  - Line 65: Updated status-right to show `#{pane_current_path}` alongside Claude status
+
+**Display Examples:**
+- `claude @ ~/projects/terminal-tabs`
+- `bash @ ~/my-repo`
+- `gitui @ ~/projects/foo`
+- `bash (./script) @ ~/scripts` (when running local script)
+
+### Terminal Name Sync Improvements ✅
+
+**Fix:** Prevent directory paths from being used as terminal names
+
+**Changes:**
+- `src/hooks/useTerminalNameSync.ts`:
+  - Removed aggressive debug logging (clean console)
+  - Uses `setTimeout(0)` to prevent React setState warnings during render
+  - Filters generic hostnames and shell names
+
+- `backend/routes/api.js`:
+  - Detects directory-like window names (contains `.`, `/`, `~`)
+  - Prefers window_name only if it's a useful app name (not a directory)
+  - Falls back to spawn label for generic titles
+
+## Testing Guide for Multi-Window Detach/Reattach
+
+### Critical Test Scenarios (NEEDS AUTOMATED TESTS)
+
+**1. Basic Detach → Reattach Flow:**
+```
+Setup:
+  - Main window with 1 terminal
+  - Pop out terminal to new window
+
+Test:
+  1. In popout window: Right-click tab → Detach
+  2. Verify main window shows "📌 Detached (1)" button (no refresh)
+  3. Verify popout window shows grayed tab with 📌 icon
+  4. In main window: Click "📌 Detached (1)" → Select terminal → Reattach
+  5. Verify terminal spawns ONLY in main window (not popout)
+  6. Verify popout window sees detached count → 0 (no refresh)
+  7. Verify terminal is connected and usable in main window
+
+Expected Console Logs:
+  - Popout: "📡 Broadcasting state-changed to other windows (after localStorage sync)"
+  - Popout: "Sending disconnect to backend for agentId: xxxxxxxx"
+  - Main: "🔄 State changed in another window, applying payload..."
+  - Main: "✓ Applied state from broadcast: 1 detached terminals"
+  - Main: "📡 Broadcasting reattach to other windows"
+  - Popout: "✓ Applied state from broadcast: 0 detached terminals"
+```
+
+**2. Split Container Detach → Reattach:**
+```
+Setup:
+  - Create split (TFE + Bash)
+  - Pop out split to new window
+
+Test:
+  1. In popout window: Right-click either split tab → Detach
+  2. Verify both panes detached (split layout preserved)
+  3. Verify main window shows "📌 Detached (1)" for container
+  4. In main window: Reattach split container
+  5. Verify split restores with both panes
+  6. Verify both panes spawn ONLY in main window
+  7. Verify no escape sequence corruption (no `1;2c0;276;0c`)
+
+Expected:
+  - Detach sends disconnect for BOTH panes
+  - Backend removes both from terminalOwners
+  - Reattach spawns both panes in main window only
+  - Split layout preserved (horizontal/vertical)
+```
+
+**3. Close Popout Window (beforeunload handler):**
+```
+Setup:
+  - Pop out terminal to new window
+
+Test:
+  1. Close popout window (X button or Ctrl+W)
+  2. Verify main window shows "📌 Detached (1)" immediately
+  3. Verify terminal can be reattached from main window
+  4. Verify terminal spawns only in main window (not zombie popout)
+
+Expected:
+  - beforeunload marks terminal as detached
+  - Broadcasts state-changed with payload
+  - Main window receives and updates immediately
+```
+
+**4. Bidirectional Sync:**
+```
+Setup:
+  - Main window + Popout window both open
+
+Test:
+  1. Main window: Detach terminal A
+  2. Verify popout sees "📌 Detached (1)"
+  3. Popout window: Detach terminal B
+  4. Verify main sees "📌 Detached (2)"
+  5. Main window: Reattach terminal A
+  6. Verify popout sees "📌 Detached (1)"
+  7. Popout window: Reattach terminal B
+  8. Verify main sees "📌 Detached (0)"
+
+Expected:
+  - Each action broadcasts with payload
+  - Other windows update instantly
+  - No race conditions or stale state
+```
+
+**5. Working Directory Display:**
+```
+Test:
+  1. Spawn bash terminal in ~/projects/myapp
+  2. Verify tab shows "bash @ ~/projects/myapp"
+  3. Verify tmux status bar shows "📁 ~/projects/myapp"
+  4. cd to ~/documents
+  5. Wait 2 seconds (name sync interval)
+  6. Verify tab updates to "bash @ ~/documents"
+  7. Run local script: ./build.sh
+  8. Verify tab shows "bash (./build.sh) @ ~/projects/myapp"
+
+Expected:
+  - Working directory updates every 2 seconds
+  - Home directory shortened to ~
+  - Directory commands shown in parentheses
+```
 
 ## Architecture Notes
 
-**Split container vs panes:**
-- Container terminal: Has `splitLayout.type = 'horizontal' | 'vertical'` - hidden from tab bar
-- Pane terminals: Referenced in `splitLayout.panes[]` array - shown as individual tabs with merged styling
-- Pane terminals DON'T have their own `splitLayout` property
-- Use `splitTabInfo` map to determine if a terminal is part of a split
-- Use `isTerminalPartOfSplit()` helper to check if terminal is a pane (in useDragDrop hook)
+**BroadcastChannel + Zustand State Sync:**
+- **Old approach (broken):** Broadcast notification → receiver reads localStorage → localStorage cache stale → shows 0 detached
+- **New approach (working):** Broadcast full payload → receiver applies directly to Zustand → instant update
 
-**Focus vs Active:**
-- `activeTerminalId` = which tab is selected (container for splits)
-- `focusedTerminalId` = within a split, which pane has keyboard focus
-- For splits: Both panes get `.split-active` class, only focused pane gets `.focused` class
+**Critical Timing:**
+- Sender waits 150ms before broadcasting (allows Zustand persist to write to localStorage)
+- Receiver applies payload immediately (no localStorage read)
+- No race conditions because payload contains authoritative state
 
-**Drag Blocking:**
-- Split panes have `disabled: true` on useSortable hook → cannot be dragged
-- Edge zone (split) operations blocked if source OR target is part of a split
-- Center zone (reorder) operations still work for regular tabs
-- Clear visual feedback: default cursor + 🔒 overlay when blocked
+**Backend Terminal Ownership:**
+- `terminalOwners` Map tracks which WebSocket connections own each terminal
+- When detaching: send `disconnect` message to remove from map
+- When spawning: backend only sends `terminal-spawned` to registered owners
+- Prevents multiple windows from receiving spawn events
 
-**Auto-Cleanup on Exit:**
-- Backend detects when PTY process exits
-- For tmux terminals: checks if session still exists (detached vs ended)
-- For non-tmux terminals: immediately emits 'closed' event
-- Frontend receives 'terminal-closed' WebSocket message
-- Automatically removes tab and cleans up split if needed
-- Switches to next available terminal or closes empty window
+**Window Closing Detection:**
+- `beforeunload` event handler marks terminals as detached
+- Only fires for non-main windows (currentWindowId !== 'main')
+- Broadcasts state to other windows before closing
+- Allows seamless reattach from other windows
 
-## Testing Guide
+## Known Edge Cases to Test
 
-To verify split tabs work correctly:
+1. **Rapid detach/reattach cycles** - Verify no duplicate broadcasts or state corruption
+2. **Multiple windows detaching simultaneously** - Verify last-write-wins and no lost updates
+3. **Network interruption during broadcast** - Verify graceful degradation (localStorage still works)
+4. **Closing window mid-detach** - Verify broadcast completes before window closes
+5. **Reattaching while other window still connecting** - Verify backend ownership prevents conflicts
 
-1. **Create a split**: Drag a regular tab to the edge of another regular tab
-   - ✅ Both pane tabs should appear in tab bar with merged styling
-   - ✅ Left/right splits: left tab appears first
-   - ✅ Top/bottom splits: top tab appears first
+## Files Modified Summary
 
-2. **Verify locked state**: Try dragging a split pane tab
-   - ✅ Should not move (default cursor, no drag)
+### Frontend:
+- `src/SimpleTerminalApp.tsx` - BroadcastChannel receiver + all broadcast senders (6 locations)
+- `src/hooks/useTerminalNameSync.ts` - Removed debug logs, added setTimeout(0) for React warnings
+- `.tmux-terminal-tabs.conf` - Added `#{pane_current_path}` to status-right
 
-3. **Verify no nesting**: Try dragging regular tab to edge of split pane
-   - ✅ Shows 🔒 "Split panes are locked" overlay
+### Backend:
+- `backend/routes/api.js` - Added working directory to tmux info API, filter directory names
 
-4. **Verify visual states**:
-   - ✅ Click either pane → both tabs get orange border
-   - ✅ Focus switches between panes → focused tab name turns orange
-   - ✅ Each pane tab shows its own emoji (not duplicated)
+### Key Changes:
+- Broadcast messages now include full state payload
+- Receiver applies state directly (no localStorage read)
+- Detach sends WebSocket disconnect message
+- Working directory shown in tabs and tmux status bar
 
-5. **Verify close cleanup**: Click X on either pane tab
-   - ✅ Remaining pane converts back to regular single tab
-   - ✅ No orphaned containers
+## Next Session TODO
 
-6. **Verify unsplit**: Right-click either tab → "Unsplit"
-   - ✅ Both tabs show "Unsplit" option
-   - ✅ Converts clicked pane to regular tab
+**Write comprehensive integration tests for:**
+1. Cross-window detach/reattach flow
+2. Split container detach/reattach
+3. Window closing auto-detach
+4. Bidirectional state sync (multiple windows)
+5. Working directory display and updates
+6. Edge cases listed above
 
-7. **Verify auto-cleanup**: Type `exit` or press Ctrl+D in a terminal
-   - ✅ Tab automatically closes
-   - ✅ If in a split, remaining pane converts to regular tab
-   - ✅ Switches to next available terminal
-   - ✅ Works for both tmux and non-tmux terminals
+**Test framework considerations:**
+- Need multi-window/tab testing capability
+- Mock BroadcastChannel or use real browser contexts
+- Mock WebSocket for backend interaction
+- Test localStorage sync timing
+- Verify Zustand state updates across windows
 
-8. **Verify detach from split**: Right-click split pane → "Detach"
-   - ✅ Pane detaches cleanly without escape sequences
-   - ✅ Remaining pane converts to regular tab
-   - ✅ No `1;2c0;276;0c` corruption in terminals
+**Recommended tools:**
+- Playwright (multi-tab/window support)
+- Jest + @testing-library/react (unit tests for hooks)
+- Mock Service Worker (WebSocket mocking)

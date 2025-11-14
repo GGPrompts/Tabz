@@ -799,17 +799,24 @@ router.get('/tmux/info/:name', asyncHandler(async (req, res) => {
       });
     }
 
-    // Get window name, pane title, window count, and pane count in one call
-    // Format: "window_name|pane_title|window_count|active_window_index|pane_count"
+    // Get window name, pane title, window count, pane count, and current working directory
+    // Format: "window_name|pane_title|session_windows|window_index|pane_count|pane_current_path"
     const info = execSync(
-      `tmux display-message -t "${name}" -p "#{window_name}|#{pane_title}|#{session_windows}|#{window_index}|#{window_panes}"`,
+      `tmux display-message -t "${name}" -p "#{window_name}|#{pane_title}|#{session_windows}|#{window_index}|#{window_panes}|#{pane_current_path}"`,
       { encoding: 'utf-8' }
     ).trim();
 
-    const [windowName, paneTitle, windowCountStr, activeWindowStr, paneCountStr] = info.split('|');
+    const [windowName, paneTitle, windowCountStr, activeWindowStr, paneCountStr, currentPath] = info.split('|');
     const windowCount = parseInt(windowCountStr, 10);
     const activeWindow = parseInt(activeWindowStr, 10);
     const paneCount = parseInt(paneCountStr, 10);
+
+    // Shorten path for display (replace home directory with ~)
+    const homeDir = require('os').homedir();
+    const displayPath = currentPath ? currentPath.replace(homeDir, '~') : null;
+
+    // Debug: Log raw tmux values
+    console.log(`[API] Tmux info for ${name}:`, { windowName, paneTitle, windowCount, paneCount, currentPath: displayPath });
 
     // Prefer window_name when it differs from pane_title and is not generic
     // This makes tab names update dynamically for bash terminals running TUI apps
@@ -822,14 +829,41 @@ router.get('/tmux/info/:name', asyncHandler(async (req, res) => {
     const hostnamePattern = /^(localhost|[\w]+-?(desktop|laptop)|ip-[\d-]+)$/i
     const paneTitleIsHostname = hostnamePattern.test(paneTitle)
 
-    // Prefer window_name if:
-    // 1. pane_title is a hostname (MattDesktop) - use window_name even if it's "bash"
-    // 2. window_name differs from pane_title and isn't "bash"
-    const useWindowName = windowName && (
-      paneTitleIsHostname ||
-      (windowName !== paneTitle && windowName !== 'bash')
-    )
-    const displayName = useWindowName ? windowName : (paneTitle || 'bash')
+    // Check if window_name looks like a directory path (contains ., /, ~, or ..)
+    // Examples: "./classics", "../go", "~/projects", "/home/user"
+    const windowNameIsDirectory = windowName && /[.\/~]/.test(windowName)
+
+    // Determine base name (app or useful title)
+    let baseName
+    if (paneTitleIsHostname || paneTitle === 'bash') {
+      // If pane_title is generic (hostname or "bash"), use window_name if it's an app
+      baseName = windowName && !windowNameIsDirectory ? windowName : 'bash'
+    } else {
+      // Otherwise use pane_title (e.g., "Editing: file.tsx" from Claude Code)
+      baseName = paneTitle
+    }
+
+    // Build display name with optional command and working directory
+    // Examples:
+    //   - "bash @ ~/projects/terminal-tabs"
+    //   - "gitui @ ~/my-repo"
+    //   - "✳ Claude Auto Status @ ~/projects/terminal-tabs"
+    //   - "bash (./tmuxplexer) @ ~/tmuxplexer"
+    let displayName = baseName
+
+    // Append command if window_name is a directory-like command (./app, ../script)
+    if (windowNameIsDirectory) {
+      displayName = `${displayName} (${windowName})`
+    }
+
+    // Append working directory if available and different from command
+    // Skip if displayPath already appears in the name (avoid "bash (./foo) @ ./foo")
+    if (displayPath && !displayName.includes(displayPath)) {
+      displayName = `${displayName} @ ${displayPath}`
+    }
+
+    // Debug: Log final display name
+    console.log(`[API] Display name for ${name}: "${displayName}" (baseName="${baseName}", cmd=${windowNameIsDirectory ? windowName : 'none'}, path=${displayPath})`);
 
     res.json({
       success: true,

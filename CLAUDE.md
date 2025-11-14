@@ -764,3 +764,33 @@ tmux ls | grep "tt-bash"
 - ✅ Debug race conditions by capturing exact timing
 - ✅ See both browser + backend logs in one capture
 
+### Sending Prompts to Other Claude Sessions (Tmux Workflow)
+
+**When working across multiple Claude Code sessions in tmux**, you can send prompts directly to other sessions using `tmux send-keys`:
+
+**Critical: Use 0.1s delay to prevent submission issues**
+
+```bash
+# Send prompt to another Claude session
+TARGET_SESSION="31"  # or any tmux session number
+
+# Send the prompt text (literal mode preserves formatting)
+tmux send-keys -t "$TARGET_SESSION" -l "Your prompt text here..."
+
+# CRITICAL: 0.1s delay prevents newline from triggering submit before prompt loads
+sleep 0.1
+
+# Submit the prompt
+tmux send-keys -t "$TARGET_SESSION" C-m
+```
+
+**Why the delay matters:**
+- Without the delay, Claude may interpret the final newline as a submission before the full prompt is loaded
+- This causes only a blank line to be sent instead of your full prompt
+- 0.1 seconds is sufficient for the terminal to process the input buffer
+
+**Use cases:**
+- Delegating test fixes to another Claude session while you continue other work
+- Sending complex refactoring prompts to a dedicated session
+- Coordinating work across multiple parallel Claude sessions
+

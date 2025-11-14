@@ -547,14 +547,37 @@ function SimpleTerminalApp() {
         console.log('[SimpleTerminalApp] 🔄 Received reload-all message from another window')
         window.location.reload()
       } else if (event.data.type === 'state-changed') {
-        // Force Zustand to re-read from localStorage
-        console.log('[SimpleTerminalApp] 🔄 State changed in another window, syncing...')
-        const storageEvent = new StorageEvent('storage', {
-          key: 'simple-terminal-storage',
-          newValue: localStorage.getItem('simple-terminal-storage'),
-          url: window.location.href,
-        })
-        window.dispatchEvent(storageEvent)
+        // Apply state directly from broadcast payload (Codex fix)
+        // Avoids stale localStorage cache issue in Chrome
+        console.log('[SimpleTerminalApp] 🔄 State changed in another window, applying payload...')
+
+        // Ignore messages from our own window
+        if (event.data.from === currentWindowId) {
+          console.log('[SimpleTerminalApp] ⏭️ Ignoring broadcast from self')
+          return
+        }
+
+        const payload = event.data.payload
+        if (payload) {
+          try {
+            const parsed = JSON.parse(payload)
+            const next = parsed?.state
+            if (next && next.terminals) {
+              // Apply state directly to store (bypasses localStorage cache)
+              useSimpleTerminalStore.setState({
+                terminals: next.terminals,
+                activeTerminalId: next.activeTerminalId,
+                focusedTerminalId: next.focusedTerminalId
+              })
+
+              // Debug: Check detached terminals after sync
+              const detached = next.terminals.filter((t: any) => t.status === 'detached')
+              console.log('[SimpleTerminalApp] ✓ Applied state from broadcast:', detached.length, 'detached terminals')
+            }
+          } catch (error) {
+            console.error('[SimpleTerminalApp] Failed to parse broadcast payload:', error)
+          }
+        }
       }
     }
 
@@ -618,6 +641,54 @@ function SimpleTerminalApp() {
       console.warn(`[SimpleTerminalApp] Terminal ${activeFromUrl} not found yet, waiting for localStorage sync...`)
     }
   }, [storedTerminals, currentWindowId]) // Re-run when terminals change (not just length!)
+
+  // Handle window closing - mark terminals as detached when popped-out window closes
+  useEffect(() => {
+    const handleBeforeUnload = async () => {
+      // Only mark terminals as detached if this is NOT the main window
+      if (currentWindowId === 'main') return
+
+      console.log(`[SimpleTerminalApp] Window ${currentWindowId} closing, marking terminals as detached`)
+
+      // Find all terminals belonging to this window
+      const windowTerminals = storedTerminals.filter(t =>
+        (t.windowId || 'main') === currentWindowId &&
+        t.status === 'active' // Only detach active terminals
+      )
+
+      if (windowTerminals.length === 0) return
+
+      console.log(`[SimpleTerminalApp] Detaching ${windowTerminals.length} terminals:`, windowTerminals.map(t => t.name))
+
+      // Mark each terminal as detached
+      windowTerminals.forEach(terminal => {
+        updateTerminal(terminal.id, {
+          status: 'detached',
+          agentId: undefined,
+          windowId: undefined,
+        })
+      })
+
+      // Notify other windows via broadcast channel
+      // CRITICAL: Wait 150ms for Zustand persist middleware to write to localStorage
+      setTimeout(() => {
+        if (broadcastChannelRef.current) {
+          const payload = localStorage.getItem('simple-terminal-storage')
+          broadcastChannelRef.current.postMessage({
+            type: 'state-changed',
+            payload,
+            from: currentWindowId,
+            at: Date.now()
+          })
+        }
+      }, 150)
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [currentWindowId, storedTerminals, updateTerminal])
 
   // Load spawn options from JSON file
   const loadSpawnOptions = () => {
@@ -910,8 +981,15 @@ function SimpleTerminalApp() {
             method: 'POST',
           })
 
-          // DON'T close PTY - let it disconnect naturally
-          // Sending 'close' would kill the tmux session!
+          // Send disconnect to backend to remove this window from terminalOwners
+          // CRITICAL: Use 'disconnect' not 'close' - close would kill the tmux session!
+          if (paneTerminal.agentId && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            console.log(`[SimpleTerminalApp] Sending disconnect to backend for pane agentId: ${paneTerminal.agentId.slice(-8)}`)
+            wsRef.current.send(JSON.stringify({
+              type: 'disconnect',
+              data: { terminalId: paneTerminal.agentId }
+            }))
+          }
 
           // Clear from processedAgentIds so it can reconnect
           if (paneTerminal.agentId) {
@@ -935,12 +1013,22 @@ function SimpleTerminalApp() {
         windowId: undefined, // Clear window assignment
       })
 
-      // Notify other windows that state changed
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.postMessage({ type: 'state-changed' })
-      }
-
       console.log(`[SimpleTerminalApp] ✓ Detached split container with preserved layout`)
+
+      // Notify other windows that state changed
+      // CRITICAL: Wait 150ms for Zustand persist middleware to write to localStorage
+      setTimeout(() => {
+        if (broadcastChannelRef.current) {
+          console.log('[SimpleTerminalApp] 📡 Broadcasting state-changed to other windows (after localStorage sync)')
+          const payload = localStorage.getItem('simple-terminal-storage')
+          broadcastChannelRef.current.postMessage({
+            type: 'state-changed',
+            payload,
+            from: currentWindowId,
+            at: Date.now()
+          })
+        }
+      }, 150)
       setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
       return
     }
@@ -1008,9 +1096,15 @@ function SimpleTerminalApp() {
       if (result.success) {
         console.log(`[SimpleTerminalApp] ✓ Detached from session: ${terminal.sessionName}`)
 
-        // DON'T close PTY via WebSocket - let it disconnect naturally
-        // Sending 'close' would kill the tmux session!
-        // The backend's /api/tmux/detach already handled detaching the client safely
+        // Send disconnect to backend to remove this window from terminalOwners
+        // CRITICAL: Use 'disconnect' not 'close' - close would kill the tmux session!
+        if (terminal.agentId && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          console.log(`[SimpleTerminalApp] Sending disconnect to backend for agentId: ${terminal.agentId.slice(-8)}`)
+          wsRef.current.send(JSON.stringify({
+            type: 'disconnect',
+            data: { terminalId: terminal.agentId }
+          }))
+        }
 
         // Clear from processedAgentIds so it can reconnect
         if (terminal.agentId) {
@@ -1026,9 +1120,22 @@ function SimpleTerminalApp() {
         })
 
         // Notify other windows that state changed
-        if (broadcastChannelRef.current) {
-          broadcastChannelRef.current.postMessage({ type: 'state-changed' })
-        }
+        // CRITICAL: Wait 150ms for Zustand persist middleware to write to localStorage
+        // (persist has 100ms debounce, we add 50ms buffer)
+        setTimeout(() => {
+          if (broadcastChannelRef.current) {
+            console.log('[SimpleTerminalApp] 📡 Broadcasting state-changed to other windows (after localStorage sync)')
+            const payload = localStorage.getItem('simple-terminal-storage')
+            broadcastChannelRef.current.postMessage({
+              type: 'state-changed',
+              payload,
+              from: currentWindowId,
+              at: Date.now()
+            })
+          } else {
+            console.warn('[SimpleTerminalApp] ⚠️ BroadcastChannel not available, cannot notify other windows')
+          }
+        }, 150)
       } else {
         console.error(`[SimpleTerminalApp] Failed to detach:`, result.error)
       }
@@ -1105,12 +1212,22 @@ function SimpleTerminalApp() {
       // Set as active after all panes reconnected
       setActiveTerminal(terminalId)
 
-      // Notify other windows that state changed
-      if (broadcastChannelRef.current) {
-        broadcastChannelRef.current.postMessage({ type: 'state-changed' })
-      }
-
       console.log(`[SimpleTerminalApp] ✓ Re-attached split container with restored layout`)
+
+      // Notify other windows that state changed
+      // CRITICAL: Wait 150ms for Zustand persist middleware to write to localStorage
+      setTimeout(() => {
+        if (broadcastChannelRef.current) {
+          console.log('[SimpleTerminalApp] 📡 Broadcasting reattach to other windows')
+          const payload = localStorage.getItem('simple-terminal-storage')
+          broadcastChannelRef.current.postMessage({
+            type: 'state-changed',
+            payload,
+            from: currentWindowId,
+            at: Date.now()
+          })
+        }
+      }, 150)
       return
     }
 
@@ -1148,9 +1265,19 @@ function SimpleTerminalApp() {
     setActiveTerminal(terminalId)
 
     // Notify other windows that state changed
-    if (broadcastChannelRef.current) {
-      broadcastChannelRef.current.postMessage({ type: 'state-changed' })
-    }
+    // CRITICAL: Wait 150ms for Zustand persist middleware to write to localStorage
+    setTimeout(() => {
+      if (broadcastChannelRef.current) {
+        console.log('[SimpleTerminalApp] 📡 Broadcasting reattach to other windows')
+        const payload = localStorage.getItem('simple-terminal-storage')
+        broadcastChannelRef.current.postMessage({
+          type: 'state-changed',
+          payload,
+          from: currentWindowId,
+          at: Date.now()
+        })
+      }
+    }, 150)
   }
 
   const handleCloseTerminal = (terminalId: string) => {

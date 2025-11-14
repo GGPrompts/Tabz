@@ -105,7 +105,6 @@
       "label": "Claude Code",
       "command": "claude",
       "terminalType": "claude-code",
-      "workingDir": "~/projects",
       "icon": "🤖",
       "description": "Claude Code (interactive mode)",
       "defaultTheme": "amber",
@@ -221,6 +220,14 @@
       "defaultFontSize": 16,
       "defaultFontFamily": "monospace",
       "defaultBackground": "dark-neutral"
+    },
+    {
+      "label": "TKan",
+      "command": "go run .",
+      "terminalType": "tui-tool",
+      "icon": "💻",
+      "description": "tui tool kanban board with gh projects backend",
+      "workingDir": "~/projects/tkan"
     }
   ]
 }

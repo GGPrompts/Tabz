@@ -67,8 +67,11 @@ export function useTerminalNameSync(
 
               // Only update if name actually changed to avoid unnecessary re-renders
               if (newName !== terminal.name) {
-                console.log(`[NameSync] Updating ${terminal.id.slice(-8)}: "${terminal.name}" → "${newName}"`)
-                updateTerminal(terminal.id, { name: newName })
+                // Use setTimeout to ensure update happens after current render cycle completes
+                // This prevents "Cannot update component while rendering" React warnings
+                setTimeout(() => {
+                  updateTerminal(terminal.id, { name: newName })
+                }, 0)
               }
             }
           } catch (error) {
