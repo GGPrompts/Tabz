@@ -787,6 +787,83 @@ if (shouldSendInitialResize) {
 
 ---
 
+### Lesson: Tmux Splits Require Disabled EOL Conversion (Nov 14, 2025)
+
+**Problem:** Tmux split panes corrupted each other - text from one pane bled into the other, split divider misaligned.
+
+**What Happened:**
+1. User spawns TFE terminal → works fine
+2. User splits it horizontally/vertically → creates React split with two xterm instances
+3. Both xterm instances connect to same tmux session (different panes)
+4. Output corruption: bash terminal's newlines corrupt TFE's rendering
+5. Split divider appears 1 space to the right on first 2 rows only
+
+**Root Cause:** xterm.js EOL (End-of-Line) conversion was enabled for all terminals:
+
+```typescript
+// WRONG - Causes tmux corruption:
+const xtermOptions = {
+  convertEol: true,  // Converts \n to \r\n for ALL terminals
+}
+```
+
+**Why This Breaks Tmux Splits:**
+- Tmux sends properly formatted terminal sequences with `\n` (line feed)
+- xterm with `convertEol: true` converts `\n` → `\r\n` (carriage return + line feed)
+- **Each xterm instance** in the split converts the SAME tmux output independently
+- Different conversion = different cursor positioning = panes corrupt each other
+- The split divider is rendered by tmux, but xterm's extra `\r` shifts it
+
+**Solution:** Conditionally disable EOL conversion for tmux sessions:
+
+```typescript
+// CORRECT - Let tmux manage its own line endings:
+const xtermOptions = {
+  // Disable EOL conversion for tmux - it manages terminal sequences
+  convertEol: !isTmuxSession,  // Only convert for regular shells
+  // Ensure UNIX-style line endings
+  windowsMode: false,
+}
+```
+
+**Why This Works:**
+- **Tmux sessions**: `convertEol: false` → xterm displays raw PTY output without modification
+- **Regular shells**: `convertEol: true` → xterm converts for proper display (Windows compatibility)
+- Both xterm instances now handle tmux output identically → no corruption
+
+**Key Insights:**
+- Tmux is a terminal multiplexer - it manages its own terminal protocol
+- When multiple xterm instances share one tmux session, they must handle output identically
+- EOL conversion must be disabled to prevent double-processing of tmux sequences
+- `windowsMode: false` ensures UNIX-style line endings (`\n` only, not `\r\n`)
+
+**Debugging This Issue:**
+```bash
+# Symptoms:
+# - Text from bash pane appears in TFE pane
+# - Split divider offset on first few rows only
+# - Newlines cause visual corruption between panes
+
+# Check browser console for dimension mismatch:
+[TmuxDimensions] Dimension mismatch for session tt-tfe-xxx!
+  Current: 391x58 (full container width - WRONG!)
+  Reference: 80x24 (correct tmux split size)
+```
+
+**Prevention Checklist:**
+- [ ] Are you creating split terminals that share a tmux session?
+- [ ] Do both xterm instances have identical EOL handling?
+- [ ] Is `convertEol` conditional on `isTmuxSession`?
+- [ ] Is `windowsMode: false` for tmux sessions?
+
+**Files:**
+- `src/components/Terminal.tsx:240-245` - Conditional EOL conversion
+- `src/hooks/useTmuxSessionDimensions.ts` - Dimension tracking (prevents font mismatches)
+
+**Related Issues:** Font normalization (both panes must use same font to get matching dimensions)
+
+---
+
 ### Lesson: Backend Debouncing Prevents Dimension Thrashing (Nov 12, 2025)
 
 **Problem:** Multiple resize events with slightly different dimensions (310 vs 308) hitting same PTY.

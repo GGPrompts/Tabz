@@ -25,6 +25,7 @@ import { useSettingsStore } from "../stores/useSettingsStore";
 import { useTerminalTheme } from "../hooks/useTerminalTheme";
 import { useTerminalResize } from "../hooks/useTerminalResize";
 import { useTerminalFont } from "../hooks/useTerminalFont";
+import { useTmuxSessionDimensions } from "../hooks/useTmuxSessionDimensions";
 
 interface TerminalProps {
   agent: Agent;
@@ -79,8 +80,9 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
     const [opacity, setOpacity] = useState(initialOpacity);
     const themeButtonRef = useRef<HTMLButtonElement>(null);
 
-    // Get tmux setting to conditionally enable scrollback/scrollbar
-    const useTmux = useSettingsStore((state) => state.useTmux);
+    // Determine if this terminal is attached to a tmux session (sessionName if reattached, global toggle otherwise)
+    const shouldUseTmux = useSettingsStore((state) => state.useTmux);
+    const isTmuxSession = !!agent.sessionName || shouldUseTmux;
 
     const terminalInfo = TERMINAL_TYPES.find(
       (t) => t.value === agent.terminalType,
@@ -159,7 +161,8 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       agent.id,
       agent.name,
       debouncedResize,
-      mountKey
+      mountKey,
+      isTmuxSession
     );
     const { updateFontSize, updateFontFamily } = useTerminalFont(
       xtermRef,
@@ -167,6 +170,10 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       agent.id,
       initialFontSize,
       debouncedResize
+    );
+    const { getReference, checkDimensions, registerDimensions } = useTmuxSessionDimensions(
+      agent.sessionName,
+      isTmuxSession
     );
 
     useEffect(() => {
@@ -205,8 +212,20 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       } : getThemeForTerminalType(currentTheme);
 
       // Get font size from settings store or default to 14
-      const savedFontSize = initialFontSize || useSettingsStore.getState().terminalDefaultFontSize;
-      const savedFontFamily = initialFontFamily || useSettingsStore.getState().terminalDefaultFontFamily;
+      let savedFontSize = initialFontSize || useSettingsStore.getState().terminalDefaultFontSize;
+      let savedFontFamily = initialFontFamily || useSettingsStore.getState().terminalDefaultFontFamily;
+
+      // For tmux sessions, check if we need to normalize font to match other panes
+      // This MUST happen before creating xterm instance to prevent dimension mismatch
+      if (isTmuxSession && agent.sessionName) {
+        const reference = getReference();
+        if (reference) {
+          console.log(`[Terminal] Pre-init font normalization for tmux session ${agent.sessionName}`);
+          console.log(`  Will use reference font: ${reference.fontFamily} ${reference.fontSize}px (instead of ${savedFontFamily} ${savedFontSize}px)`);
+          savedFontFamily = reference.fontFamily;
+          savedFontSize = reference.fontSize;
+        }
+      }
 
       // Special settings for TUI tools to improve rendering
       const xtermOptions: any = {
@@ -217,8 +236,12 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
         // Disable local echo for Docker containers - let the PTY handle it
         cursorStyle: "block",
         // Conditional scrollback: tmux handles it (0), non-tmux needs it (10000)
-        scrollback: useTmux ? 0 : 10000,
-        convertEol: true,
+        scrollback: isTmuxSession ? 0 : 10000,
+        // CRITICAL for tmux: Disable EOL conversion - tmux manages its own terminal sequences
+        // convertEol: true would convert \n to \r\n, breaking tmux split pane rendering
+        convertEol: !isTmuxSession,
+        // Ensure UNIX-style line endings for tmux sessions
+        windowsMode: false,
       };
 
       // Additional optimizations for TUI tools
@@ -226,7 +249,6 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
         // Keep bold text rendering for better visibility
         xtermOptions.drawBoldTextInBrightColors = true;
         xtermOptions.minimumContrastRatio = 1; // Disable contrast adjustment
-        xtermOptions.windowsMode = false; // Ensure UNIX-style line endings
         // Ensure proper rendering of box-drawing characters
         xtermOptions.rendererType = 'canvas'; // Force canvas renderer for better box drawing
       }
@@ -283,11 +305,15 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       xterm.attachCustomKeyEventHandler((event) => {
         // Shift+Ctrl+C for copy (standard terminal emulator shortcut)
         if (event.ctrlKey && event.shiftKey && event.key === "C" && xterm.hasSelection()) {
+          event.preventDefault();
+          event.stopPropagation();
           document.execCommand("copy");
           return false;
         }
         // Shift+Ctrl+V for paste (standard terminal emulator shortcut)
         if (event.ctrlKey && event.shiftKey && event.key === "V") {
+          event.preventDefault();
+          event.stopPropagation();
           navigator.clipboard.readText().then((text) => {
             xterm.paste(text);
           });
@@ -317,6 +343,26 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       };
 
       attemptOpen();
+
+      // Block browser's native paste handler to prevent duplicate pastes
+      // Our custom key handler (above) already handles Ctrl+Shift+V properly
+      const handlePaste = (e: ClipboardEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+      };
+
+      // Add paste blocker to both container and xterm textarea
+      if (terminalRef.current) {
+        terminalRef.current.addEventListener('paste', handlePaste, { capture: true });
+      }
+
+      // Also block on the xterm helper textarea specifically
+      setTimeout(() => {
+        const textarea = terminalRef.current?.querySelector('.xterm-helper-textarea');
+        if (textarea) {
+          textarea.addEventListener('paste', handlePaste, { capture: true });
+        }
+      }, 100);
 
       // Disable Windows autofill/autocomplete/password manager on the xterm helper textarea
       setTimeout(() => {
@@ -372,7 +418,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
             // but tmux has split that space (pane1: 99 cols, pane2: 100 cols)
             // Sending 200 cols corrupts both panes. Tmux manages its own pane dimensions.
             // ONLY send resize on actual browser window resize (handled by useTerminalResize)
-            if (!useTmux && fitAddon && xterm) {
+            if (!isTmuxSession && fitAddon && xterm) {
               fitAddon.fit();
               // Send current dimensions to backend to ensure viewport is correct
               if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -402,7 +448,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       fitAddonRef.current = fitAddon;
 
       // Delay initial fit and send dimensions to backend
-      // Using longer delay to ensure terminal is fully initialized for proper mouse support and scrollback
+      // Use short delay to get dimensions to TUI apps (like TFE) ASAP to prevent wrong-width rendering
       setTimeout(() => {
         try {
           // Ensure terminal is opened before fitting
@@ -431,6 +477,13 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
               fitAddon.fit();
 
               console.log(`[Terminal] Initial fit complete for ${agent.name}: ${xterm.cols}x${xterm.rows}, container: ${containerWidth}x${containerHeight}`);
+
+              // For tmux sessions, register this pane's dimensions as reference (if first pane)
+              if (isTmuxSession && agent.sessionName) {
+                const currentFont = xterm.options.fontFamily || 'monospace';
+                const currentSize = xterm.options.fontSize || 14;
+                registerDimensions(xterm.rows, xterm.cols, currentFont, currentSize);
+              }
 
               // Send initial dimensions to backend (with retry if WebSocket not ready)
               const sendResize = (retries = 0) => {
@@ -461,7 +514,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
             console.debug('[Terminal] Initial fit error (normal during initialization):', err);
           }
         }
-      }, 800); // Consistent delay for proper terminal initialization
+      }, 150); // Short delay - TUI apps need dimensions ASAP to avoid rendering at wrong width
 
       // Handle terminal input - send directly to backend via WebSocket
       // NOTE: We attach this immediately, but filter out data during initialization
@@ -493,14 +546,52 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
         isInitializing = false;
       }, 1000); // 1 second should be enough for xterm.js queries to complete
 
+      // Listen for split container resize events
+      const handleContainerResize = (e: Event) => {
+        const customEvent = e as CustomEvent<{ terminalIds?: string[] }>;
+        const terminalIds = customEvent.detail?.terminalIds;
+
+        // Only refit if this terminal is in the list (or no list specified = refit all)
+        if (!terminalIds || terminalIds.includes(agent.id)) {
+          if (fitAddonRef.current && xtermRef.current) {
+            fitAddonRef.current.fit();
+
+            // Send resize to backend for non-tmux terminals
+            if (!isTmuxSession && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              wsRef.current.send(
+                JSON.stringify({
+                  type: "resize",
+                  terminalId: agent.id,
+                  cols: xtermRef.current.cols,
+                  rows: xtermRef.current.rows,
+                }),
+              );
+            }
+
+            console.log(`[Terminal] Refitted ${agent.name} after container resize: ${xtermRef.current.cols}x${xtermRef.current.rows}`);
+          }
+        }
+      };
+
+      window.addEventListener('terminal-container-resized', handleContainerResize);
+
       // (Removed banner message per user request to avoid flicker during resize)
 
       return () => {
+        // Remove container resize listener
+        window.removeEventListener('terminal-container-resized', handleContainerResize);
         // Remove focus event listeners
         if (terminalRef.current) {
           terminalRef.current.removeEventListener("mousedown", focusHandler);
           terminalRef.current.removeEventListener("click", focusHandler);
           terminalRef.current.removeEventListener("touchstart", focusHandler);
+          terminalRef.current.removeEventListener("paste", handlePaste, { capture: true });
+
+          // Also remove from xterm textarea
+          const textarea = terminalRef.current.querySelector('.xterm-helper-textarea');
+          if (textarea) {
+            textarea.removeEventListener('paste', handlePaste, { capture: true });
+          }
         }
 
         // Dispose of the data handler
@@ -726,7 +817,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
 
     return (
       <div
-        className={`terminal-container glass terminal-${agent.terminalType} ${themeClassName} ${embedded ? "embedded" : ""} ${isMaximized ? "maximized" : ""} ${isTUITool ? "terminal-tui-tool" : ""} ${isPyRadio ? "terminal-pyradio" : ""} ${useTmux ? "terminal-tmux" : "terminal-no-tmux"}`}
+        className={`terminal-container glass terminal-${agent.terminalType} ${themeClassName} ${embedded ? "embedded" : ""} ${isMaximized ? "maximized" : ""} ${isTUITool ? "terminal-tui-tool" : ""} ${isPyRadio ? "terminal-pyradio" : ""} ${isTmuxSession ? "terminal-tmux" : "terminal-no-tmux"}`}
         style={
           {
             borderColor:
@@ -853,10 +944,12 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
             </div>
           </div>
         )}
-        <div
-          className="terminal-body"
-          ref={terminalRef}
-        />
+        <div className="terminal-body-wrapper">
+          <div
+            className="terminal-body"
+            ref={terminalRef}
+          />
+        </div>
         {!embedded && (
           <div className="terminal-status">
             <span className={`status-indicator ${agent.status}`} />
