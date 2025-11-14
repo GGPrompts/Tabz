@@ -1159,26 +1159,36 @@
 
 /* Terminal Display */
 .terminal-display {
+  --terminal-header-offset: 47px;
   flex: 1;
   display: flex;
   flex-direction: column;
   background: #1a1b26;
   overflow: hidden;
   position: relative;
+  padding-top: var(--terminal-header-offset); /* ensure content sits below fixed header */
 }
 
 .terminal-display > * {
   width: 100%;
-  height: 100%;
+  /* Use calc to fill remaining space after header padding */
+  height: calc(100% - var(--terminal-header-offset));
+  flex: 1;
+}
+
+/* Remove padding when header is hidden so terminals reclaim the space */
+.simple-terminal-app.header-hidden .terminal-display {
+  --terminal-header-offset: 0px;
+  padding-top: 0;
 }
 
 /* Terminal Wrapper - for keeping all terminals rendered */
 .terminal-wrapper {
   position: absolute;
-  top: 0;
+  top: var(--terminal-header-offset, 0px);
   left: 0;
   width: 100%;
-  height: 100%;
+  height: calc(100% - var(--terminal-header-offset, 0px));
   /* Hidden terminals still render but are invisible */
 }
 
