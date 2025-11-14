@@ -113,6 +113,7 @@ export function useWebSocketManager(
   }, [connectionStatus])
 
   // Clean up agents for terminals that become detached (via broadcast from other windows)
+  // OPTIMIZED: Only run when detachment status actually changes, not on every terminal update
   useEffect(() => {
     const detachedTerminals = storedTerminals.filter(t => t.status === 'detached' && t.agentId)
 
@@ -137,7 +138,13 @@ export function useWebSocketManager(
         updateTerminal(terminal.id, { agentId: undefined })
       }
     })
-  }, [storedTerminals, webSocketAgents])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    // Only depend on terminal status changes, not all properties
+    // Create stable reference that only changes when status/agentId changes
+    storedTerminals.map(t => `${t.id}:${t.status}:${t.agentId || ''}`).join(','),
+    webSocketAgents.length // Only care about agent count, not their properties
+  ])
 
   /**
    * Handle WebSocket messages - routes messages to appropriate handlers

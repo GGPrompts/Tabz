@@ -1,5 +1,11 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { broadcastMiddleware } from "./broadcastMiddleware";
+
+// Get current window ID from URL params (for multi-window support)
+// This must be done outside the store creation to avoid re-initialization
+const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+const currentWindowId = urlParams.get('window') || 'main';
 
 export interface SplitPane {
   id: string;
@@ -59,55 +65,57 @@ interface SimpleTerminalState {
 
 export const useSimpleTerminalStore = create<SimpleTerminalState>()(
   persist(
-    (set) => ({
-      terminals: [],
-      activeTerminalId: null,
-      focusedTerminalId: null,
+    broadcastMiddleware<SimpleTerminalState>(currentWindowId)(
+      (set) => ({
+        terminals: [],
+        activeTerminalId: null,
+        focusedTerminalId: null,
 
-      addTerminal: (terminal) =>
-        set((state) => {
-          // Only set as active if we don't have an active terminal yet
-          // This prevents cross-window interference when spawning from other windows
-          const shouldSetActive = !state.activeTerminalId
-          return {
-            terminals: [...state.terminals, terminal],
-            activeTerminalId: shouldSetActive ? terminal.id : state.activeTerminalId,
-          }
-        }),
+        addTerminal: (terminal) =>
+          set((state) => {
+            // Only set as active if we don't have an active terminal yet
+            // This prevents cross-window interference when spawning from other windows
+            const shouldSetActive = !state.activeTerminalId
+            return {
+              terminals: [...state.terminals, terminal],
+              activeTerminalId: shouldSetActive ? terminal.id : state.activeTerminalId,
+            }
+          }),
 
-      removeTerminal: (id) =>
-        set((state) => {
-          const newTerminals = state.terminals.filter((t) => t.id !== id);
-          const newActiveId =
-            state.activeTerminalId === id
-              ? newTerminals[newTerminals.length - 1]?.id ?? null
-              : state.activeTerminalId;
+        removeTerminal: (id) =>
+          set((state) => {
+            const newTerminals = state.terminals.filter((t) => t.id !== id);
+            const newActiveId =
+              state.activeTerminalId === id
+                ? newTerminals[newTerminals.length - 1]?.id ?? null
+                : state.activeTerminalId;
 
-          return {
-            terminals: newTerminals,
-            activeTerminalId: newActiveId,
-          };
-        }),
+            return {
+              terminals: newTerminals,
+              activeTerminalId: newActiveId,
+            };
+          }),
 
-      updateTerminal: (id, updates) =>
-        set((state) => ({
-          terminals: state.terminals.map((t) =>
-            t.id === id ? { ...t, ...updates } : t
-          ),
-        })),
+        updateTerminal: (id, updates) =>
+          set((state) => ({
+            terminals: state.terminals.map((t) =>
+              t.id === id ? { ...t, ...updates } : t
+            ),
+          })),
 
-      setActiveTerminal: (id) =>
-        set({ activeTerminalId: id }),
+        setActiveTerminal: (id) =>
+          set({ activeTerminalId: id }),
 
-      clearAllTerminals: () =>
-        set({ terminals: [], activeTerminalId: null, focusedTerminalId: null }),
+        clearAllTerminals: () =>
+          set({ terminals: [], activeTerminalId: null, focusedTerminalId: null }),
 
-      reorderTerminals: (newOrder) =>
-        set({ terminals: newOrder }),
+        reorderTerminals: (newOrder) =>
+          set({ terminals: newOrder }),
 
-      setFocusedTerminal: (id) =>
-        set({ focusedTerminalId: id }),
-    }),
+        setFocusedTerminal: (id) =>
+          set({ focusedTerminalId: id }),
+      })
+    ),
     {
       name: "simple-terminal-storage",
       storage: createJSONStorage(() => localStorage),

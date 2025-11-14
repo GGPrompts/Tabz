@@ -637,8 +637,10 @@ router.get('/tmux/sessions/:name/windows', asyncHandler(async (req, res) => {
 }));
 
 /**
- * POST /api/tmux/sessions/:name/command - Send command to session
+ * POST /api/tmux/sessions/:name/command - Execute tmux control command on session
  * Body: { command: string }
+ * Example: { command: "split-window -h" } → executes tmux split-window -t sessionName -h
+ * Does NOT send keys to terminal - safe for TUI apps!
  */
 router.post('/tmux/sessions/:name/command', asyncHandler(async (req, res) => {
   const { name } = req.params;
@@ -651,12 +653,12 @@ router.post('/tmux/sessions/:name/command', asyncHandler(async (req, res) => {
     });
   }
 
-  const result = await tmuxSessionManager.sendCommand(name, command);
+  const result = await tmuxSessionManager.executeTmuxCommand(name, command);
 
   if (result.success) {
     res.json({
       success: true,
-      message: `Command sent to session ${name}`
+      message: `Command executed on session ${name}`
     });
   } else {
     res.status(500).json({

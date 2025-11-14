@@ -56,6 +56,14 @@
       "defaultBackground": "carbon"
     },
     {
+      "label": "TKan",
+      "command": "go run .",
+      "terminalType": "tui-tool",
+      "icon": "💻",
+      "description": "tui tool kanban board with gh projects backend",
+      "workingDir": "~/projects/tkan"
+    },
+    {
       "label": "GIT UI",
       "command": "gitui",
       "terminalType": "tui-tool",
@@ -220,14 +228,6 @@
       "defaultFontSize": 16,
       "defaultFontFamily": "monospace",
       "defaultBackground": "dark-neutral"
-    },
-    {
-      "label": "TKan",
-      "command": "go run .",
-      "terminalType": "tui-tool",
-      "icon": "💻",
-      "description": "tui tool kanban board with gh projects backend",
-      "workingDir": "~/projects/tkan"
     }
   ]
 }

@@ -549,6 +549,26 @@ class TmuxSessionManager {
   }
 
   /**
+   * Execute tmux control command on session
+   * Does NOT send keys to terminal - executes tmux command directly
+   * Safe to use with TUI apps (won't corrupt vim, htop, Claude Code, etc.)
+   */
+  async executeTmuxCommand(sessionName, command) {
+    try {
+      // Execute tmux command directly on the session
+      // Example: tmux split-window -t "sessionName" -h
+      execSync(`tmux ${command} -t "${sessionName}"`, { encoding: 'utf8' });
+
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
    * List windows for a session
    */
   async listWindows(sessionName) {

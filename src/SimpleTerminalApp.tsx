@@ -4,6 +4,7 @@ import './SimpleTerminalApp.css'
 import { Terminal } from './components/Terminal'
 import { SplitLayout } from './components/SplitLayout'
 import { SettingsModal } from './components/SettingsModal'
+import { HotkeysHelpModal } from './components/HotkeysHelpModal'
 import { FontFamilyDropdown } from './components/FontFamilyDropdown'
 import { BackgroundGradientDropdown } from './components/BackgroundGradientDropdown'
 import { TextColorThemeDropdown } from './components/TextColorThemeDropdown'
@@ -310,6 +311,7 @@ function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate,
 function SimpleTerminalApp() {
   const [showSpawnMenu, setShowSpawnMenu] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showHotkeysHelp, setShowHotkeysHelp] = useState(false)
 
   // Initialize currentWindowId first to determine header visibility
   const [currentWindowId] = useState(() => {
@@ -321,9 +323,6 @@ function SimpleTerminalApp() {
 
   // Collapse header by default for popout windows (not main window)
   const [headerVisible, setHeaderVisible] = useState(currentWindowId === 'main')
-
-  // BroadcastChannel for cross-window communication
-  const broadcastChannelRef = useRef<BroadcastChannel | null>(null)
 
   // Console error tracking
   const [consoleErrors, setConsoleErrors] = useState<Array<{
@@ -536,59 +535,6 @@ function SimpleTerminalApp() {
     }
   }, [])
 
-  // Setup BroadcastChannel for cross-window communication
-  useEffect(() => {
-    const channel = new BroadcastChannel('tabz-sync')
-    broadcastChannelRef.current = channel
-
-    // Listen for messages from other windows
-    channel.onmessage = (event) => {
-      if (event.data.type === 'reload-all') {
-        console.log('[SimpleTerminalApp] 🔄 Received reload-all message from another window')
-        window.location.reload()
-      } else if (event.data.type === 'state-changed') {
-        // Apply state directly from broadcast payload (Codex fix)
-        // Avoids stale localStorage cache issue in Chrome
-        console.log('[SimpleTerminalApp] 🔄 State changed in another window, applying payload...')
-
-        // Ignore messages from our own window
-        if (event.data.from === currentWindowId) {
-          console.log('[SimpleTerminalApp] ⏭️ Ignoring broadcast from self')
-          return
-        }
-
-        const payload = event.data.payload
-        if (payload) {
-          try {
-            const parsed = JSON.parse(payload)
-            const next = parsed?.state
-            if (next && next.terminals) {
-              // Apply state directly to store (bypasses localStorage cache)
-              useSimpleTerminalStore.setState({
-                terminals: next.terminals,
-                activeTerminalId: next.activeTerminalId,
-                focusedTerminalId: next.focusedTerminalId
-              })
-
-              // Debug: Check detached terminals after sync
-              const detached = next.terminals.filter((t: any) => t.status === 'detached')
-              console.log('[SimpleTerminalApp] ✓ Applied state from broadcast:', detached.length, 'detached terminals')
-            }
-          } catch (error) {
-            console.error('[SimpleTerminalApp] Failed to parse broadcast payload:', error)
-          }
-        }
-      }
-    }
-
-    console.log('[SimpleTerminalApp] 📡 BroadcastChannel initialized for window:', currentWindowId)
-
-    return () => {
-      channel.close()
-      broadcastChannelRef.current = null
-    }
-  }, [currentWindowId])
-
   // Set browser tab title based on window and active terminal
   useEffect(() => {
     if (currentWindowId === 'main') {
@@ -661,6 +607,7 @@ function SimpleTerminalApp() {
       console.log(`[SimpleTerminalApp] Detaching ${windowTerminals.length} terminals:`, windowTerminals.map(t => t.name))
 
       // Mark each terminal as detached
+      // Note: BroadcastChannel middleware will automatically sync to other windows
       windowTerminals.forEach(terminal => {
         updateTerminal(terminal.id, {
           status: 'detached',
@@ -668,20 +615,6 @@ function SimpleTerminalApp() {
           windowId: undefined,
         })
       })
-
-      // Notify other windows via broadcast channel
-      // CRITICAL: Wait 150ms for Zustand persist middleware to write to localStorage
-      setTimeout(() => {
-        if (broadcastChannelRef.current) {
-          const payload = localStorage.getItem('simple-terminal-storage')
-          broadcastChannelRef.current.postMessage({
-            type: 'state-changed',
-            payload,
-            from: currentWindowId,
-            at: Date.now()
-          })
-        }
-      }, 150)
     }
 
     window.addEventListener('beforeunload', handleBeforeUnload)
@@ -1015,20 +948,7 @@ function SimpleTerminalApp() {
 
       console.log(`[SimpleTerminalApp] ✓ Detached split container with preserved layout`)
 
-      // Notify other windows that state changed
-      // CRITICAL: Wait 150ms for Zustand persist middleware to write to localStorage
-      setTimeout(() => {
-        if (broadcastChannelRef.current) {
-          console.log('[SimpleTerminalApp] 📡 Broadcasting state-changed to other windows (after localStorage sync)')
-          const payload = localStorage.getItem('simple-terminal-storage')
-          broadcastChannelRef.current.postMessage({
-            type: 'state-changed',
-            payload,
-            from: currentWindowId,
-            at: Date.now()
-          })
-        }
-      }, 150)
+      // Note: BroadcastChannel middleware will automatically sync to other windows
       setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
       return
     }
@@ -1113,29 +1033,12 @@ function SimpleTerminalApp() {
         }
 
         // Mark terminal as detached (keeps in localStorage, globally accessible)
+        // Note: BroadcastChannel middleware will automatically sync to other windows
         updateTerminal(contextMenu.terminalId, {
           status: 'detached',
           agentId: undefined, // Clear PTY connection so it can reconnect
           windowId: undefined, // Clear window assignment so it can reattach anywhere
         })
-
-        // Notify other windows that state changed
-        // CRITICAL: Wait 150ms for Zustand persist middleware to write to localStorage
-        // (persist has 100ms debounce, we add 50ms buffer)
-        setTimeout(() => {
-          if (broadcastChannelRef.current) {
-            console.log('[SimpleTerminalApp] 📡 Broadcasting state-changed to other windows (after localStorage sync)')
-            const payload = localStorage.getItem('simple-terminal-storage')
-            broadcastChannelRef.current.postMessage({
-              type: 'state-changed',
-              payload,
-              from: currentWindowId,
-              at: Date.now()
-            })
-          } else {
-            console.warn('[SimpleTerminalApp] ⚠️ BroadcastChannel not available, cannot notify other windows')
-          }
-        }, 150)
       } else {
         console.error(`[SimpleTerminalApp] Failed to detach:`, result.error)
       }
@@ -1214,20 +1117,7 @@ function SimpleTerminalApp() {
 
       console.log(`[SimpleTerminalApp] ✓ Re-attached split container with restored layout`)
 
-      // Notify other windows that state changed
-      // CRITICAL: Wait 150ms for Zustand persist middleware to write to localStorage
-      setTimeout(() => {
-        if (broadcastChannelRef.current) {
-          console.log('[SimpleTerminalApp] 📡 Broadcasting reattach to other windows')
-          const payload = localStorage.getItem('simple-terminal-storage')
-          broadcastChannelRef.current.postMessage({
-            type: 'state-changed',
-            payload,
-            from: currentWindowId,
-            at: Date.now()
-          })
-        }
-      }, 150)
+      // Note: BroadcastChannel middleware will automatically sync to other windows
       return
     }
 
@@ -1264,20 +1154,7 @@ function SimpleTerminalApp() {
     // Set as active after reconnecting
     setActiveTerminal(terminalId)
 
-    // Notify other windows that state changed
-    // CRITICAL: Wait 150ms for Zustand persist middleware to write to localStorage
-    setTimeout(() => {
-      if (broadcastChannelRef.current) {
-        console.log('[SimpleTerminalApp] 📡 Broadcasting reattach to other windows')
-        const payload = localStorage.getItem('simple-terminal-storage')
-        broadcastChannelRef.current.postMessage({
-          type: 'state-changed',
-          payload,
-          from: currentWindowId,
-          at: Date.now()
-        })
-      }
-    }, 150)
+    // Note: BroadcastChannel middleware will automatically sync to other windows
   }
 
   const handleCloseTerminal = (terminalId: string) => {
@@ -1351,6 +1228,26 @@ function SimpleTerminalApp() {
     removeTerminal(terminalId)
   }
 
+  // Helper function to send tmux commands to active terminal
+  const sendTmuxCommand = async (sessionName: string, command: string) => {
+    try {
+      const response = await fetch(`/api/tmux/sessions/${sessionName}/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command })
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        console.log(`[SimpleTerminalApp] ✓ Tmux command executed: ${command}`)
+      } else {
+        console.error(`[SimpleTerminalApp] Failed to execute tmux command:`, result.error)
+      }
+    } catch (error) {
+      console.error(`[SimpleTerminalApp] Failed to execute tmux command:`, error)
+    }
+  }
+
   // Keyboard shortcuts (extracted to custom hook)
   // Must be called after handleSpawnTerminal and handleCloseTerminal are defined
   useKeyboardShortcuts(
@@ -1361,7 +1258,8 @@ function SimpleTerminalApp() {
     setShowSpawnMenu,
     setActiveTerminal,
     handleSpawnTerminal,
-    handleCloseTerminal
+    handleCloseTerminal,
+    sendTmuxCommand
   )
 
   // Pop out pane to new tab (undo split)
@@ -1558,10 +1456,15 @@ ${localStorageKeys.map(k => `  • ${k}`).join('\n')}
     console.log('[SimpleTerminalApp] ✅ All sessions, settings, and localStorage cleared')
 
     // Broadcast to all other windows to reload
-    if (broadcastChannelRef.current) {
-      broadcastChannelRef.current.postMessage({ type: 'reload-all' })
-      console.log('[SimpleTerminalApp] 📡 Sent reload-all message to all windows')
-    }
+    // Create temporary channel to send reload-all (middleware listens in other windows)
+    const channel = new BroadcastChannel('tabz-sync')
+    channel.postMessage({
+      type: 'reload-all',
+      from: currentWindowId,
+      at: Date.now()
+    })
+    console.log('[SimpleTerminalApp] 📡 Sent reload-all message to all windows')
+    channel.close()
 
     // Wait a bit to ensure broadcast is sent and everything is cleaned up
     await new Promise(resolve => setTimeout(resolve, 300))
@@ -1924,6 +1827,13 @@ End of error report
           >
             ⚙️
           </button>
+          <button
+            className="hotkeys-button"
+            onClick={() => setShowHotkeysHelp(true)}
+            title="Keyboard Shortcuts"
+          >
+            ⌨️
+          </button>
           <div className={`connection-status ${connectionStatus}`}>
             <span className="status-dot"></span>
             {connectionStatus}
@@ -2066,6 +1976,12 @@ End of error report
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
         onSave={() => loadSpawnOptions()}
+      />
+
+      {/* Hotkeys Help Modal */}
+      <HotkeysHelpModal
+        show={showHotkeysHelp}
+        onClose={() => setShowHotkeysHelp(false)}
       />
 
       {/* Error Modal */}
