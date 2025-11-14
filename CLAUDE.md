@@ -74,6 +74,7 @@ backend/
 3. **Don't Over-Engineer** - Simple solutions win
 4. **Don't Break WebSocket Protocol** - Backend compatibility is critical
 5. **Don't Skip Tests** - Failing tests = failing features
+6. **Don't Use `tmux send-keys` for Commands** - Use `/api/tmux/sessions/:name/command` API instead to prevent terminal corruption
 
 ### 📝 Documentation Workflow
 
