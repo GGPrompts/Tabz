@@ -439,6 +439,7 @@ Use intuitive aliases in spawn-options:
 
 #### Tmux Integration
 - **[docs/TMUX_RENDERING_FINAL.md](docs/TMUX_RENDERING_FINAL.md)** - Complete tmux rendering solution (completed)
+- **[Tmux EOL Fix Gist](https://gist.github.com/GGPrompts/7d40ea1070a45de120261db00f1d7e3a)** - Fixing xterm.js EOL conversion for tmux splits (critical fix)
 - **[docs/TMUX_RENDERING_FIX.md](docs/TMUX_RENDERING_FIX.md)** - Initial tmux rendering debugging (superseded by FINAL)
 - **[docs/TMUX_SPLIT_RENDERING_DEBUG.md](docs/TMUX_SPLIT_RENDERING_DEBUG.md)** - Tmux split debugging notes (historical)
 - **[docs/TMUX_MIGRATION_PLAN.md](docs/TMUX_MIGRATION_PLAN.md)** - Tmux migration planning (historical)

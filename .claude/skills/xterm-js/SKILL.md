@@ -306,6 +306,43 @@ updateTerminal(id, {
 })
 ```
 
+### 11. Tmux Split Terminals & EOL Conversion
+
+**Critical Pattern: Disable EOL Conversion for Tmux Sessions**
+
+When multiple xterm.js instances share a tmux session (e.g., React split terminals), enabling `convertEol: true` causes output corruption.
+
+**Problem:**
+- Tmux sends terminal sequences with proper line endings (`\n`)
+- xterm with `convertEol: true` converts `\n` → `\r\n` independently
+- Each xterm instance converts the SAME tmux output differently
+- Result: text bleeding between panes, misaligned split divider
+
+**Solution:**
+```typescript
+const isTmuxSession = !!agent.sessionName || shouldUseTmux;
+
+const xtermOptions = {
+  theme: theme.xterm,
+  fontSize: savedFontSize,
+  cursorBlink: true,
+  scrollback: isTmuxSession ? 0 : 10000,
+
+  // CRITICAL: Disable EOL conversion for tmux
+  convertEol: !isTmuxSession,  // Only convert for regular shells
+  windowsMode: false,          // Ensure UNIX-style line endings
+};
+```
+
+**Why This Works:**
+- **Tmux sessions**: `convertEol: false` → xterm displays raw PTY output
+- **Regular shells**: `convertEol: true` → xterm converts for Windows compatibility
+- Both xterm instances handle tmux output identically → no corruption
+
+**Key Insight:** Tmux is a terminal multiplexer that manages its own terminal protocol. Multiple xterm instances sharing one tmux session must handle output identically to prevent corruption.
+
+**Reference:** [Tmux EOL Fix Gist](https://gist.github.com/GGPrompts/7d40ea1070a45de120261db00f1d7e3a) - Complete guide with font normalization patterns
+
 ## Resources
 
 ### references/
