@@ -257,3 +257,77 @@ chrome.tabGroups.update(groupId, {
 **Priority:** Post-MVP (after terminal display is working)
 
 **Reference:** https://developer.chrome.com/docs/extensions/reference/api/tabGroups
+
+---
+
+### Chrome Built-in AI APIs Integration
+
+**Idea:** Use Chrome's [Built-in AI APIs](https://developer.chrome.com/docs/extensions/ai) for intelligent terminal features.
+
+**Available APIs (on-device via Gemini Nano):**
+- **Summarizer API** - Summarize terminal output, command history
+- **Writer API** - Generate session descriptions, commit messages
+- **Prompt API** - General LLM for error explanations, command suggestions
+- **Language Detector** - Auto-detect shell type, script language
+- **Rewriter API** - Improve command suggestions, refine descriptions
+
+**Why This is Perfect for Tabz:**
+- ✅ **Privacy-first**: Runs locally (Gemini Nano) - terminal output stays on your machine
+- ✅ **Free**: No API keys or quotas needed
+- ✅ **Fast**: On-device = instant responses
+- ✅ **Offline**: Works without internet connection
+
+**Potential Features:**
+
+1. **Smart Session Naming**
+   ```javascript
+   // AI analyzes commands to generate meaningful names
+   const name = await ai.writer.write({
+     context: "npm install, npm run build, npm test",
+     task: "Generate concise session name"
+   })
+   // Result: "React Build Pipeline" (instead of "bash")
+   ```
+
+2. **Error Explanations**
+   ```javascript
+   // Click error message → Get plain English explanation
+   const help = await ai.prompt.prompt(
+     `Explain this error and suggest a fix: ${errorText}`
+   )
+   ```
+
+3. **Command History Semantic Search**
+   ```javascript
+   // Search: "when did I fix the database issue?"
+   // Finds relevant commands even with different wording
+   const results = await ai.searchHistory(query, terminalHistory)
+   ```
+
+4. **Session Summaries**
+   ```javascript
+   // "What did I do in this terminal today?"
+   const summary = await ai.summarizer.summarize(sessionHistory, {
+     type: "key-points",
+     length: "short"
+   })
+   ```
+
+5. **Natural Language to Commands**
+   ```javascript
+   // User types: "show all node processes"
+   // AI converts to: ps aux | grep node
+   const command = await ai.prompt.prompt(
+     `Convert to bash: ${naturalLanguage}`
+   )
+   ```
+
+**Implementation Notes:**
+- Some APIs require origin trial signup
+- Gemini Nano runs on-device (privacy win for terminal output)
+- Could integrate with existing auto-naming from tmux
+- Perfect complement to Tab Groups (AI-named groups!)
+
+**Priority:** Post-MVP (very exciting, but after terminals work)
+
+**Reference:** https://developer.chrome.com/docs/extensions/ai
