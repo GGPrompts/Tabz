@@ -41,6 +41,14 @@ export function useTerminalInstance(options: UseTerminalInstanceOptions) {
       return;
     }
 
+    // Check container dimensions
+    const rect = container.getBoundingClientRect();
+    console.log('[useTerminalInstance] Container dimensions:', {
+      width: rect.width,
+      height: rect.height,
+      containerId
+    });
+
     // Create terminal instance
     const term = new Terminal({
       cursorBlink: true,
@@ -58,15 +66,8 @@ export function useTerminalInstance(options: UseTerminalInstanceOptions) {
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
 
-    // CRITICAL: Open terminal FIRST before loading Canvas addon
-    // This prevents dimension errors
-    term.open(container);
-
-    // Fit terminal to container immediately after opening
-    fitAddon.fit();
-
-    // Use Canvas addon for consistency (more stable than WebGL)
-    // Load AFTER opening to prevent dimension access errors
+    // Use Canvas addon for better performance (load BEFORE opening)
+    // This ensures the renderer is ready before fit() is called
     try {
       const canvasAddon = new CanvasAddon();
       canvasAddonRef.current = canvasAddon;
@@ -76,8 +77,12 @@ export function useTerminalInstance(options: UseTerminalInstanceOptions) {
       console.warn('[useTerminalInstance] Canvas addon failed, using default renderer', err);
     }
 
-    // Fit again after canvas addon is loaded
-    fitAddon.fit();
+    // Open terminal with renderer already loaded
+    term.open(container);
+
+    // Don't fit immediately - let the delayed retries handle it
+    // This prevents "dimensions undefined" errors before renderer is ready
+    console.log('[useTerminalInstance] Terminal opened, waiting for delayed fit...');
 
     // Set up data handler using ref to prevent recreating terminal
     const dataHandler = term.onData((data) => {
@@ -96,19 +101,83 @@ export function useTerminalInstance(options: UseTerminalInstanceOptions) {
 
     // Auto-fit after a short delay to ensure container has proper dimensions
     const fitTimers: NodeJS.Timeout[] = [];
-    fitTimers.push(setTimeout(() => fitAddon.fit(), 50));
-    fitTimers.push(setTimeout(() => fitAddon.fit(), 150));
-    fitTimers.push(setTimeout(() => fitAddon.fit(), 300));
+    fitTimers.push(setTimeout(() => {
+      try {
+        fitAddon.fit();
+        console.log('[useTerminalInstance] Delayed fit (50ms):', {
+          cols: term.cols,
+          rows: term.rows
+        });
+      } catch (err) {
+        console.warn('[useTerminalInstance] Delayed fit (50ms) failed:', err);
+      }
+    }, 50));
+    fitTimers.push(setTimeout(() => {
+      try {
+        fitAddon.fit();
+        console.log('[useTerminalInstance] Delayed fit (150ms):', {
+          cols: term.cols,
+          rows: term.rows
+        });
+      } catch (err) {
+        console.warn('[useTerminalInstance] Delayed fit (150ms) failed:', err);
+      }
+    }, 150));
+    fitTimers.push(setTimeout(() => {
+      try {
+        fitAddon.fit();
+        console.log('[useTerminalInstance] Delayed fit (300ms):', {
+          cols: term.cols,
+          rows: term.rows
+        });
+      } catch (err) {
+        console.warn('[useTerminalInstance] Delayed fit (300ms) failed:', err);
+      }
+    }, 300));
 
     // Handle window resize
     const handleResize = () => {
-      fitAddon.fit();
+      try {
+        fitAddon.fit();
+      } catch (err) {
+        console.warn('[useTerminalInstance] Window resize fit failed:', err);
+      }
     };
     window.addEventListener('resize', handleResize);
 
     // Watch for container size changes using ResizeObserver
+    // Debounce to prevent infinite resize loops
+    let resizeTimeout: NodeJS.Timeout | null = null;
     const resizeObserver = new ResizeObserver(() => {
-      fitAddon.fit();
+      // Only fit if terminal is fully initialized (has a renderer)
+      if (!term.element) {
+        console.log('[useTerminalInstance] ResizeObserver: Terminal not ready yet, skipping fit');
+        return;
+      }
+
+      // Debounce: wait for resizing to stabilize before fitting
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout);
+      }
+
+      resizeTimeout = setTimeout(() => {
+        const newRect = container.getBoundingClientRect();
+        console.log('[useTerminalInstance] ResizeObserver triggered (debounced):', {
+          width: newRect.width,
+          height: newRect.height,
+          beforeFit: { cols: term.cols, rows: term.rows }
+        });
+
+        try {
+          fitAddon.fit();
+          console.log('[useTerminalInstance] After fit:', {
+            cols: term.cols,
+            rows: term.rows
+          });
+        } catch (err) {
+          console.warn('[useTerminalInstance] Fit failed, terminal may not be ready:', err);
+        }
+      }, 100); // Wait 100ms after last resize event
     });
     resizeObserver.observe(container);
 
@@ -116,6 +185,11 @@ export function useTerminalInstance(options: UseTerminalInstanceOptions) {
     return () => {
       // Clear all fit timers
       fitTimers.forEach(timer => clearTimeout(timer));
+
+      // Clear resize timeout if pending
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout);
+      }
 
       // Disconnect resize observer
       resizeObserver.disconnect();

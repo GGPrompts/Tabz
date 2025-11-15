@@ -1,173 +1,259 @@
-# Session Complete: State Management Refactor + Keyboard Shortcuts (Nov 14, 2025)
+# Terminal Sizing & Multiple PTY Attachment Issues - Session Status
 
-## 🎉 Major Achievements
-
-### 1. Eliminated State Sync Race Conditions (Session 12)
-
-**Problem:** App used `setTimeout(150ms)` hoping localStorage finishes writing before broadcasting state changes. This caused 4 test failures and unpredictable cross-window sync behavior.
-
-**Solution:** Created BroadcastChannel middleware that wraps Zustand store and broadcasts synchronously after every state update.
-
-**Results:**
-- ✅ Test pass rate: 91% → 98.4% (39/43 → 253/257 tests)
-- ✅ Eliminated ALL setTimeout(150) race conditions
-- ✅ Guaranteed ordering - broadcasts happen after state updates
-- ✅ Centralized sync logic in middleware
-- ✅ Optimized agent cleanup to only run on status changes
-
-**Files Created:**
-- `src/stores/broadcastMiddleware.ts` - Zustand middleware for cross-window sync
-
-**Files Modified:**
-- `src/stores/simpleTerminalStore.ts` - Integrated middleware
-- `src/SimpleTerminalApp.tsx` - Removed manual BroadcastChannel setup (59 lines removed)
-- `src/hooks/useWebSocketManager.ts` - Optimized agent cleanup dependencies
-
-### 2. Added Keyboard Shortcuts + Hotkeys Help (Session 13)
-
-**Problem:** Browser shortcuts conflict with tmux/terminal usage:
-- Ctrl+C → Opens browser console (not terminal copy)
-- Ctrl+T → New browser tab (not tmux)
-- Ctrl+W → Close browser tab
-- Tab cycling (Ctrl+Tab) doesn't work
-
-**Solution:** Implemented Alt-based keyboard shortcuts and visual hotkeys help sidebar.
-
-**Shortcuts Added:**
-- `Alt+1-9` - Jump to tab 1-9
-- `Alt+0` - Jump to last tab
-- `Alt+[` / `Alt+]` - Previous/Next tab
-- `Alt+H` - Split horizontal (tmux)
-- `Alt+V` - Split vertical (tmux)
-- `Alt+X` - Close pane (tmux)
-- `Alt+Z` - Zoom toggle (tmux)
-- `Alt+Arrow` - Navigate between panes (tmux)
-
-**Features:**
-- ✅ ⌨️ Hotkeys button in header
-- ✅ Sidebar modal (doesn't blur page, can see shortcuts working)
-- ✅ Organized by category (Tab Navigation, Tmux Controls)
-- ✅ Glassmorphic design matching app theme
-- ✅ sendTmuxCommand helper using API (not send-keys)
-
-**Files Created:**
-- `src/components/HotkeysHelpModal.tsx` - Sidebar modal component
-- `src/components/HotkeysHelpModal.css` - Sidebar styling
-
-**Files Modified:**
-- `src/hooks/useKeyboardShortcuts.ts` - Added tmux command shortcuts
-- `src/SimpleTerminalApp.tsx` - Added hotkeys button + modal + sendTmuxCommand
-- `backend/modules/tmux-session-manager.js` - Added executeTmuxCommand()
-- `backend/routes/api.js` - Updated API to use executeTmuxCommand (safe for TUI apps)
-
-## 📝 Documentation Updates
-
-- Added rule to CLAUDE.md: "Don't Use `tmux send-keys` for Commands" - Use API instead to prevent terminal corruption
-- Updated tmux send-keys delay to 0.3s for long prompts
-- Documented both fixes in CHANGELOG.md v1.2.5
-
-## 🐛 Bug Fixes Completed This Session
-
-1. **Unsplit Terminal Disappearing** (Earlier in session)
-   - Root cause: Split container IS the terminal itself
-   - Fix: Clear splitLayout instead of deleting container
-   - Both terminals now remain visible after unsplit
-
-2. **Multi-Window Detach Sync** (Earlier in session)
-   - Root cause: WebSocket agents not cleaned up after broadcast
-   - Fix: Monitor terminals becoming detached and clean up agents
-   - All windows now properly sync detached state
-
-3. **State Sync Race Conditions** (Session 12)
-   - Root cause: setTimeout hoping localStorage finishes
-   - Fix: BroadcastChannel middleware with synchronous broadcasts
-   - Test pass rate improved to 98.4%
-
-4. **Keyboard Shortcuts Not Working** (Session 13)
-   - Root cause: Using send-keys instead of API
-   - Fix: Switch to /api/tmux/sessions/:name/command
-   - All shortcuts now work without corrupting terminals
-
-## 🚀 What's Working Now
-
-### State Management
-- ✅ Cross-window sync with no race conditions
-- ✅ Automatic broadcasts on every state mutation
-- ✅ Agent cleanup only runs when needed
-- ✅ 98.4% test pass rate (253/257 tests)
-
-### Keyboard Shortcuts
-- ✅ Tab navigation (Alt+1-9, Alt+0, Alt+[/])
-- ✅ Tmux pane controls (Alt+H/V/X/Z)
-- ✅ Tmux pane navigation (Alt+Arrow)
-- ✅ No browser conflicts (uses Alt instead of Ctrl)
-- ✅ Hotkeys help always accessible (⌨️ button)
-
-### Multi-Window Support
-- ✅ Terminals move between windows
-- ✅ Detach/reattach works correctly
-- ✅ Split containers detach with preserved layout
-- ✅ State syncs instantly across windows
-
-### Split Terminals
-- ✅ Unsplit restores both terminals
-- ✅ Split layout preserved on detach/reattach
-- ✅ Drag to split from tab bar
-
-## 🎯 Future Work (Optional)
-
-### High Priority
-- None! Major issues resolved.
-
-### Medium Priority
-- Fix 4 remaining failing tests (legacy test infrastructure)
-- Mobile responsiveness improvements
-- Tmux-native rewrite exploration (long-term simplification)
-
-### Low Priority
-- Tab reordering via drag (currently can only drag to split)
-- Chrome extension for advanced window management
-- Project templates feature
-
-## 📊 Metrics
-
-| Metric | Before | After |
-|--------|--------|-------|
-| Test Pass Rate | 91% | 98.4% |
-| setTimeout Race Conditions | 5+ locations | 0 |
-| Keyboard Shortcuts | None | 12+ shortcuts |
-| Lines of Code (net) | - | +470 (features), -200 (refactor) |
-
-## 🛠️ Technical Debt Resolved
-
-- ✅ BroadcastChannel race conditions eliminated
-- ✅ Agent cleanup optimization
-- ✅ Keyboard shortcut conflicts resolved
-- ✅ Terminal corruption prevention (API vs send-keys)
-
-## 💡 Key Learnings
-
-1. **BroadcastChannel Middleware Pattern**: Wrapping Zustand with middleware provides cleaner architecture than manual broadcasts scattered throughout code
-
-2. **Tmux API > send-keys**: Always use `/api/tmux/sessions/:name/command` instead of `tmux send-keys` to prevent terminal corruption in TUI apps
-
-3. **Alt-based Shortcuts**: Using Alt instead of Ctrl avoids ALL browser keyboard conflicts while remaining intuitive
-
-4. **Parallel Claude Sessions**: Can work well but need careful file coordination. Sequential is safer for overlapping changes.
-
-## 🎨 Code Quality Improvements
-
-- Centralized sync logic (no more scattered setTimeout calls)
-- Type-safe keyboard shortcuts
-- Documented API patterns in CLAUDE.md
-- Clean separation of concerns (middleware, hooks, components)
+**Date:** 2025-11-15
+**Branch:** terminal-tabs-tmux-only (experimental)
+**Status:** Multiple critical bugs - NOT PRODUCTION READY
 
 ---
 
-**Session Duration**: ~3 hours (parallel work with 2 Claude sessions)
-**Tests Fixed**: +214 tests (39→253)
-**Features Added**: Keyboard shortcuts, hotkeys help, state sync middleware
-**Bug Fixes**: 4 critical bugs resolved
-**Lines Changed**: +670, -200
+## 🐛 Current Critical Issues
 
-Last Updated: November 14, 2025
+### 1. **Multiple PTY Attachments to Same Tmux Session** ❌
+**Symptom:** White dots fill screen below 800x600 window. Visual artifacts everywhere.
+
+**What User Sees:**
+- In app: Both 800x600 window AND fullscreen window visible with tmux status bars
+- Area below 800x600 filled with white dots
+- Cursor appears in wrong locations
+
+**What's Actually Happening:**
+```bash
+$ tmux list-clients
+/dev/pts/9: 154 [88x35] (attached)     ← Original spawn
+/dev/pts/10: 154 [378x75] (attached)   ← First resize
+/dev/pts/11: 154 [309x75] (attached)   ← Second resize
+```
+**THREE PTY clients** attached to ONE tmux session!
+
+**Attempted Fix:** Added PTY cleanup in `pty-handler.js:181-189` - **DOES NOT WORK**
+
+---
+
+### 2. **Commands Not Executing** ❌
+**Symptom:** Spawning TFE shows bash prompt instead of running `tfe`.
+
+**In tmux session:**
+```
+matt@MattDesktop:~/projects/terminal-tabs$ bash
+matt@MattDesktop:~/projects/terminal-tabs$
+```
+
+**Should be:** TFE file explorer running immediately
+
+**Config is correct:**
+- Frontend sends: `{ command: "tfe", terminalType: "tui-tool" }`
+- Backend logs: `"command": "tfe"` received
+- autoExecuteCommand should write `"tfe\n"` to PTY
+
+**Root cause unknown** - timing issue? PTY not ready? Command lost in attach?
+
+---
+
+### 3. **Terminal Stuck at 800x600** ❌
+**Symptom:** Terminal doesn't fill window despite ResizeObserver working.
+
+**Dimensions:**
+- Container: 3056px x 1230px ✅
+- xterm fits to: 378 cols x 75 rows ✅
+- Tmux session: 88 cols x 35 rows ❌ (800x600)
+
+**Why:** Multiple tmux clients force session to smallest common size (800x600)
+
+---
+
+## ✅ Fixes Applied (Nov 15, 2025)
+
+### 1. Disabled React.StrictMode
+**File:** `src/main.tsx:18`
+**Problem:** Double mount in dev → duplicate terminals → double typing
+**Result:** ✅ No more double typing
+
+### 2. Debounced ResizeObserver
+**File:** `src/hooks/useTerminalInstance.ts:150-182`
+**Problem:** Feedback loop causing infinite shrinking
+**Result:** ✅ Terminal no longer shrinks continuously
+
+### 3. Auto-Resize After Attach
+**File:** `src/components/MinimalTerminalView.tsx:140-165`
+**Problem:** Terminal connects but tmux not resized
+**Result:** ⚠️ Sends resize command but blocked by multi-client issue
+
+### 4. Fixed Backend Validation
+**File:** `backend/routes/api.js:34`
+**Problem:** Backend rejected `command` field
+**Result:** ✅ TUI tools can now send commands
+
+### 5. Fixed WebSocket Port
+**File:** `src/components/MinimalTerminalView.tsx:14`
+**Problem:** Connecting to wrong port (8127 instead of 8131)
+**Result:** ✅ WebSocket connects properly
+
+### 6. Attempted PTY Cleanup
+**File:** `backend/modules/pty-handler.js:181-189`
+**Problem:** Old PTY processes not killed
+**Result:** ❌ **STILL BROKEN** - multiple PTYs still attaching
+
+---
+
+## 📁 Files Modified This Session
+
+```
+src/main.tsx                          - Disabled StrictMode
+src/hooks/useTerminalInstance.ts      - Debounced resize, added logging
+src/components/MinimalTerminalView.tsx - Auto-resize, fixed WS port
+src/SimpleTmuxApp.tsx                 - Changed prompt → command
+backend/routes/api.js                 - Added command field validation
+backend/modules/pty-handler.js        - Added PTY cleanup (NOT WORKING)
+```
+
+---
+
+## 🔍 Debug Information for Next Session
+
+### PTY Cleanup Code (NOT WORKING)
+**Location:** `backend/modules/pty-handler.js:171-194`
+
+```javascript
+if (existingPty.tmuxSession === sessionName && existingId !== id) {
+  // CRITICAL: Kill the old PTY process (detach from tmux)
+  try {
+    if (existingPty.ptyProcess && !existingPty.ptyProcess.killed) {
+      existingPty.ptyProcess.kill('SIGTERM');
+      log.debug('Old PTY process killed (detached from tmux)');
+    }
+  } catch (err) {
+    log.warn('Failed to kill old PTY process:', err.message);
+  }
+  this.processes.delete(existingId);
+}
+```
+
+**Why it's not working:**
+- SIGTERM might not actually kill the PTY?
+- Process might respawn before old one dies?
+- Race condition in cleanup timing?
+- Need to use `tmux detach-client` instead?
+
+### Command Execution Code
+**Location:** `backend/modules/pty-handler.js:345-354`
+
+```javascript
+if (terminalConfig && terminalConfig.command && !autoExecuteTypes.includes(terminalType)) {
+  const cmd = typeof terminalConfig.command === 'string' ? terminalConfig.command : ''
+  const toWrite = cmd.endsWith('\n') ? cmd : (cmd + '\n')
+  log.debug(`Executing custom command for ${terminalType}`);
+  ptyProcess.write(toWrite);
+  return;
+}
+```
+
+**Why commands aren't running:**
+- Timing - PTY not ready when write happens?
+- Running on reconnect when shouldn't?
+- Tmux attach eating the command?
+
+---
+
+## 🎯 Next Steps (Priority Order)
+
+### **1. Fix Multiple PTY Attachments** (CRITICAL)
+
+**Debug approach:**
+```bash
+# Before spawn
+tmux list-clients
+
+# After spawn - should see ONE client
+tmux list-clients
+
+# If see multiple - cleanup failed
+```
+
+**Possible solutions:**
+- Use `tmux detach-client -t /dev/pts/X` instead of kill()
+- Add delay between kill and new spawn
+- Check if kill() actually terminates process
+- Monitor process list to verify termination
+
+### **2. Fix Command Execution** (HIGH)
+
+**Debug approach:**
+- Add logging: actual command content being written
+- Log PTY state when command executes
+- Test: does it work on first spawn vs reconnect?
+- Check tmux capture-pane output immediately after spawn
+
+### **3. Test Single Client Flow** (HIGH)
+Once fixes applied:
+- Spawn terminal
+- Run `tmux list-clients` - should show ONE client
+- Check for white dots - should be GONE
+- Terminal should fill window
+
+---
+
+## 🔬 Comparison: Main vs Tmux-Only Branch
+
+### Main Branch (`~/projects/terminal-tabs`) - WORKING ✅
+- Terminals fill window
+- Commands execute immediately
+- No visual artifacts
+- One PTY per session
+- Detach/reattach works
+
+### Tmux-Only Branch (`~/projects/terminal-tabs-tmux-only`) - BROKEN ❌
+- White dots everywhere
+- Commands don't execute (bash instead of tfe)
+- Terminal stuck at 800x600
+- Multiple PTYs per session
+- Detach/reattach broken
+
+**KEY QUESTION:** What does main branch do differently to prevent multiple PTY attachments?
+
+---
+
+## 🧪 Testing Checklist (For Next Session)
+
+After fixes:
+- [ ] Spawn TFE → should launch tfe (not bash)
+- [ ] `tmux list-clients` → ONE client per session
+- [ ] Terminal fills window (not 800x600)
+- [ ] No white dots/artifacts
+- [ ] Typing works normally
+- [ ] Detach → reattach works
+- [ ] Window resize works
+
+---
+
+## 💾 Git Commit Ready
+
+Changes staged for commit on `terminal-tabs-tmux-only` branch:
+- All sizing fixes
+- ResizeObserver debouncing
+- StrictMode disabled
+- Backend validation updated
+- PTY cleanup attempt (even though not working yet)
+
+**Commit message:**
+```
+wip: terminal sizing fixes and PTY cleanup attempt
+
+Issues:
+- Multiple PTY attachments still occurring (white dots)
+- Commands not executing (bash instead of tfe)
+- Terminal stuck at 800x600
+
+Fixes applied:
+- Disabled React.StrictMode (fixed double typing)
+- Debounced ResizeObserver (fixed infinite shrinking)
+- Added auto-resize after attach
+- Fixed backend validation for command field
+- Attempted PTY cleanup (not working yet)
+
+See NEXT_SESSION_PROMPT.md for full details.
+```
+
+---
+
+**Last Updated:** 2025-11-15 20:38 UTC
+**Next Session Focus:** Fix multiple PTY attachments and command execution

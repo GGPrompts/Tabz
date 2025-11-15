@@ -31,6 +31,7 @@ const spawnAgentSchema = Joi.object({
   icon: Joi.string().max(10).optional(),
   env: Joi.object().pattern(Joi.string(), Joi.string()).optional(),
   prompt: Joi.string().max(500).optional(),
+  command: Joi.string().max(500).optional(),  // For TUI tools and commands from spawn-options.json
   autoStart: Joi.boolean().default(true),
   agentConfigPath: Joi.string().optional()
 });

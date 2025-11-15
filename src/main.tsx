@@ -15,9 +15,8 @@ setupConsoleForwarding();
 setupKeyboardHandler();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <AppErrorBoundary>
-      <SimpleTmuxApp />
-    </AppErrorBoundary>
-  </React.StrictMode>,
+  // StrictMode disabled - causes double xterm initialization (double typing bug)
+  <AppErrorBoundary>
+    <SimpleTmuxApp />
+  </AppErrorBoundary>
 );

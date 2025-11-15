@@ -76,8 +76,8 @@ export function SimpleTmuxApp() {
         name: name,
         terminalType: template.terminalType,
         workingDir: template.workingDir || globalDefaults.workingDirectory,
-        // Add any template-specific options
-        ...(template.command && { prompt: template.command }),
+        // Send command for backend to execute (pty-handler checks terminalConfig.command)
+        ...(template.command && { command: template.command }),
       };
 
       console.log('[SimpleTmuxApp] Spawn config:', spawnConfig);

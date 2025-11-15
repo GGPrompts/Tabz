@@ -3,7 +3,7 @@ import { useTerminalInstance } from '@/hooks/useTerminalInstance';
 import { useSimpleWebSocket } from '@/hooks/useSimpleWebSocket';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { LogOut, Maximize2, RefreshCw } from 'lucide-react';
+import { LogOut, RefreshCw } from 'lucide-react';
 
 interface MinimalTerminalViewProps {
   sessionName: string;
@@ -19,6 +19,7 @@ export function MinimalTerminalView({ sessionName, terminalId, onDetach }: Minim
   const attachedRef = useRef(false);
   const terminalRef = useRef<any>(null);
   const onDataRef = useRef<((data: string) => void) | null>(null);
+  const hasResizedRef = useRef(false);
 
   // WebSocket connection (must be before useEffect that uses it)
   const { connected, send } = useSimpleWebSocket({
@@ -136,12 +137,32 @@ export function MinimalTerminalView({ sessionName, terminalId, onDetach }: Minim
     }
   }, [connected, terminalId, send]);
 
-  // Focus terminal when ready and attached
+  // Focus terminal and resize when ready and attached (only once!)
   useEffect(() => {
-    if (terminal.ready && attached) {
+    if (terminal.ready && attached && !hasResizedRef.current) {
       terminal.focus();
+      hasResizedRef.current = true;
+
+      // Resize tmux session to match terminal dimensions (one-time on attach)
+      setTimeout(() => {
+        const dims = terminal.fit();
+        console.log('[MinimalTerminalView] Auto-resize after attach:', dims);
+        if (connected && terminalId) {
+          send({
+            type: 'resize',
+            terminalId,
+            cols: dims.cols,
+            rows: dims.rows
+          });
+        }
+      }, 100);
     }
-  }, [terminal.ready, attached, terminal]);
+
+    // Reset the flag when detached
+    if (!attached) {
+      hasResizedRef.current = false;
+    }
+  }, [terminal.ready, attached, terminal, connected, terminalId, send]);
 
   const handleDetach = () => {
     if (connected && terminalId) {
@@ -187,10 +208,8 @@ export function MinimalTerminalView({ sessionName, terminalId, onDetach }: Minim
         </div>
 
         <div className="flex items-center gap-2">
-          <Button onClick={handleRefit} variant="ghost" size="sm" title="Refit terminal">
-            <Maximize2 className="h-4 w-4" />
-          </Button>
-          <Button onClick={handleRefit} variant="ghost" size="sm" title="Refresh">
+          {/* Removed misleading fullscreen button - ResizeObserver handles automatic sizing */}
+          <Button onClick={handleRefit} variant="ghost" size="sm" title="Refresh terminal (refit)">
             <RefreshCw className="h-4 w-4" />
           </Button>
           <Button onClick={handleDetach} variant="ghost" size="sm" title="Detach (keeps session alive)">

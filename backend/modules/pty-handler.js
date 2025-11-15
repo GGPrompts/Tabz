@@ -178,7 +178,17 @@ class PTYHandler extends EventEmitter {
                 log.debug('Canceled grace period timer');
               }
 
-              // Remove the old PTY attachment (but tmux session stays alive)
+              // CRITICAL: Kill the old PTY process (detach from tmux)
+              try {
+                if (existingPty.ptyProcess && !existingPty.ptyProcess.killed) {
+                  existingPty.ptyProcess.kill('SIGTERM');
+                  log.debug('Old PTY process killed (detached from tmux)');
+                }
+              } catch (err) {
+                log.warn('Failed to kill old PTY process:', err.message);
+              }
+
+              // Remove the old PTY attachment (tmux session stays alive)
               this.processes.delete(existingId);
               log.debug('Old PTY removed from processes');
             }
