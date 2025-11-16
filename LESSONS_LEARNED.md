@@ -4,6 +4,74 @@ This document captures important debugging lessons, gotchas, and best practices 
 
 ---
 
+## Terminal Matching and Reconnection
+
+### Lesson: Always Match by Unique Identifiers (sessionName), Not Display Properties (Nov 16, 2025)
+
+**Problem**: Refreshing page with many terminals caused massive slowdown, errors, and terminals connecting to wrong sessions.
+
+**What Happened:**
+1. User had many terminals (especially multiple bash terminals)
+2. On refresh, terminals tried to reconnect to existing tmux sessions
+3. Auto-naming feature was updating `terminal.name` from tmux pane titles
+4. Reconnection logic was falling back to matching by `terminalType` (not unique!)
+5. Wrong terminals matched to wrong sessions → chaos
+
+**Root Cause**: The terminal matching fallback chain had a critical gap:
+```typescript
+// OLD (BROKEN) - Missing sessionName matching!
+1. Match by requestId ✅ (unique)
+2. Match by agentId ✅ (unique, but undefined during spawning)
+3. Match by terminalType ❌ (NOT UNIQUE! bash, claude-code, etc.)
+   → Multiple bash terminals all match first one!
+```
+
+**Solution**: Add sessionName matching BEFORE falling back to terminalType:
+```typescript
+// NEW (FIXED) - sessionName matching added!
+1. Match by requestId ✅ (unique)
+2. Match by agentId ✅ (unique)
+3. Match by sessionName ✅ (UNIQUE! tt-bash-123, tt-cc-456)
+4. Match by terminalType ⚠️ (last resort, dangerous)
+```
+
+**The Fix** (`src/hooks/useWebSocketManager.ts:185-193`):
+```typescript
+// CRITICAL: Match by sessionName (unique identifier that persists across refreshes)
+// This prevents matching wrong terminals when reconnecting many terminals of same type
+if (!existingTerminal && message.data.sessionName) {
+  existingTerminal = storedTerminals.find(t =>
+    t.sessionName === message.data.sessionName &&
+    (t.windowId || 'main') === currentWindowId
+  )
+  console.log('[useWebSocketManager] 🔍 Checking storedTerminals by sessionName:', existingTerminal ? 'FOUND' : 'NOT FOUND')
+}
+```
+
+**Key Insights**:
+- **Display names change** - `terminal.name` gets updated from tmux pane titles
+- **Unique IDs don't change** - `sessionName` (tt-bash-123), `terminal.id` persist
+- **Type is NOT unique** - Multiple terminals can have same `terminalType`
+- **Always use unique identifiers for matching**, never use display properties or types
+
+**Prevention Checklist**:
+- ✅ Use `sessionName` for matching existing sessions
+- ✅ Use `terminal.id` for matching UI state
+- ✅ Use `requestId` for matching spawn requests
+- ❌ NEVER use `terminal.name` for matching (it changes!)
+- ❌ NEVER use `terminalType` as primary matcher (not unique!)
+
+**Performance Impact**:
+- **Before**: O(n²) when matching many terminals by type
+- **After**: O(n) direct lookup by sessionName
+- **Result**: Instant reconnection even with 50+ terminals
+
+**Files**:
+- `src/hooks/useWebSocketManager.ts:185-193` (sessionName matching added)
+- `src/hooks/useTerminalSpawning.ts:260` (sessionName used for reconnection)
+
+---
+
 ## Refs and State Management
 
 ### Lesson: Clear Refs When State Changes (Nov 13, 2025)
@@ -1074,4 +1142,110 @@ terminalRegistry.on('output', (terminalId, data) => {
 
 ---
 
-**Last Updated**: November 13, 2025
+## Lesson: Orphaned Session Detection is a Trap (Nov 15, 2025)
+
+**Branch**: `sessionmanager` (failed experiment - commit 67ecf11)
+
+### What Was Attempted
+
+Detect and manage tmux sessions that exist outside of Tabz:
+- Poll tmux for all sessions every 15 seconds
+- Show "orphaned" sessions (not in localStorage) in UI
+- Offer "Adopt" and "Kill" buttons for external sessions
+
+### Why It Failed
+
+1. **Refresh Hell**: Polling every 15s caused entire site reload to sync state
+2. **State Complexity**: Managing two sources of truth (localStorage + tmux)
+3. **Race Conditions**: Other windows detecting same orphans simultaneously
+4. **Unclear Ownership**: Which window "owns" an orphaned session?
+5. **False Positives**: Creating spam for legitimately external sessions (from tmuxplexer, manual tmux, etc.)
+
+### The Code That Caused Problems
+
+```typescript
+// ❌ BAD: Polling every 15s
+useEffect(() => {
+  const interval = setInterval(async () => {
+    const allSessions = await fetchTmuxSessions()
+    const orphans = allSessions.filter(s => !isInLocalStorage(s))
+    setOrphanedSessions(orphans)
+
+    // This was causing full page reloads!
+    if (orphans.length > 0) {
+      console.log('Detected orphans, reloading...')
+      window.location.reload()
+    }
+  }, 15000)
+
+  return () => clearInterval(interval)
+}, [])
+
+// ❌ BAD: Adopt orphans (unclear ownership)
+const handleAdoptOrphans = async (sessionNames: string[]) => {
+  // Which window adopts? What if multiple windows try?
+  sessionNames.forEach(name => {
+    addTerminal({ sessionName: name, ... })
+  })
+
+  // Broadcast to other windows - creates race conditions
+  broadcastChannel.postMessage({ type: 'orphan-adopted' })
+}
+```
+
+### Why This Approach Doesn't Work
+
+**The fundamental problem**: Tabz uses localStorage as source of truth, but tmux is the actual source of truth. Trying to reconcile both creates:
+- Infinite loops (detect orphan → adopt → broadcast → detect again)
+- Unclear ownership (which window manages what?)
+- Performance issues (constant polling + reloads)
+- User confusion (why are random sessions appearing?)
+- Multi-window chaos (all windows fighting over same orphans)
+
+### The Right Approach
+
+**Don't do it in Tabz.** Use separate tools for session management:
+
+1. **tmux CLI** (simple)
+   ```bash
+   tmux ls                          # See all sessions
+   tmux attach -t session-name      # Attach to session
+   tmux kill-session -t session-name # Kill session
+   ```
+
+2. **tmuxplexer** (nice TUI - already exists!)
+   - Already has session browser
+   - Shows all sessions (including external)
+   - Safe attach/kill operations
+   - No polling, no state sync issues
+   - Can be spawned from Tabz spawn menu
+
+3. **Keep Tabz Simple**
+   - Only track sessions Tabz spawned
+   - Trust localStorage as single source of truth
+   - If user wants to manage external sessions, use tmux/tmuxplexer
+
+### Prevention Checklist
+
+Before implementing "smart" session detection:
+
+- [ ] Do we really need this? (Answer: Usually no)
+- [ ] Will this require polling? (If yes, reconsider)
+- [ ] Are there multiple sources of truth? (If yes, reconsider)
+- [ ] Could this cause race conditions? (If yes, reconsider)
+- [ ] Is there already a tool that does this? (If yes, use that tool!)
+
+### Artifacts
+
+**Branch**: `sessionmanager` (67ecf11)
+**Related Docs**:
+- `DETACHED_SESSIONS_DESIGN.md` (design doc for failed feature)
+- `DEBUG_POPOUT_BUG.md` (debugging the reload issues)
+
+**Status**: ❌ Abandoned - Feature is anti-pattern
+
+**Recommendation**: Keep Tabz focused on managing its own sessions. Use tmux/tmuxplexer for external session management.
+
+---
+
+**Last Updated**: November 15, 2025

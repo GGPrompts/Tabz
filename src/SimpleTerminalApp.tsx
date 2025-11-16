@@ -379,6 +379,9 @@ function SimpleTerminalApp() {
   // Pane marked status
   const [paneMarked, setPaneMarked] = useState(false)
 
+  // Pane zoomed status
+  const [paneZoomed, setPaneZoomed] = useState(false)
+
   // Rename dialog state
   const [renameDialog, setRenameDialog] = useState<{
     show: boolean
@@ -1130,20 +1133,23 @@ function SimpleTerminalApp() {
     console.log('[handlePaneContextMenu] Terminal:', terminal)
     console.log('[handlePaneContextMenu] sessionName:', terminal?.sessionName, 'status:', terminal?.status)
 
-    // Fetch marked status if terminal has a session
+    // Fetch marked and zoomed status if terminal has a session
     if (terminal?.sessionName) {
       try {
         const response = await fetch(`/api/tmux/info/${terminal.sessionName}`)
         const data = await response.json()
         if (data.success) {
           setPaneMarked(data.paneMarked || false)
+          setPaneZoomed(data.paneZoomed || false)
         }
       } catch (error) {
         console.error('[handlePaneContextMenu] Error fetching pane info:', error)
         setPaneMarked(false)
+        setPaneZoomed(false)
       }
     } else {
       setPaneMarked(false)
+      setPaneZoomed(false)
     }
 
     setPaneContextMenu({
@@ -2817,7 +2823,7 @@ End of error report
                   className="context-menu-item"
                   onClick={() => executeTmuxPaneCommand('resize-pane -Z')}
                 >
-                  🔍 Zoom
+                  {paneZoomed ? '🔍 Unzoom' : '🔍 Zoom'}
                 </button>
                 <div className="context-menu-divider" />
                 <button

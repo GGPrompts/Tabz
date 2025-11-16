@@ -801,18 +801,19 @@ router.get('/tmux/info/:name', asyncHandler(async (req, res) => {
       });
     }
 
-    // Get window name, pane title, window count, pane count, current working directory, and marked status
-    // Format: "window_name|pane_title|session_windows|window_index|pane_count|pane_current_path|pane_marked"
+    // Get window name, pane title, window count, pane count, current working directory, marked status, and zoom status
+    // Format: "window_name|pane_title|session_windows|window_index|pane_count|pane_current_path|pane_marked|window_zoomed_flag"
     const info = execSync(
-      `tmux display-message -t "${name}" -p "#{window_name}|#{pane_title}|#{session_windows}|#{window_index}|#{window_panes}|#{pane_current_path}|#{pane_marked}"`,
+      `tmux display-message -t "${name}" -p "#{window_name}|#{pane_title}|#{session_windows}|#{window_index}|#{window_panes}|#{pane_current_path}|#{pane_marked}|#{window_zoomed_flag}"`,
       { encoding: 'utf-8' }
     ).trim();
 
-    const [windowName, paneTitle, windowCountStr, activeWindowStr, paneCountStr, currentPath, paneMarkedStr] = info.split('|');
+    const [windowName, paneTitle, windowCountStr, activeWindowStr, paneCountStr, currentPath, paneMarkedStr, paneZoomedStr] = info.split('|');
     const windowCount = parseInt(windowCountStr, 10);
     const activeWindow = parseInt(activeWindowStr, 10);
     const paneCount = parseInt(paneCountStr, 10);
     const paneMarked = paneMarkedStr === '1';
+    const paneZoomed = paneZoomedStr === '1';
 
     // Shorten path for display (replace home directory with ~)
     const homeDir = require('os').homedir();
@@ -875,6 +876,7 @@ router.get('/tmux/info/:name', asyncHandler(async (req, res) => {
       activeWindow: activeWindow || 0,
       paneCount: paneCount || 1,
       paneMarked: paneMarked || false,
+      paneZoomed: paneZoomed || false,
       sessionName: name
     });
   } catch (err) {

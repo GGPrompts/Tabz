@@ -182,8 +182,19 @@ export function useWebSocketManager(
             console.log('[useWebSocketManager] 🔍 Checking storedTerminals by agentId:', existingTerminal ? 'FOUND' : 'NOT FOUND')
           }
 
+          // CRITICAL: Match by sessionName (unique identifier that persists across refreshes)
+          // This prevents matching wrong terminals when reconnecting many terminals of same type
+          if (!existingTerminal && message.data.sessionName) {
+            existingTerminal = storedTerminals.find(t =>
+              t.sessionName === message.data.sessionName &&
+              (t.windowId || 'main') === currentWindowId
+            )
+            console.log('[useWebSocketManager] 🔍 Checking storedTerminals by sessionName:', existingTerminal ? 'FOUND' : 'NOT FOUND')
+          }
+
           // Fallback: Find most recent spawning terminal of same type IN THIS WINDOW
           // CRITICAL: Filter by windowId to prevent cross-window contamination with fast-spawning terminals (bash)
+          // WARNING: This is a last resort and can match wrong terminal if multiple are spawning!
           if (!existingTerminal) {
             const spawningTerminals = storedTerminals.filter(t =>
               t.status === 'spawning' &&
