@@ -408,6 +408,44 @@ Use intuitive aliases in spawn-options:
 - `ocean` → Deep Ocean
 - `dark` → GitHub Dark
 
+### Icon System
+
+**Icons use [lucide-react](https://lucide.dev)** - A beautiful, consistent icon library with 1000+ icons.
+
+**Location:** `src/config/terminalIcons.tsx`
+
+**How it works:**
+- Each terminal type maps to a lucide icon + color scheme
+- Icons appear in tabs, spawn menu, detached dropdown, and settings
+- Users can select icons when editing spawn options in Settings modal
+
+**Adding a new icon:**
+
+1. **Import the icon** from lucide-react:
+```typescript
+import { YourIcon } from 'lucide-react';
+```
+
+2. **Add to TERMINAL_ICON_MAP** in `src/config/terminalIcons.tsx`:
+```typescript
+'your-type': {
+  icon: YourIcon,
+  color: '#ff6b35',
+  bgGradient: 'linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)',
+  label: 'Your Label',
+  category: 'tool', // or 'agent' or 'utility'
+},
+```
+
+3. **Use in spawn options** by setting `icon: 'your-type'` in `public/spawn-options.json`
+
+**Available categories:**
+- `agent` - AI assistants (Claude Code, Gemini, etc.)
+- `tool` - TUI applications (LazyGit, TFE, Spotify, etc.)
+- `utility` - Generic utilities (Bash, Python, Fire, Rocket, etc.)
+
+**Icon picker:** Settings → Edit Spawn Option → Icon dropdown shows all available icons organized by category.
+
 ---
 
 ## 🐛 Known Issues

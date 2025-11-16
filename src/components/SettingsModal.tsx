@@ -5,6 +5,8 @@ import { FontFamilyDropdown } from './FontFamilyDropdown'
 import { BackgroundGradientDropdown } from './BackgroundGradientDropdown'
 import { TextColorThemeDropdown } from './TextColorThemeDropdown'
 import { useSettingsStore } from '../stores/useSettingsStore'
+import { InlineTerminalIcon } from './ui/avatar-icon'
+import { getIconsByCategory, getTerminalIcon } from '../config/terminalIcons'
 
 interface SpawnOption {
   label: string
@@ -31,21 +33,8 @@ interface SettingsModalProps {
   onSave: () => void
 }
 
-// Curated emoji icons for terminal spawn options
-const ICON_OPTIONS = [
-  '💻', '🖥️', '⌨️', '🖱️', // Computers & Peripherals
-  '🤖', '🧠', '👾', '🎮', // AI & Tech
-  '📁', '📂', '📄', '📝', // Files
-  '⚡', '🔥', '💎', '⭐', // Energy & Quality
-  '🚀', '🛸', '🌌', '🌠', // Space
-  '🎨', '🎭', '🎪', '🎯', // Arts & Goals
-  '🔧', '⚙️', '🔨', '🛠️', // Tools
-  '🐚', '🐧', '🐍', '🦀', // Shell & Languages
-  '📊', '📈', '📉', '💹', // Data & Charts
-  '🔒', '🔓', '🔑', '🛡️', // Security
-  '🌐', '🌍', '🗺️', '📡', // Network & World
-  '⏱️', '⏰', '⌛', '⏳', // Time
-]
+// Get all available icons organized by category
+const ICON_CATEGORIES = getIconsByCategory()
 
 export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<'spawn-options' | 'global-defaults'>('spawn-options')
@@ -73,7 +62,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
     label: '',
     command: '',
     terminalType: 'bash',
-    icon: '💻',
+    icon: 'bash', // Use terminal type as icon
     description: '',
     workingDir: '', // Empty = use global default
     defaultTheme: undefined,
@@ -331,7 +320,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
       label: '',
       command: '',
       terminalType: 'bash',
-      icon: '💻',
+      icon: 'bash', // Use terminal type as icon
       description: '',
       workingDir: '', // Empty = use global default
       defaultTheme: undefined,
@@ -820,22 +809,61 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                       className="icon-picker-trigger"
                       onClick={() => setShowIconPicker(!showIconPicker)}
                     >
-                      <span className="selected-icon">{formData.icon}</span>
+                      <span className="selected-icon">
+                        <InlineTerminalIcon terminalType={formData.icon} size="sm" />
+                      </span>
                       <span className="picker-arrow">▼</span>
                     </button>
                     {showIconPicker && (
                       <div className="icon-picker-dropdown">
-                        {ICON_OPTIONS.map((icon) => (
-                          <button
-                            key={icon}
-                            type="button"
-                            className={`icon-option ${formData.icon === icon ? 'selected' : ''}`}
-                            onClick={() => handleIconSelect(icon)}
-                            title={icon}
-                          >
-                            {icon}
-                          </button>
-                        ))}
+                        <div className="icon-category">
+                          <div className="icon-category-label">AI Agents</div>
+                          <div className="icon-category-grid">
+                            {ICON_CATEGORIES.agent.map((iconType) => (
+                              <button
+                                key={iconType}
+                                type="button"
+                                className={`icon-option ${formData.icon === iconType ? 'selected' : ''}`}
+                                onClick={() => handleIconSelect(iconType)}
+                                title={getTerminalIcon(iconType).label}
+                              >
+                                <InlineTerminalIcon terminalType={iconType} size="md" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="icon-category">
+                          <div className="icon-category-label">Tools</div>
+                          <div className="icon-category-grid">
+                            {ICON_CATEGORIES.tool.map((iconType) => (
+                              <button
+                                key={iconType}
+                                type="button"
+                                className={`icon-option ${formData.icon === iconType ? 'selected' : ''}`}
+                                onClick={() => handleIconSelect(iconType)}
+                                title={getTerminalIcon(iconType).label}
+                              >
+                                <InlineTerminalIcon terminalType={iconType} size="md" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="icon-category">
+                          <div className="icon-category-label">Utilities</div>
+                          <div className="icon-category-grid">
+                            {ICON_CATEGORIES.utility.map((iconType) => (
+                              <button
+                                key={iconType}
+                                type="button"
+                                className={`icon-option ${formData.icon === iconType ? 'selected' : ''}`}
+                                onClick={() => handleIconSelect(iconType)}
+                                title={getTerminalIcon(iconType).label}
+                              >
+                                <InlineTerminalIcon terminalType={iconType} size="md" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>

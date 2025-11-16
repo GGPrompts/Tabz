@@ -473,11 +473,32 @@
   padding: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(12px);
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 4px;
-  max-height: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
   overflow-y: auto;
+}
+
+.icon-category {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.icon-category-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 4px;
+}
+
+.icon-category-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
 }
 
 .icon-picker-dropdown::-webkit-scrollbar {

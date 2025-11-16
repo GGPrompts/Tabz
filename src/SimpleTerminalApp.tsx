@@ -8,6 +8,7 @@ import { HotkeysHelpModal } from './components/HotkeysHelpModal'
 import { FontFamilyDropdown } from './components/FontFamilyDropdown'
 import { BackgroundGradientDropdown } from './components/BackgroundGradientDropdown'
 import { TextColorThemeDropdown } from './components/TextColorThemeDropdown'
+import { InlineTerminalIcon } from './components/ui/avatar-icon'
 import { Agent, TERMINAL_TYPES } from './types'
 import { useSimpleTerminalStore, Terminal as StoredTerminal } from './stores/simpleTerminalStore'
 import { useSettingsStore } from './stores/useSettingsStore'
@@ -22,6 +23,7 @@ import { useDragDrop } from './hooks/useDragDrop'
 import { useWebSocketManager } from './hooks/useWebSocketManager'
 import { useTerminalNameSync } from './hooks/useTerminalNameSync'
 import { useClaudeCodeStatus, ClaudeCodeStatus } from './hooks/useClaudeCodeStatus'
+import { useAltKeyState } from './hooks/useAltKeyState'
 import {
   DndContext,
   closestCenter,
@@ -83,9 +85,11 @@ interface SortableTabProps {
   mousePosition: React.MutableRefObject<{ x: number; y: number }>
   splitPosition?: 'single' | 'left' | 'middle' | 'right'
   claudeCodeStatuses: Map<string, ClaudeCodeStatus>
+  isAltPressed?: boolean
+  tabIndex?: number
 }
 
-function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate, onClose, onContextMenu, dropZone, isDraggedOver, mousePosition, splitPosition = 'single', claudeCodeStatuses }: SortableTabProps) {
+function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate, onClose, onContextMenu, dropZone, isDraggedOver, mousePosition, splitPosition = 'single', claudeCodeStatuses, isAltPressed = false, tabIndex }: SortableTabProps) {
   // LOCK SPLIT PANES: Disable dragging for terminals that are part of a split (but not the container)
   const isPartOfSplit = splitPosition !== 'single'
   const isDraggable = !isPartOfSplit
@@ -167,6 +171,12 @@ function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate,
 
   // Render split icon with arrow indicator
   const renderTabIcon = () => {
+    // Show tab number when Alt is pressed (for Alt+1-9 shortcuts)
+    if (isAltPressed && tabIndex !== undefined) {
+      const displayNumber = tabIndex + 1 // Convert 0-based to 1-based
+      return <span className="tab-icon-single" style={{ fontWeight: 'bold' }}>{displayNumber}</span>
+    }
+
     if (terminal.status === 'spawning') {
       return <span className="tab-icon-single">⏳</span>
     }
@@ -176,17 +186,19 @@ function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate,
       const isVertical = terminal.splitLayout.type === 'vertical'
       const splitArrow = isVertical ? '↔' : '↕'
 
-      // Get icons from both panes
-      const paneIcons = terminal.splitLayout.panes.map(pane => {
+      // Get terminal types from both panes
+      const paneTypes = terminal.splitLayout.panes.map(pane => {
         const paneTerminal = allTerminals.find(t => t.id === pane.terminalId)
-        return paneTerminal?.icon || '💻'
+        return paneTerminal?.terminalType || 'bash'
       })
 
       return (
         <span className="tab-icon-split">
           <span className="split-arrow">{splitArrow}</span>
-          {paneIcons.map((icon, idx) => (
-            <span key={idx} className="split-emoji">{icon}</span>
+          {paneTypes.map((terminalType, idx) => (
+            <span key={idx} className="split-emoji">
+              <InlineTerminalIcon terminalType={terminalType} size="xs" />
+            </span>
           ))}
         </span>
       )
@@ -194,9 +206,7 @@ function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate,
 
     // Regular single terminal
     return (
-      <span className="tab-icon-single">
-        {terminal.icon || TERMINAL_TYPES.find(t => t.value === terminal.terminalType)?.icon || '💻'}
-      </span>
+      <InlineTerminalIcon terminalType={terminal.terminalType} size="sm" />
     )
   }
 
@@ -217,7 +227,7 @@ function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate,
       {terminal.status === 'detached' ? (
         <span className="tab-icon-single">📌</span>
       ) : (
-        <span className="tab-icon-single">{terminal.icon || '💻'}</span>
+        renderTabIcon()
       )}
       <span className="tab-label">{terminal.name}</span>
 
@@ -366,6 +376,9 @@ function SimpleTerminalApp() {
   const [detachedDropdownPosition, setDetachedDropdownPosition] = useState({ top: 0, left: 0 })
   const detachedDropdownRef = useRef<HTMLDivElement>(null)
   const detachedTabRef = useRef<HTMLDivElement>(null)
+
+  // Alt key state for showing tab numbers
+  const isAltPressed = useAltKeyState()
 
   // Settings
   const { useTmux, updateSettings } = useSettingsStore()
@@ -1785,7 +1798,9 @@ End of error report
                   setShowDetachedDropdown(false)
                 }}
               >
-                <span className="detached-dropdown-icon">{terminal.icon || '💻'}</span>
+                <span className="detached-dropdown-icon">
+                  <InlineTerminalIcon terminalType={terminal.terminalType} size="sm" />
+                </span>
                 <span className="detached-dropdown-name">{terminal.name}</span>
                 {terminal.sessionName && (
                   <span className="detached-dropdown-session">
@@ -1914,7 +1929,7 @@ End of error report
                   // Otherwise, maintain original order (don't swap)
                   return 0
                 })
-                .map(terminal => {
+                .map((terminal, index) => {
                   const splitInfo = splitTabInfo.get(terminal.id)
                   const isSplit = splitInfo && splitInfo.position !== 'single'
 
@@ -1957,6 +1972,8 @@ End of error report
                     mousePosition={mousePosition}
                     splitPosition={splitInfo?.position}
                     claudeCodeStatuses={claudeCodeStatuses}
+                    isAltPressed={isAltPressed}
+                    tabIndex={index}
                   />
                 )
               })}
@@ -2225,7 +2242,9 @@ End of error report
                       }
                     }}
                   >
-                    <span className="spawn-icon">{option.icon}</span>
+                    <span className="spawn-icon">
+                      <InlineTerminalIcon terminalType={option.terminalType} size="lg" />
+                    </span>
                     <div className="spawn-info">
                       <div className="spawn-label">{option.label}</div>
                       <div className="spawn-description">{option.description}</div>
