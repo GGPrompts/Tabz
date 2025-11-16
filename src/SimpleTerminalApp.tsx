@@ -1212,9 +1212,54 @@ function SimpleTerminalApp() {
 
     console.log(`[SimpleTerminalApp] Killing tmux pane: ${terminal.sessionName}`)
 
+    // Execute kill-pane command
     await executeTmuxPaneCommand('kill-pane')
 
-    // Remove terminal from UI
+    // Check if this terminal is part of a split
+    const splitContainer = storedTerminals.find(t =>
+      t.splitLayout?.panes?.some(p => p.terminalId === terminal.id)
+    )
+
+    if (splitContainer && splitContainer.splitLayout) {
+      // Terminal is part of a split - clean up the split
+      console.log(`[SimpleTerminalApp] Cleaning up split for killed pane: ${terminal.id}`)
+
+      const remainingPanes = splitContainer.splitLayout.panes.filter(
+        p => p.terminalId !== terminal.id
+      )
+
+      if (remainingPanes.length === 1) {
+        // Only 1 pane left - convert split container back to single terminal
+        console.log(`[SimpleTerminalApp] Only 1 pane remaining, converting split to single terminal`)
+        updateTerminal(splitContainer.id, {
+          splitLayout: { type: 'single', panes: [] }
+        })
+
+        // Unhide the remaining pane if it was hidden
+        const remainingPaneTerminal = storedTerminals.find(t => t.id === remainingPanes[0].terminalId)
+        if (remainingPaneTerminal?.isHidden) {
+          updateTerminal(remainingPanes[0].terminalId, {
+            isHidden: false
+          })
+        }
+
+        // Set the remaining pane as active
+        setActiveTerminal(remainingPanes[0].terminalId)
+      } else if (remainingPanes.length > 1) {
+        // Still have multiple panes - update the split layout
+        updateTerminal(splitContainer.id, {
+          splitLayout: {
+            ...splitContainer.splitLayout,
+            panes: remainingPanes
+          }
+        })
+      } else {
+        // No panes left - remove the split container entirely
+        removeTerminal(splitContainer.id)
+      }
+    }
+
+    // Remove the killed pane terminal from UI
     removeTerminal(paneContextMenu.terminalId)
   }
 
