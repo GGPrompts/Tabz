@@ -1772,7 +1772,11 @@ End of error report
   // Footer control handlers - Tab-specific customizations (persisted per-tab)
   // These changes are specific to the focused/active terminal and persist through refresh
   // New spawns always use defaults from spawn-options.json
-  const handleFontSizeChange = (delta: number) => {
+  const handleFontSizeChange = (delta: number, e?: React.MouseEvent) => {
+    // Prevent button from stealing focus and sending events to terminal
+    e?.preventDefault()
+    e?.stopPropagation()
+
     if (!displayTerminal || !terminalRef.current) return
     const globalDefault = useSettingsStore.getState().terminalDefaultFontSize
     const currentSize = displayTerminal.fontSize || globalDefault
@@ -1782,7 +1786,11 @@ End of error report
     updateTerminal(displayTerminal.id, { fontSize: newSize })
   }
 
-  const handleResetToDefaults = () => {
+  const handleResetToDefaults = (e?: React.MouseEvent) => {
+    // Prevent button from stealing focus and sending events to terminal
+    e?.preventDefault()
+    e?.stopPropagation()
+
     if (!displayTerminal || !terminalRef.current) return
 
     // Find the spawn option for this terminal
@@ -2588,7 +2596,7 @@ End of error report
             {/* Font Size Controls */}
             <button
               className="footer-control-btn"
-              onClick={() => handleFontSizeChange(-1)}
+              onClick={(e) => handleFontSizeChange(-1, e)}
               title="Decrease font size"
               disabled={!displayTerminal.fontSize || displayTerminal.fontSize <= 10}
             >
@@ -2597,7 +2605,7 @@ End of error report
             <span className="font-size-display">{displayTerminal.fontSize || useSettingsStore.getState().terminalDefaultFontSize}px</span>
             <button
               className="footer-control-btn"
-              onClick={() => handleFontSizeChange(1)}
+              onClick={(e) => handleFontSizeChange(1, e)}
               title="Increase font size"
               disabled={!!displayTerminal.fontSize && displayTerminal.fontSize >= 24}
             >
@@ -2607,7 +2615,7 @@ End of error report
             {/* Reset to Defaults Button */}
             <button
               className="footer-control-btn"
-              onClick={handleResetToDefaults}
+              onClick={(e) => handleResetToDefaults(e)}
               title="Reset to spawn-option defaults (theme, font, transparency)"
             >
               ↺
@@ -2616,7 +2624,11 @@ End of error report
             {/* Customize Panel Toggle */}
             <button
               className="footer-control-btn"
-              onClick={() => setShowCustomizePanel(!showCustomizePanel)}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setShowCustomizePanel(!showCustomizePanel)
+              }}
               title="Customize theme, transparency, font"
             >
               🎨
@@ -2695,6 +2707,7 @@ End of error report
           {(() => {
             const terminal = storedTerminals.find(t => t.id === contextMenu.terminalId)
             const canDetach = terminal?.sessionName && terminal?.status !== 'detached'
+            const windowCount = terminal?.windowCount || 1
 
             // Check if this terminal is part of a split (either as container or as pane)
             const isInSplit = terminal && (
@@ -2706,6 +2719,38 @@ End of error report
 
             return (
               <>
+                {windowCount > 1 && terminal?.sessionName && (
+                  <>
+                    <div
+                      className="context-menu-submenu"
+                      onMouseEnter={() => fetchTmuxWindows(terminal.sessionName!)}
+                    >
+                      <button className="context-menu-item">
+                        🪟 Switch Window ▶
+                      </button>
+                      {showWindowSubmenu && tmuxWindows.length > 0 && (
+                        <div className="context-submenu-panel">
+                          {tmuxWindows.map(win => (
+                            <button
+                              key={win.index}
+                              className="context-menu-item"
+                              onClick={async () => {
+                                if (terminal.sessionName) {
+                                  await executeTmuxPaneCommand(`select-window -t :${win.index}`, terminal.id)
+                                  setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+                                  setShowWindowSubmenu(false)
+                                }
+                              }}
+                            >
+                              {win.name} {win.active ? '✓' : ''}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="context-menu-divider" />
+                  </>
+                )}
                 <button
                   className="context-menu-item"
                   onClick={handleContextRename}

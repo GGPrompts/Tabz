@@ -17,6 +17,7 @@ import { Terminal as StoredTerminal } from '../stores/simpleTerminalStore'
  * - Alt+1-9: Jump to tab N
  * - Alt+H: Split horizontal (tmux)
  * - Alt+V: Split vertical (tmux)
+ * - Alt+N: New window (tmux)
  * - Alt+U: Swap pane up (tmux)
  * - Alt+D: Swap pane down (tmux)
  * - Alt+M: Mark pane (tmux)
@@ -184,6 +185,8 @@ export function useKeyboardShortcuts(
             'H': 'split-window -h -c "#{pane_current_path}"',
             'v': 'split-window -v -c "#{pane_current_path}"',
             'V': 'split-window -v -c "#{pane_current_path}"',
+            'n': 'new-window -c "#{pane_current_path}"',
+            'N': 'new-window -c "#{pane_current_path}"',
             'x': 'kill-pane',
             'X': 'kill-pane',
             'z': 'resize-pane -Z',

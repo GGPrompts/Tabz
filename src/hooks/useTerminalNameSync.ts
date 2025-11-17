@@ -65,12 +65,16 @@ export function useTerminalNameSync(
                 newName = `${newName} (${counts.join(', ')})`
               }
 
-              // Only update if name actually changed to avoid unnecessary re-renders
-              if (newName !== terminal.name) {
+              // Only update if name or window count changed to avoid unnecessary re-renders
+              if (newName !== terminal.name || result.windowCount !== terminal.windowCount) {
                 // Use setTimeout to ensure update happens after current render cycle completes
                 // This prevents "Cannot update component while rendering" React warnings
                 setTimeout(() => {
-                  updateTerminal(terminal.id, { name: newName })
+                  updateTerminal(terminal.id, {
+                    name: newName,
+                    windowCount: result.windowCount,
+                    paneCount: result.paneCount
+                  })
                 }, 0)
               }
             }

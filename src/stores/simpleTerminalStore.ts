@@ -44,6 +44,10 @@ export interface Terminal {
   autoUpdateName?: boolean; // Whether to auto-update name from tmux pane title (default: true)
   customName?: string; // User-provided custom name (disables auto-update when set)
 
+  // Tmux window/pane counts (for UI features like window switcher)
+  windowCount?: number; // Number of windows in this tmux session
+  paneCount?: number; // Number of panes in current window
+
   // Split layout data (Phase 1 of split layout system)
   splitLayout?: SplitLayout;
 }

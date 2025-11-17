@@ -555,12 +555,35 @@ class TmuxSessionManager {
    */
   async executeTmuxCommand(sessionName, command) {
     try {
-      // Execute tmux command directly on the session
-      // Example: tmux split-window -t "sessionName" -h
-      execSync(`tmux ${command} -t "${sessionName}"`, { encoding: 'utf8' });
+      let finalCommand;
+
+      // Check if command already has -t flag (e.g., "select-window -t :0")
+      // If so, replace the target with full session:window format
+      if (command.includes('-t :')) {
+        // Extract window index from command like "select-window -t :0"
+        const match = command.match(/-t :(\d+)/);
+        if (match) {
+          const windowIndex = match[1];
+          // Replace ":0" with "sessionName:0"
+          command = command.replace(/-t :\d+/, `-t "${sessionName}:${windowIndex}"`);
+          finalCommand = `tmux ${command}`;
+          console.log(`[TmuxSessionManager] Executing window command: ${finalCommand}`);
+          execSync(finalCommand, { encoding: 'utf8' });
+        } else {
+          // Fallback to default behavior
+          finalCommand = `tmux ${command} -t "${sessionName}"`;
+          execSync(finalCommand, { encoding: 'utf8' });
+        }
+      } else {
+        // Default behavior: append -t sessionName
+        // Example: tmux split-window -h -t "sessionName"
+        finalCommand = `tmux ${command} -t "${sessionName}"`;
+        execSync(finalCommand, { encoding: 'utf8' });
+      }
 
       return { success: true };
     } catch (error) {
+      console.error(`[TmuxSessionManager] Command failed: ${error.message}`);
       return {
         success: false,
         error: error.message,

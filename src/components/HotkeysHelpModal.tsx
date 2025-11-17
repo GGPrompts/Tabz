@@ -69,10 +69,18 @@ export function HotkeysHelpModal({ show, onClose }: Props) {
         </section>
 
         <section>
-          <h3>Splits & Panes</h3>
+          <h3>Tmux Windows & Panes</h3>
           <div className="hotkey-row hotkey-tip">
             <span className="tip-icon">💡</span>
-            <span>Drag 2 tabs together to create splits</span>
+            <span>Right-click tab to switch windows (if session has multiple)</span>
+          </div>
+          <div className="hotkey-row">
+            <kbd>Alt</kbd> + <kbd>N</kbd>
+            <span>New window (Ctrl+B c)</span>
+          </div>
+          <div className="hotkey-row">
+            <kbd>Alt</kbd> + <kbd>Left/Right</kbd>
+            <span>Previous/next window (tmux config)</span>
           </div>
           <div className="hotkey-row">
             <kbd>Alt</kbd> + <kbd>H</kbd>
