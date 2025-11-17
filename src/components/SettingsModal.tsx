@@ -15,6 +15,10 @@ interface SpawnOption {
   icon: string
   description: string
   workingDir?: string
+  projectId?: string  // For gg-hub projects
+  category?: string   // For gg-hub projects
+  metadata?: any      // For gg-hub project metadata
+  isSeparator?: boolean  // For section separators
   defaultTheme?: string
   defaultBackground?: string // Background gradient key
   defaultTransparency?: number
@@ -105,34 +109,84 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
     setIsLoading(true)
     setError(null)
     try {
+      // Load manual spawn options
       const response = await fetch('/api/spawn-options')
       const result = await response.json()
-      if (result.success) {
-        setSpawnOptions(result.data)
-        setOriginalOptions(JSON.parse(JSON.stringify(result.data))) // Deep copy for comparison
 
-        // Load projects from file
-        if (result.projects) {
-          setProjects(result.projects)
-          setOriginalProjects(JSON.parse(JSON.stringify(result.projects))) // Deep copy for comparison
-        }
-
-        // Load global defaults from file and apply to settings store
-        if (result.globalDefaults) {
-          const defaults = result.globalDefaults
-          setOriginalGlobalDefaults(JSON.parse(JSON.stringify(defaults))) // Track original
-          settings.updateSettings({
-            workingDirectory: defaults.workingDirectory ?? settings.workingDirectory,
-            terminalDefaultFontFamily: defaults.fontFamily ?? settings.terminalDefaultFontFamily,
-            terminalDefaultFontSize: defaults.fontSize ?? settings.terminalDefaultFontSize,
-            terminalDefaultTheme: defaults.theme ?? settings.terminalDefaultTheme,
-            terminalDefaultBackground: defaults.background ?? settings.terminalDefaultBackground,
-            terminalDefaultTransparency: (defaults.transparency ?? 100) / 100, // Convert % to 0-1
-            useTmux: defaults.useTmux ?? settings.useTmux,
-          })
-        }
-      } else {
+      if (!result.success) {
         setError('Failed to load spawn options')
+        return
+      }
+
+      // Load gg-hub spawn options
+      let ggHubOptions: SpawnOption[] = []
+      try {
+        const ggHubResponse = await fetch('/api/gg-hub/spawn-options')
+        const ggHubResult = await ggHubResponse.json()
+        if (ggHubResult.success) {
+          ggHubOptions = ggHubResult.data
+          console.log(`[SettingsModal] Loaded ${ggHubOptions.length} gg-hub spawn options`)
+        }
+      } catch (ggHubErr) {
+        console.warn('[SettingsModal] Failed to load gg-hub spawn options:', ggHubErr)
+        // Continue without gg-hub options - not a critical error
+      }
+
+      // Create section separator
+      const projectSeparator: SpawnOption = {
+        label: '─── Projects ───',
+        command: '',
+        terminalType: 'separator' as any,
+        icon: '',
+        description: 'gg-hub projects',
+        isSeparator: true
+      }
+
+      const toolsSeparator: SpawnOption = {
+        label: '─── Tools ───',
+        command: '',
+        terminalType: 'separator' as any,
+        icon: '',
+        description: 'Manual tools',
+        isSeparator: true
+      }
+
+      // Merge with visual separators
+      const mergedOptions = [
+        ...(ggHubOptions.length > 0 ? [projectSeparator, ...ggHubOptions] : []),
+        ...(result.data.length > 0 ? [toolsSeparator, ...result.data] : [])
+      ]
+
+      setSpawnOptions(mergedOptions)
+      setOriginalOptions(JSON.parse(JSON.stringify(mergedOptions))) // Deep copy for comparison
+
+      // Populate projects dropdown with gg-hub projects for quick working directory selection
+      if (ggHubOptions.length > 0) {
+        const projectsForDropdown = ggHubOptions.map((opt: SpawnOption) => ({
+          name: opt.label,
+          workingDir: opt.workingDir || ''
+        }))
+        setProjects(projectsForDropdown)
+        setOriginalProjects(JSON.parse(JSON.stringify(projectsForDropdown)))
+      } else if (result.projects) {
+        // Fallback to projects from spawn-options.json if gg-hub not available
+        setProjects(result.projects)
+        setOriginalProjects(JSON.parse(JSON.stringify(result.projects)))
+      }
+
+      // Load global defaults from file and apply to settings store
+      if (result.globalDefaults) {
+        const defaults = result.globalDefaults
+        setOriginalGlobalDefaults(JSON.parse(JSON.stringify(defaults))) // Track original
+        settings.updateSettings({
+          workingDirectory: defaults.workingDirectory ?? settings.workingDirectory,
+          terminalDefaultFontFamily: defaults.fontFamily ?? settings.terminalDefaultFontFamily,
+          terminalDefaultFontSize: defaults.fontSize ?? settings.terminalDefaultFontSize,
+          terminalDefaultTheme: defaults.theme ?? settings.terminalDefaultTheme,
+          terminalDefaultBackground: defaults.background ?? settings.terminalDefaultBackground,
+          terminalDefaultTransparency: (defaults.transparency ?? 100) / 100, // Convert % to 0-1
+          useTmux: defaults.useTmux ?? settings.useTmux,
+        })
       }
     } catch (err) {
       setError('Network error: ' + (err as Error).message)
@@ -213,10 +267,23 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
         useTmux: settings.useTmux,
       }
 
+      // Filter out separators and gg-hub projects before saving
+      // Only save manual tools to spawn-options.json
+      const manualToolsOnly = spawnOptions.filter(opt =>
+        !opt.isSeparator &&  // Remove separators
+        !opt.projectId       // Remove gg-hub projects (they're in gg-hub-spawn-options.json)
+      )
+
+      console.log(`[SettingsModal] Saving ${manualToolsOnly.length} manual tools (filtered ${spawnOptions.length - manualToolsOnly.length} items)`)
+
       const response = await fetch('/api/spawn-options', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spawnOptions, globalDefaults, projects }),
+        body: JSON.stringify({
+          spawnOptions: manualToolsOnly,  // Only save manual tools
+          globalDefaults,
+          projects: []  // Projects dropdown is auto-populated from gg-hub
+        }),
       })
       const result = await response.json()
       if (result.success) {
@@ -713,65 +780,76 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
               </div>
 
               <div className="options-list">
-                {spawnOptions.map((option, index) => (
-                  <div
-                    key={index}
-                    className={`option-item ${dragOverIndex === index ? 'drag-over' : ''} ${draggedIndex === index ? 'dragging' : ''}`}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, index)}
-                    onDragEnd={handleDragEnd}
-                    onDragOver={(e) => handleDragOver(e, index)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={(e) => handleDrop(e, index)}
-                  >
-                    <div className="option-drag-handle" title="Drag to reorder">⋮⋮</div>
-                    <div className="option-main">
-                      <span className="option-icon">{option.icon}</span>
-                      <div className="option-details">
-                        <div className="option-label">
-                          {option.label}
-                          {index === 0 && <span className="default-badge">DEFAULT</span>}
-                        </div>
-                        <div className="option-meta">
-                          {option.command || 'bash'} • {option.terminalType}
-                          {(option.workingDir || settings.workingDirectory) && ` • ${option.workingDir || settings.workingDirectory}`}
+                {spawnOptions.map((option, index) => {
+                  // Render separators differently
+                  if (option.isSeparator) {
+                    return (
+                      <div key={index} className="option-separator">
+                        <span>{option.label}</span>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div
+                      key={index}
+                      className={`option-item ${dragOverIndex === index ? 'drag-over' : ''} ${draggedIndex === index ? 'dragging' : ''}`}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, index)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, index)}
+                    >
+                      <div className="option-drag-handle" title="Drag to reorder">⋮⋮</div>
+                      <div className="option-main">
+                        <span className="option-icon">{option.icon}</span>
+                        <div className="option-details">
+                          <div className="option-label">
+                            {option.label}
+                            {index === 0 && !spawnOptions[0].isSeparator && <span className="default-badge">DEFAULT</span>}
+                          </div>
+                          <div className="option-meta">
+                            {option.command || 'bash'} • {option.terminalType}
+                            {(option.workingDir || settings.workingDirectory) && ` • ${option.workingDir || settings.workingDirectory}`}
+                          </div>
                         </div>
                       </div>
+                      <div className="option-actions">
+                        <button
+                          className="move-btn"
+                          onClick={() => moveOption(index, 'up')}
+                          disabled={index === 0}
+                          title="Move up"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          className="move-btn"
+                          onClick={() => moveOption(index, 'down')}
+                          disabled={index === spawnOptions.length - 1}
+                          title="Move down"
+                        >
+                          ↓
+                        </button>
+                        <button
+                          className="edit-btn"
+                          onClick={() => handleEditOption(index)}
+                          title="Edit"
+                        >
+                          🎨
+                        </button>
+                        <button
+                          className="delete-btn"
+                          onClick={() => handleDeleteOption(index)}
+                          title="Delete"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
-                    <div className="option-actions">
-                      <button
-                        className="move-btn"
-                        onClick={() => moveOption(index, 'up')}
-                        disabled={index === 0}
-                        title="Move up"
-                      >
-                        ↑
-                      </button>
-                      <button
-                        className="move-btn"
-                        onClick={() => moveOption(index, 'down')}
-                        disabled={index === spawnOptions.length - 1}
-                        title="Move down"
-                      >
-                        ↓
-                      </button>
-                      <button
-                        className="edit-btn"
-                        onClick={() => handleEditOption(index)}
-                        title="Edit"
-                      >
-                        🎨
-                      </button>
-                      <button
-                        className="delete-btn"
-                        onClick={() => handleDeleteOption(index)}
-                        title="Delete"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
 
               <div className="settings-footer">

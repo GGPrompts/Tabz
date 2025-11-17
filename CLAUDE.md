@@ -837,3 +837,86 @@ tmux send-keys -t "$TARGET_SESSION" C-m
 - Sending complex refactoring prompts to a dedicated session
 - Coordinating work across multiple parallel Claude sessions
 
+
+## 🔗 gg-hub Integration (November 2025)
+
+### Overview
+Tabz now integrates with gg-hub portfolio for project-based terminal spawning and command execution.
+
+### Features Added
+
+#### 1. Dual Spawn Options Architecture
+- **`spawn-options.json`** - Manual tools (htop, vim, Claude, etc.)
+- **`gg-hub-spawn-options.json`** - Auto-generated from gg-hub projects
+
+#### 2. Backend API Endpoints
+**`POST /api/execute`** - Execute commands in tmux with split modes
+```bash
+curl -X POST http://localhost:8127/api/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "npm run dev",
+    "workingDir": "/home/matt/projects/gg-hub",
+    "mode": "split-vertical"
+  }'
+```
+
+**`GET /api/gg-hub/projects`** - Fetch projects from gg-hub manifest
+```bash
+curl http://localhost:8127/api/gg-hub/projects
+```
+
+**`POST /api/gg-hub/generate-spawn-options`** - Generate spawn options file
+```bash
+curl -X POST http://localhost:8127/api/gg-hub/generate-spawn-options
+```
+
+**`GET /api/gg-hub/spawn-options`** - Serve gg-hub spawn options
+```bash
+curl http://localhost:8127/api/gg-hub/spawn-options
+```
+
+#### 3. Enhanced Claude Detection
+- **Before**: Only detected Claude in `terminalType: 'claude-code'` terminals
+- **After**: Detects Claude in ANY shell terminal (bash, zsh, fish)
+- **Status Badges**: Real-time updates - ✓ Ready, 🔧 Tool, ⏳ Processing
+
+#### 4. Settings UI Updates
+- **Project Dropdown**: Auto-populated with gg-hub projects
+- **Visual Separators**: "─── Projects ───" and "─── Tools ───" sections
+- **Smart Filtering**: Only saves manual tools, excludes gg-hub projects from spawn-options.json
+
+### Integration Points
+
+**Modified Files:**
+```
+backend/routes/api.js           # Added gg-hub endpoints
+src/components/SettingsModal.tsx # Dual file loading + filtering
+src/hooks/useClaudeCodeStatus.ts # Enhanced detection
+src/SimpleTerminalApp.tsx       # Status badges for all terminals
+```
+
+**New Files:**
+```
+public/gg-hub-spawn-options.json # Auto-generated project list
+```
+
+### Backward Compatibility
+✅ **Fully backward compatible** - all changes gracefully degrade if gg-hub is not present
+✅ **Standalone operation** - Tabz works independently with manual spawn options
+✅ **Optional integration** - gg-hub endpoints return 404 if manifest not found
+
+### Usage
+
+**Regenerate project list:**
+```bash
+curl -X POST http://localhost:8127/api/gg-hub/generate-spawn-options
+```
+
+**Test in UI:**
+1. Open Tabz Settings (⚙️)
+2. See Projects and Tools sections
+3. Projects auto-populated from gg-hub
+4. Spawn any project terminal
+5. Run `claude` → Watch tab update with status!
+

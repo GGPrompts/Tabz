@@ -1,0 +1,206 @@
+{
+  "_comment": "Auto-generated from gg-hub/projects/manifest.json - do not edit manually",
+  "_generated": "2025-11-17T22:12:38.147Z",
+  "spawnOptions": [
+    {
+      "label": "gg-hub Portfolio",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "🎯",
+      "description": "Browser-based portfolio and development workspace with integrated terminals. Features project management, xterm.js terminals with tmux support, and project-based terminal workflows.",
+      "workingDir": "/home/matt/projects",
+      "projectId": "claude-portfolio-unified",
+      "category": "Meta"
+    },
+    {
+      "label": "3D Matrix Cards",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "🎨",
+      "description": "Interactive 3D card display system with Matrix-style effects. Features multiple layouts, touch controls, and realistic card rendering.",
+      "workingDir": "/home/matt/projects/3dMatrixCards",
+      "projectId": "3d-matrix-cards",
+      "category": "3D & Visual"
+    },
+    {
+      "label": "Matrix Cards",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "🎨",
+      "description": "Cyberpunk-themed React card components featuring Matrix and Neon Glass styles. Plans for 3D casino/game hall experience.",
+      "workingDir": "/home/matt/projects/MatrixCards",
+      "projectId": "matrix-cards",
+      "category": "3D & Visual"
+    },
+    {
+      "label": "Sleak Card Component",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "🎨",
+      "description": "Modern React card system with water effects, flip animations, and multiple color variants. Mobile-optimized with playing card proportions.",
+      "workingDir": "/home/matt/projects/SleakCard",
+      "projectId": "sleak-card",
+      "category": "3D & Visual"
+    },
+    {
+      "label": "GGPrompts",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "AI prompt management platform with real-time collaboration, template system, and community features. Built with React and Supabase.",
+      "workingDir": "/home/matt/projects/GGPrompts",
+      "projectId": "ggprompts",
+      "category": "Full-Stack"
+    },
+    {
+      "label": "GGPrompts Style Guide",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "Comprehensive design system and component library for GGPrompts. Interactive documentation with live examples and CSS architecture guidelines.",
+      "workingDir": "/home/matt/projects/GGPrompts_StyleGuide",
+      "projectId": "ggprompts-style-guide",
+      "category": "Full-Stack"
+    },
+    {
+      "label": "3D File System Viewer",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "🎨",
+      "description": "Advanced 3D file system with terminal interface, expandable sidebar, and working card flipping. Features FPS controls, holographic UI, and seamless file management.",
+      "workingDir": "/home/matt/projects/3dFileSystem",
+      "projectId": "3d-file-system",
+      "category": "3D & Visual"
+    },
+    {
+      "label": "GGPrompts Professional",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "Work-appropriate replica of GGPrompts with corporate-friendly interface. Full-stack React app with authentication, prompt management, and kanban organization.",
+      "workingDir": "/home/matt/projects/ggprompts-professional",
+      "projectId": "ggprompts-professional",
+      "category": "Full-Stack"
+    },
+    {
+      "label": "terminal-tabs (Tabz)",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "Lightweight tab-based terminal interface built with React, TypeScript, and xterm.js. Spawn multiple terminals in browser tabs with full terminal emulation powered by a Node.js backend.",
+      "workingDir": "/home/matt/projects/terminal-tabs",
+      "projectId": "terminal-tabs",
+      "category": "Terminal Tools"
+    },
+    {
+      "label": "terminal-tabs AI",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "AI-enhanced version of terminal-tabs with intelligent features and automation. Experimental branch with AI-powered terminal assistance.",
+      "workingDir": "/home/matt/projects/terminal-tabs-ai",
+      "projectId": "terminal-tabs-ai",
+      "category": "Terminal Tools"
+    },
+    {
+      "label": "DoodleDen",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "Creative project built with React and Vite. Experimental creative workspace and doodling application.",
+      "workingDir": "/home/matt/projects/DoodleDen",
+      "projectId": "doodleden",
+      "category": "Terminal Tools"
+    },
+    {
+      "label": "CellBlocks",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "Full-stack cell-based application with React frontend and Node.js backend. Command library, prompts, and code snippets management system.",
+      "workingDir": "/home/matt/projects/CellBlocks",
+      "projectId": "cellblocks",
+      "category": "Full-Stack"
+    },
+    {
+      "label": "Opustrator",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "Simplified multi-agent orchestration system. Manage and coordinate multiple AI agents with a clean interface.",
+      "workingDir": "/home/matt/projects/opustrator",
+      "projectId": "opustrator",
+      "category": "Full-Stack"
+    },
+    {
+      "label": "tmux-manager (Web UI)",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "Universal CLI tool and web interface for managing tmux sessions with rich metadata and API server. Replaces fragmented Node.js backends with clean, reusable solution where tmux is the database.",
+      "workingDir": "/home/matt/projects/tmux-manager",
+      "projectId": "tmux-manager-web",
+      "category": "Terminal Tools"
+    },
+    {
+      "label": "TFE - Terminal File Explorer",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "Powerful and clean terminal-based file explorer built with Go and Bubbletea. Features dual-pane preview, syntax highlighting, and integrated AI prompts library. Works beautifully on desktop and mobile (Termux).",
+      "workingDir": "/home/matt/projects/TFE",
+      "projectId": "tfe",
+      "category": "TUI Apps"
+    },
+    {
+      "label": "Tmuxplexer",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "Modern TUI tmux session manager with workspace templates. Create complex tmux layouts instantly with beautiful Bubble Tea interface.",
+      "workingDir": "/home/matt/projects/tmuxplexer",
+      "projectId": "tmuxplexer",
+      "category": "TUI Apps"
+    },
+    {
+      "label": "tkan - Terminal Kanban Board",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "Beautiful dual-view task management TUI with visual Kanban board and sortable table views. Integrates with GitHub Projects API for seamless project management.",
+      "workingDir": "/home/matt/projects/tkan",
+      "projectId": "tkan",
+      "category": "TUI Apps"
+    },
+    {
+      "label": "CellBlocksTUI",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "Lightweight terminal interface for managing CellBlocks cards. Perfect for Termux mobile workflows with 5MB binary and ~10MB RAM usage.",
+      "workingDir": "/home/matt/projects/CellBlocksTUI",
+      "projectId": "cellblocks-tui",
+      "category": "TUI Apps"
+    },
+    {
+      "label": "TUI Classics",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "Nostalgic terminal games collection bringing back the classics - Minesweeper, Solitaire, 2048, Snake, Tanks, and a Balatro-like card game. Beautiful, fully-interactive TUI versions.",
+      "workingDir": "/home/matt/projects/TUIClassics",
+      "projectId": "tuiclassics",
+      "category": "TUI Apps"
+    },
+    {
+      "label": "Bit - ANSI Logo Designer",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "📁",
+      "description": "Terminal ANSI logo designer and font library. Forked project enhanced with sidescrolling and background support for creating beautiful terminal art.",
+      "workingDir": "/home/matt/projects/bit",
+      "projectId": "bit",
+      "category": "TUI Apps"
+    }
+  ]
+}

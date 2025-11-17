@@ -43,6 +43,13 @@ Quick overview:
   - `Alt+Arrow` - Navigate panes
   - See all shortcuts in Hotkeys Help Modal (⌨️ button in header)
 
+### gg-hub Integration (Optional)
+- **Project-Based Terminals** - Auto-populate spawn menu with projects from gg-hub manifest
+- **Dual Spawn Options** - Manual tools (`spawn-options.json`) + Projects (`gg-hub-spawn-options.json`)
+- **Command Execution API** - Execute commands in tmux with split modes
+- **Claude Detection** - Real-time Claude Code status detection in ANY terminal type
+- **Status Badges** - Live status updates: ✓ Ready, 🔧 Tool, ⏳ Processing
+
 ## Quick Start
 
 ### Install Dependencies
@@ -76,15 +83,39 @@ Access at http://localhost:5173
 
 ## Configuration
 
-Terminal types are configured in `public/spawn-options.json`. Each terminal can specify:
+### Spawn Options
+
+Tabz supports two spawn option files:
+
+1. **`public/spawn-options.json`** - Manual tools (htop, vim, Claude, etc.)
+2. **`public/gg-hub-spawn-options.json`** - Auto-generated from gg-hub projects (optional)
+
+Each spawn option can specify:
 
 - `label` - Display name
 - `command` - Command to execute
-- `terminalType` - Type identifier
+- `terminalType` - Type identifier (bash, claude-code, tui-tool, etc.)
 - `icon` - Emoji icon
+- `workingDir` - Working directory for the terminal
 - `defaultTheme` - Terminal color theme
 - `defaultTransparency` - Opacity level (0-100)
-- `defaultSize` - Initial width/height
+- `defaultFontSize` - Font size
+- `defaultFontFamily` - Font family
+
+### Global Defaults
+
+Set in `spawn-options.json`:
+```json
+{
+  "globalDefaults": {
+    "workingDirectory": "/home/matt",
+    "theme": "holographic",
+    "background": "carbon",
+    "transparency": 90,
+    "useTmux": true
+  }
+}
+```
 
 ## Project Structure
 

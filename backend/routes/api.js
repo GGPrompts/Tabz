@@ -1279,6 +1279,331 @@ router.post('/console-log', asyncHandler(async (req, res) => {
 }));
 
 // =============================================================================
+// GG-HUB INTEGRATION ENDPOINTS
+// =============================================================================
+
+/**
+ * POST /api/execute - Execute command in tmux with split modes
+ * Supports: split-vertical, split-horizontal, window, background
+ *
+ * Body:
+ *   command: string - Command to execute (optional, defaults to bash)
+ *   workingDir: string - Working directory for the command
+ *   mode: string - Split mode (split-vertical, split-horizontal, window, background)
+ *   sessionName: string - Optional tmux session name (defaults to active session)
+ */
+router.post('/execute', asyncHandler(async (req, res) => {
+  const { command, workingDir, mode = 'split-vertical', sessionName } = req.body;
+  const { execSync } = require('child_process');
+  const util = require('util');
+  const { exec } = require('child_process');
+  const execAsync = util.promisify(exec);
+
+  if (!workingDir) {
+    return res.status(400).json({
+      success: false,
+      error: 'workingDir is required'
+    });
+  }
+
+  const validModes = ['split-vertical', 'split-horizontal', 'window', 'background'];
+  if (!validModes.includes(mode)) {
+    return res.status(400).json({
+      success: false,
+      error: `Invalid mode. Must be one of: ${validModes.join(', ')}`
+    });
+  }
+
+  try {
+    // Determine target session
+    let targetSession = sessionName;
+    if (!targetSession) {
+      // Use currently attached session
+      try {
+        const { stdout } = await execAsync('tmux display-message -p "#{session_name}"');
+        targetSession = stdout.trim();
+      } catch (err) {
+        return res.status(400).json({
+          success: false,
+          error: 'No active tmux session found. Please specify sessionName or attach to a tmux session.'
+        });
+      }
+    }
+
+    // Escape command for shell execution
+    const shellCmd = command || 'bash';
+    const escapedCmd = shellCmd.replace(/"/g, '\\"');
+
+    // Build tmux command based on mode
+    const tmuxCommands = {
+      'split-vertical': `tmux split-window -t "${targetSession}" -h -c "${workingDir}" "${escapedCmd}"`,
+      'split-horizontal': `tmux split-window -t "${targetSession}" -v -c "${workingDir}" "${escapedCmd}"`,
+      'window': `tmux new-window -t "${targetSession}" -c "${workingDir}" "${escapedCmd}"`,
+      'background': `tmux new-window -t "${targetSession}" -d -c "${workingDir}" "${escapedCmd}"`
+    };
+
+    const tmuxCmd = tmuxCommands[mode];
+
+    // Execute tmux command
+    const { stdout, stderr } = await execAsync(tmuxCmd);
+
+    // Extract pane ID from output (if available)
+    let paneId = null;
+    try {
+      const paneResult = await execAsync(`tmux display-message -t "${targetSession}" -p "#{pane_id}"`);
+      paneId = paneResult.stdout.trim();
+    } catch (err) {
+      // Pane ID extraction is optional
+    }
+
+    res.json({
+      success: true,
+      mode,
+      command: shellCmd,
+      workingDir,
+      sessionName: targetSession,
+      paneId,
+      message: `Command executed in ${mode} mode`
+    });
+  } catch (error) {
+    console.error('[API] Execute command failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to execute command'
+    });
+  }
+}));
+
+/**
+ * GET /api/gg-hub/projects - Sync projects from gg-hub manifest
+ * Returns projects formatted for Tabz spawn options
+ */
+router.get('/gg-hub/projects', asyncHandler(async (req, res) => {
+  const fs = require('fs').promises;
+  const path = require('path');
+
+  try {
+    // Path to gg-hub manifest (adjust relative to backend location)
+    const manifestPath = path.join(__dirname, '../../../gg-hub/projects/manifest.json');
+
+    const manifestData = await fs.readFile(manifestPath, 'utf8');
+    const manifest = JSON.parse(manifestData);
+
+    // Map category to emoji icons
+    const getCategoryIcon = (category) => {
+      const icons = {
+        'Meta': '🎯',
+        '3D & Visual': '🎨',
+        'AI & Tools': '🤖',
+        'Development': '💻',
+        'TUI': '📟'
+      };
+      return icons[category] || '📁';
+    };
+
+    // Transform projects into Tabz spawn option format
+    const projects = manifest.projects.map(p => ({
+      label: p.title,
+      workingDir: p.path,
+      icon: getCategoryIcon(p.category),
+      projectId: p.id,
+      command: '',  // Empty = just shell in project dir
+      terminalType: 'bash',
+      category: p.category || 'Other',
+      description: p.description || `${p.category} project`,
+      metadata: {
+        port: p.localPort,
+        buildCommand: p.buildCommand,
+        description: p.description,
+        tags: p.tags || []
+      }
+    }));
+
+    res.json({
+      success: true,
+      count: projects.length,
+      projects,
+      source: 'gg-hub/projects/manifest.json'
+    });
+  } catch (error) {
+    console.error('[API] Failed to load gg-hub projects:', error);
+
+    // Check if error is file not found
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({
+        success: false,
+        error: 'gg-hub manifest not found',
+        message: 'Could not find gg-hub/projects/manifest.json. Ensure gg-hub is in the expected location.'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load gg-hub projects',
+      message: error.message
+    });
+  }
+}));
+
+/**
+ * POST /api/gg-hub/generate-spawn-options - Generate gg-hub-spawn-options.json file
+ * Creates a spawn options file from gg-hub manifest for Tabz to use
+ */
+router.post('/gg-hub/generate-spawn-options', asyncHandler(async (req, res) => {
+  const fs = require('fs').promises;
+  const path = require('path');
+
+  try {
+    // Load gg-hub projects
+    const manifestPath = path.join(__dirname, '../../../gg-hub/projects/manifest.json');
+    const manifestData = await fs.readFile(manifestPath, 'utf8');
+    const manifest = JSON.parse(manifestData);
+
+    // Map category to emoji icons
+    const getCategoryIcon = (category) => {
+      const icons = {
+        'Meta': '🎯',
+        '3D & Visual': '🎨',
+        'AI & Tools': '🤖',
+        'Development': '💻',
+        'TUI': '📟'
+      };
+      return icons[category] || '📁';
+    };
+
+    // Transform projects into spawn options format
+    const spawnOptions = manifest.projects.map(p => ({
+      label: p.title,
+      command: '',  // Empty = just shell in project dir
+      terminalType: 'bash',
+      icon: getCategoryIcon(p.category),
+      description: p.description || `${p.category} project`,
+      workingDir: p.path,
+      projectId: p.id,
+      category: p.category || 'Other',
+      // Optional defaults (can be overridden in settings)
+      defaultTheme: undefined,
+      defaultBackground: undefined,
+      defaultTransparency: undefined,
+      defaultFontFamily: undefined,
+      defaultFontSize: undefined
+    }));
+
+    // Create spawn options file structure
+    const spawnOptionsFile = {
+      _comment: "Auto-generated from gg-hub/projects/manifest.json - do not edit manually",
+      _generated: new Date().toISOString(),
+      spawnOptions
+    };
+
+    // Write to public directory
+    const outputPath = path.join(__dirname, '../../public/gg-hub-spawn-options.json');
+    await fs.writeFile(
+      outputPath,
+      JSON.stringify(spawnOptionsFile, null, 2),
+      'utf8'
+    );
+
+    console.log(`[API] Generated gg-hub-spawn-options.json with ${spawnOptions.length} projects`);
+
+    res.json({
+      success: true,
+      message: 'Generated gg-hub-spawn-options.json',
+      count: spawnOptions.length,
+      outputPath: 'public/gg-hub-spawn-options.json'
+    });
+  } catch (error) {
+    console.error('[API] Failed to generate gg-hub spawn options:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate spawn options',
+      message: error.message
+    });
+  }
+}));
+
+/**
+ * GET /api/gg-hub/spawn-options - Load gg-hub-spawn-options.json
+ * Returns spawn options for gg-hub projects
+ */
+router.get('/gg-hub/spawn-options', asyncHandler(async (req, res) => {
+  const fs = require('fs').promises;
+  const path = require('path');
+
+  try {
+    const spawnOptionsPath = path.join(__dirname, '../../public/gg-hub-spawn-options.json');
+
+    // Check if file exists, if not generate it
+    try {
+      await fs.access(spawnOptionsPath);
+    } catch {
+      console.log('[API] gg-hub-spawn-options.json not found, generating...');
+      // Generate the file by calling the generation logic
+      await generateGGHubSpawnOptions();
+    }
+
+    const data = await fs.readFile(spawnOptionsPath, 'utf-8');
+    const spawnConfig = JSON.parse(data);
+
+    res.json({
+      success: true,
+      count: spawnConfig.spawnOptions?.length || 0,
+      data: spawnConfig.spawnOptions || [],
+      generated: spawnConfig._generated,
+      source: 'gg-hub-spawn-options.json'
+    });
+  } catch (error) {
+    console.error('[API] Failed to load gg-hub spawn options:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load gg-hub spawn options',
+      message: error.message
+    });
+  }
+}));
+
+// Helper function to generate gg-hub spawn options (used by GET endpoint)
+async function generateGGHubSpawnOptions() {
+  const fs = require('fs').promises;
+  const path = require('path');
+
+  const manifestPath = path.join(__dirname, '../../../gg-hub/projects/manifest.json');
+  const manifestData = await fs.readFile(manifestPath, 'utf8');
+  const manifest = JSON.parse(manifestData);
+
+  const getCategoryIcon = (category) => {
+    const icons = {
+      'Meta': '🎯',
+      '3D & Visual': '🎨',
+      'AI & Tools': '🤖',
+      'Development': '💻',
+      'TUI': '📟'
+    };
+    return icons[category] || '📁';
+  };
+
+  const spawnOptions = manifest.projects.map(p => ({
+    label: p.title,
+    command: '',
+    terminalType: 'bash',
+    icon: getCategoryIcon(p.category),
+    description: p.description || `${p.category} project`,
+    workingDir: p.path,
+    projectId: p.id,
+    category: p.category || 'Other'
+  }));
+
+  const spawnOptionsFile = {
+    _comment: "Auto-generated from gg-hub/projects/manifest.json - do not edit manually",
+    _generated: new Date().toISOString(),
+    spawnOptions
+  };
+
+  const outputPath = path.join(__dirname, '../../public/gg-hub-spawn-options.json');
+  await fs.writeFile(outputPath, JSON.stringify(spawnOptionsFile, null, 2), 'utf8');
+}
+
+// =============================================================================
 // ERROR HANDLING
 // =============================================================================
 

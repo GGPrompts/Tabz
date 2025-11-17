@@ -1,20 +1,7 @@
 {
-  "projects": [
-    {
-      "name": "Tabz Development",
-      "workingDir": "~/projects/terminal-tabs"
-    },
-    {
-      "name": "TUI Classics",
-      "workingDir": "~/projects/TUIClassics"
-    },
-    {
-      "name": "Tmuxplexer",
-      "workingDir": "~/projects/tmuxplexer"
-    }
-  ],
+  "projects": [],
   "globalDefaults": {
-    "workingDirectory": "/home/matt/projects/terminal-tabs",
+    "workingDirectory": "/home/matt",
     "fontFamily": "'JetBrainsMono Nerd Font', 'JetBrainsMono NF', monospace",
     "fontSize": 16,
     "theme": "holographic",

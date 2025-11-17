@@ -231,15 +231,22 @@ function SortableTab({ terminal, isActive, isFocused, isSplitActive, onActivate,
       )}
       <span className="tab-label">{terminal.name}</span>
 
-      {/* Claude Code Status Badge */}
-      {terminal.terminalType === 'claude-code' && (() => {
+      {/* Claude Code Status Badge - Shows for ANY terminal with Claude running */}
+      {(() => {
         const status = claudeCodeStatuses.get(terminal.id)
+        const isExplicitClaudeTerminal = terminal.terminalType === 'claude-code'
+
+        // For explicit claude-code terminals: always show badge (default to Ready)
+        // For project terminals: only show badge if Claude is detected running
+        if (!isExplicitClaudeTerminal && (!status || status.status === 'unknown')) {
+          return null
+        }
 
         let statusText = ''
         let statusClass = ''
 
         if (!status || status.status === 'unknown') {
-          // Show idle/ready when no status file exists yet
+          // Show idle/ready when no status file exists yet (explicit claude terminals only)
           statusText = '✓ Ready'
           statusClass = 'status-ready'
         } else {

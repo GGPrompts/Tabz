@@ -20,6 +20,11 @@ export interface ClaudeCodeStatus {
 /**
  * Hook to track Claude Code terminal status from state-tracker hook
  * Returns a Map of terminal IDs to their current status info
+ *
+ * NOW DETECTS CLAUDE IN ANY TERMINAL TYPE:
+ * - Explicitly spawned 'claude-code' terminals
+ * - Project-based bash terminals where Claude is running
+ * - Any terminal with a working directory (we check for Claude state files)
  */
 export function useClaudeCodeStatus(
   terminals: Terminal[],
@@ -28,12 +33,21 @@ export function useClaudeCodeStatus(
   const [terminalStatuses, setTerminalStatuses] = useState<Map<string, ClaudeCodeStatus>>(new Map())
 
   useEffect(() => {
-    // Only poll for Claude Code terminals in this window
+    // Poll for ANY terminal that could potentially run Claude
+    // This includes:
+    // - Explicit 'claude-code' terminals
+    // - 'bash', 'zsh', etc. terminals (project terminals from gg-hub)
+    // - Any terminal with a working directory
     const claudeTerminals = terminals.filter(t =>
       (t.windowId || 'main') === currentWindowId &&
-      t.terminalType === 'claude-code' &&
       t.workingDir &&
-      t.status === 'active'
+      t.status === 'active' &&
+      // Allow any shell-like terminal type, not just 'claude-code'
+      (t.terminalType === 'claude-code' ||
+       t.terminalType === 'bash' ||
+       t.terminalType === 'zsh' ||
+       t.terminalType === 'fish' ||
+       t.terminalType === 'sh')
     )
 
     if (claudeTerminals.length === 0) {
