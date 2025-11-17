@@ -16,6 +16,7 @@ import { FitAddon } from '@xterm/addon-fit';
  * @param agentName - Terminal agent name (for PyRadio special handling)
  * @param debouncedResize - Debounced resize handler function
  * @param mountKey - Key that changes when portal host changes (triggers re-attach)
+ * @param isTmuxSession - Whether this terminal is attached to tmux (skip container-based resize)
  * @returns Object with refit function
  */
 export function useTerminalResize(
@@ -26,7 +27,8 @@ export function useTerminalResize(
   agentId: string,
   agentName: string | undefined,
   debouncedResize: (terminalId: string, cols: number, rows: number) => void,
-  mountKey?: string
+  mountKey?: string,
+  isTmuxSession = false
 ) {
   const roRef = useRef<ResizeObserver | null>(null);
 
@@ -94,12 +96,14 @@ export function useTerminalResize(
         ) {
           try {
             fitAddonRef.current.fit();
-            // Use debounced resize handler
-            debouncedResize(
-              agentId,
-              xtermRef.current.cols,
-              xtermRef.current.rows,
-            );
+            if (!isTmuxSession) {
+              // Use debounced resize handler
+              debouncedResize(
+                agentId,
+                xtermRef.current.cols,
+                xtermRef.current.rows,
+              );
+            }
           } catch {}
         }
       }
@@ -113,7 +117,7 @@ export function useTerminalResize(
       } catch {}
       roRef.current = null;
     };
-  }, [agentId, debouncedResize, xtermRef.current, fitAddonRef.current]); // Re-run when terminal initializes
+  }, [agentId, debouncedResize, isTmuxSession, xtermRef.current, fitAddonRef.current]); // Re-run when terminal initializes
 
   /**
    * Re-attach ResizeObserver when portal host changes (dock <-> canvas)
@@ -135,7 +139,7 @@ export function useTerminalResize(
         roRef.current = new ResizeObserver(() => {
           try {
             fitAddonRef.current?.fit();
-            if (xtermRef.current) {
+            if (xtermRef.current && !isTmuxSession) {
               // Use debounced resize handler
               debouncedResize(
                 agentId,
@@ -169,6 +173,7 @@ export function useTerminalResize(
         ) as HTMLTextAreaElement | null;
         ta?.focus();
         if (
+          !isTmuxSession &&
           wsRef.current &&
           wsRef.current.readyState === WebSocket.OPEN &&
           xtermRef.current
@@ -185,7 +190,7 @@ export function useTerminalResize(
       } catch {}
     };
     setTimeout(tryFit, 50);
-  }, [mountKey, agentId]);
+  }, [mountKey, agentId, isTmuxSession]);
 
   /**
    * Hot Refresh Recovery: Force a fit after mount to handle HMR scenarios
@@ -201,8 +206,8 @@ export function useTerminalResize(
           fitAddonRef.current?.fit();
           xtermRef.current?.refresh(0, xtermRef.current.rows - 1);
 
-          // Send resize to backend
-          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && xtermRef.current) {
+          // Send resize to backend for non-tmux sessions
+          if (!isTmuxSession && wsRef.current && wsRef.current.readyState === WebSocket.OPEN && xtermRef.current) {
             wsRef.current.send(
               JSON.stringify({
                 type: "resize",
@@ -219,7 +224,7 @@ export function useTerminalResize(
     }, 100);
 
     return () => clearTimeout(timer);
-  }, []); // Empty deps - only run once after mount
+  }, [isTmuxSession]); // Re-run if tmux state changes
 
   /**
    * Listen for custom container resize events from split panes
@@ -243,6 +248,7 @@ export function useTerminalResize(
 
             // After a fit, send exact cols/rows to backend so PTY wraps correctly
             if (
+              !isTmuxSession &&
               wsRef.current &&
               wsRef.current.readyState === WebSocket.OPEN &&
               xtermRef.current
@@ -274,7 +280,7 @@ export function useTerminalResize(
         handleContainerResized as EventListener,
       );
     };
-  }, [agentId]);
+  }, [agentId, isTmuxSession]);
 
   return { handleResize };
 }

@@ -43,7 +43,7 @@ export function useTerminalSpawning(
   wsRef: React.RefObject<WebSocket | null>,
   pendingSpawns: React.MutableRefObject<Map<string, StoredTerminal>>
 ) {
-  const { addTerminal, updateTerminal, setActiveTerminal } = useSimpleTerminalStore()
+  const { addTerminal, updateTerminal, setActiveTerminal, terminals: storedTerminals } = useSimpleTerminalStore()
 
   /**
    * Generate short session name like "tt-cc-a3k" (Tabz - Claude Code - random suffix)
@@ -111,9 +111,19 @@ export function useTerminalSpawning(
         },
       })
 
+      // Generate unique name by checking ALL terminals globally (not just current window)
+      // This prevents name collisions when terminals are popped out to different windows
+      const existingNames = storedTerminals.map(t => t.name)
+      let uniqueName = option.label
+      let suffix = 2
+      while (existingNames.includes(uniqueName)) {
+        uniqueName = `${option.label}-${suffix}`
+        suffix++
+      }
+
       const newTerminal: StoredTerminal = {
         id: `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        name: option.label,
+        name: uniqueName,
         spawnLabel: option.label, // Preserve original label for fallback
         terminalType: option.terminalType,
         command: option.command, // Store original command for matching during reconnection

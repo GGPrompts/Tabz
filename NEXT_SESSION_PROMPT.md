@@ -1,173 +1,273 @@
-# Session Complete: State Management Refactor + Keyboard Shortcuts (Nov 14, 2025)
+# Test Coverage for Dual Context Menu System (v1.4.0)
 
-## 🎉 Major Achievements
+## 🎯 Goal
+Add comprehensive test coverage for the new dual context menu system and tmux features added in v1.4.0 (commit `b1533b2`).
 
-### 1. Eliminated State Sync Race Conditions (Session 12)
+## 📋 Features That Need Testing
 
-**Problem:** App used `setTimeout(150ms)` hoping localStorage finishes writing before broadcasting state changes. This caused 4 test failures and unpredictable cross-window sync behavior.
+### 1. **Pane Context Menu** (Right-click inside terminal)
+**Location**: `src/SimpleTerminalApp.tsx:1125-1155` (handlePaneContextMenu)
 
-**Solution:** Created BroadcastChannel middleware that wraps Zustand store and broadcasts synchronously after every state update.
+**What to test**:
+- ✅ Opens pane menu when right-clicking terminal with tmux session
+- ✅ Shows "No tmux session" when terminal has no sessionName
+- ✅ Fetches pane marked status from `/api/tmux/info/:name` before opening
+- ✅ Sets `paneMarked` state correctly based on API response
+- ✅ Handles API errors gracefully (sets paneMarked to false)
+- ✅ Menu shows at correct mouse coordinates (e.clientX, e.clientY)
 
-**Results:**
-- ✅ Test pass rate: 91% → 98.4% (39/43 → 253/257 tests)
-- ✅ Eliminated ALL setTimeout(150) race conditions
-- ✅ Guaranteed ordering - broadcasts happen after state updates
-- ✅ Centralized sync logic in middleware
-- ✅ Optimized agent cleanup to only run on status changes
+### 2. **Pane Menu Actions** (executeTmuxPaneCommand)
+**Location**: `src/SimpleTerminalApp.tsx:1158-1179`
 
-**Files Created:**
-- `src/stores/broadcastMiddleware.ts` - Zustand middleware for cross-window sync
+**What to test**:
+- ✅ Split Horizontally → calls `/api/tmux/sessions/:name/command` with `split-window -h`
+- ✅ Split Vertically → calls `/api/tmux/sessions/:name/command` with `split-window -v`
+- ✅ Swap Up → calls with `swap-pane -U`
+- ✅ Swap Down → calls with `swap-pane -D`
+- ✅ Mark → calls with `select-pane -m`
+- ✅ Unmark → calls with `select-pane -M`
+- ✅ Swap with Marked → calls with `swap-pane -s '{marked}'`
+- ✅ Respawn → calls with `respawn-pane -k`
+- ✅ Zoom → calls with `resize-pane -Z`
+- ✅ Closes menu after command execution
+- ✅ Handles API errors without crashing
 
-**Files Modified:**
-- `src/stores/simpleTerminalStore.ts` - Integrated middleware
-- `src/SimpleTerminalApp.tsx` - Removed manual BroadcastChannel setup (59 lines removed)
-- `src/hooks/useWebSocketManager.ts` - Optimized agent cleanup dependencies
+### 3. **Kill Pane** (handleKillPane)
+**Location**: `src/SimpleTerminalApp.tsx:1196-1208`
 
-### 2. Added Keyboard Shortcuts + Hotkeys Help (Session 13)
+**What to test**:
+- ✅ Calls `kill-pane` via executeTmuxPaneCommand
+- ✅ Removes terminal from UI using `removeTerminal()`
+- ✅ Closes pane menu after execution
+- ✅ Does nothing if no paneContextMenu.terminalId
+- ✅ Does nothing if terminal has no sessionName
 
-**Problem:** Browser shortcuts conflict with tmux/terminal usage:
-- Ctrl+C → Opens browser console (not terminal copy)
-- Ctrl+T → New browser tab (not tmux)
-- Ctrl+W → Close browser tab
-- Tab cycling (Ctrl+Tab) doesn't work
+### 4. **Tmux Window Switcher**
+**Location**: `src/SimpleTerminalApp.tsx:1181-1194` (fetchTmuxWindows)
 
-**Solution:** Implemented Alt-based keyboard shortcuts and visual hotkeys help sidebar.
+**What to test**:
+- ✅ Fetches window list from `/api/tmux/windows/:name`
+- ✅ Sets `tmuxWindows` state with array of {index, name, active}
+- ✅ Sets `showWindowSubmenu` to true on success
+- ✅ Handles API errors gracefully
+- ✅ Submenu only shows when `windowCount > 1`
+- ✅ Window switching calls `select-window -t :N` with correct index
 
-**Shortcuts Added:**
-- `Alt+1-9` - Jump to tab 1-9
-- `Alt+0` - Jump to last tab
-- `Alt+[` / `Alt+]` - Previous/Next tab
-- `Alt+H` - Split horizontal (tmux)
-- `Alt+V` - Split vertical (tmux)
-- `Alt+X` - Close pane (tmux)
-- `Alt+Z` - Zoom toggle (tmux)
-- `Alt+Arrow` - Navigate between panes (tmux)
+### 5. **Dynamic Mark/Unmark Toggle**
+**Location**: `src/SimpleTerminalApp.tsx:2765-2779`
 
-**Features:**
-- ✅ ⌨️ Hotkeys button in header
-- ✅ Sidebar modal (doesn't blur page, can see shortcuts working)
-- ✅ Organized by category (Tab Navigation, Tmux Controls)
-- ✅ Glassmorphic design matching app theme
-- ✅ sendTmuxCommand helper using API (not send-keys)
+**What to test**:
+- ✅ Shows "📌 Mark" button when `paneMarked === false`
+- ✅ Shows "📍 Unmark" button when `paneMarked === true`
+- ✅ Mark button calls `select-pane -m`
+- ✅ Unmark button calls `select-pane -M`
+- ✅ State updates correctly after marking/unmarking
 
-**Files Created:**
-- `src/components/HotkeysHelpModal.tsx` - Sidebar modal component
-- `src/components/HotkeysHelpModal.css` - Sidebar styling
+### 6. **Tab Context Menu Reorganization**
+**Location**: `src/SimpleTerminalApp.tsx:2634-2698`
 
-**Files Modified:**
-- `src/hooks/useKeyboardShortcuts.ts` - Added tmux command shortcuts
-- `src/SimpleTerminalApp.tsx` - Added hotkeys button + modal + sendTmuxCommand
-- `backend/modules/tmux-session-manager.js` - Added executeTmuxCommand()
-- `backend/routes/api.js` - Updated API to use executeTmuxCommand (safe for TUI apps)
+**What to test**:
+- ✅ Unsplit option appears only when `isInSplit === true`
+- ✅ Split buttons removed from tab menu (verify they don't exist)
+- ✅ Menu has proper dividers for organization
+- ✅ All existing tab menu actions still work (detach, pop out, kill session)
 
-## 📝 Documentation Updates
+### 7. **New Keyboard Shortcuts**
+**Location**: `src/hooks/useKeyboardShortcuts.ts:176-199`
 
-- Added rule to CLAUDE.md: "Don't Use `tmux send-keys` for Commands" - Use API instead to prevent terminal corruption
-- Updated tmux send-keys delay to 0.3s for long prompts
-- Documented both fixes in CHANGELOG.md v1.2.5
+**What to test**:
+- ✅ `Alt+U` → calls `swap-pane -U`
+- ✅ `Alt+D` → calls `swap-pane -D`
+- ✅ `Alt+M` → calls `select-pane -m`
+- ✅ `Alt+S` → calls `swap-pane -s '{marked}'`
+- ✅ `Alt+R` → calls `respawn-pane -k`
+- ✅ All shortcuts only fire when terminal has sessionName
+- ✅ Shortcuts preventDefault and stopPropagation
+- ✅ Shortcuts work with both lowercase and uppercase
 
-## 🐛 Bug Fixes Completed This Session
+### 8. **Backend API Enhancements**
 
-1. **Unsplit Terminal Disappearing** (Earlier in session)
-   - Root cause: Split container IS the terminal itself
-   - Fix: Clear splitLayout instead of deleting container
-   - Both terminals now remain visible after unsplit
+**GET /api/tmux/windows/:name** (`backend/routes/api.js:891-933`)
+- ✅ Returns array of windows with {index, name, active}
+- ✅ Returns 404 if session doesn't exist
+- ✅ Parses tmux format string correctly
+- ✅ Handles tmux errors gracefully
 
-2. **Multi-Window Detach Sync** (Earlier in session)
-   - Root cause: WebSocket agents not cleaned up after broadcast
-   - Fix: Monitor terminals becoming detached and clean up agents
-   - All windows now properly sync detached state
+**GET /api/tmux/info/:name** (enhanced to return `paneMarked`)
+- ✅ Returns `paneMarked: true` when pane is marked
+- ✅ Returns `paneMarked: false` when pane is not marked
+- ✅ Parses `#{pane_marked}` correctly ('1' → true, '0' → false)
 
-3. **State Sync Race Conditions** (Session 12)
-   - Root cause: setTimeout hoping localStorage finishes
-   - Fix: BroadcastChannel middleware with synchronous broadcasts
-   - Test pass rate improved to 98.4%
+## 🏗️ Test Structure
 
-4. **Keyboard Shortcuts Not Working** (Session 13)
-   - Root cause: Using send-keys instead of API
-   - Fix: Switch to /api/tmux/sessions/:name/command
-   - All shortcuts now work without corrupting terminals
+### Recommended Test Files
 
-## 🚀 What's Working Now
+```
+tests/
+├── integration/
+│   ├── pane-context-menu.test.ts        # NEW - Pane menu integration tests
+│   ├── tmux-window-switcher.test.ts     # NEW - Window switcher tests
+│   └── keyboard-shortcuts-tmux.test.ts   # NEW - New keyboard shortcuts
+└── unit/
+    └── hooks/
+        └── useKeyboardShortcuts.test.ts  # ENHANCE - Add new shortcut tests
+```
 
-### State Management
-- ✅ Cross-window sync with no race conditions
-- ✅ Automatic broadcasts on every state mutation
-- ✅ Agent cleanup only runs when needed
-- ✅ 98.4% test pass rate (253/257 tests)
+### Test Pattern (from existing tests)
 
-### Keyboard Shortcuts
-- ✅ Tab navigation (Alt+1-9, Alt+0, Alt+[/])
-- ✅ Tmux pane controls (Alt+H/V/X/Z)
-- ✅ Tmux pane navigation (Alt+Arrow)
-- ✅ No browser conflicts (uses Alt instead of Ctrl)
-- ✅ Hotkeys help always accessible (⌨️ button)
+```typescript
+/**
+ * Integration Tests: Pane Context Menu
+ *
+ * Tests the complete pane context menu workflow.
+ *
+ * Covered Workflows:
+ * 1. Opening pane menu on right-click
+ * 2. Fetching pane marked status
+ * 3. Executing tmux pane commands
+ * 4. Kill pane and UI cleanup
+ *
+ * Test Philosophy:
+ * - Test FULL integration flow with real store state
+ * - Mock WebSocket and fetch API calls
+ * - Verify menu state updates
+ * - Test both success and error paths
+ */
 
-### Multi-Window Support
-- ✅ Terminals move between windows
-- ✅ Detach/reattach works correctly
-- ✅ Split containers detach with preserved layout
-- ✅ State syncs instantly across windows
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { useSimpleTerminalStore } from '../../src/stores/simpleTerminalStore'
 
-### Split Terminals
-- ✅ Unsplit restores both terminals
-- ✅ Split layout preserved on detach/reattach
-- ✅ Drag to split from tab bar
+// Mock fetch globally
+global.fetch = vi.fn()
 
-## 🎯 Future Work (Optional)
+describe('Pane Context Menu', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useSimpleTerminalStore.getState().clearTerminals()
+  })
 
-### High Priority
-- None! Major issues resolved.
+  it('fetches pane marked status before opening menu', async () => {
+    // Setup: Add terminal with tmux session
+    const store = useSimpleTerminalStore.getState()
+    store.addTerminal({
+      id: 'term-1',
+      name: 'Test',
+      sessionName: 'tt-bash-abc',
+      // ...
+    })
 
-### Medium Priority
-- Fix 4 remaining failing tests (legacy test infrastructure)
-- Mobile responsiveness improvements
-- Tmux-native rewrite exploration (long-term simplification)
+    // Mock API response
+    ;(global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ success: true, paneMarked: true })
+    })
 
-### Low Priority
-- Tab reordering via drag (currently can only drag to split)
-- Chrome extension for advanced window management
-- Project templates feature
+    // Simulate right-click
+    const mockEvent = new MouseEvent('contextmenu', { clientX: 100, clientY: 200 })
+    // await handlePaneContextMenu(mockEvent, 'term-1')
 
-## 📊 Metrics
+    // Verify API call
+    expect(global.fetch).toHaveBeenCalledWith('/api/tmux/info/tt-bash-abc')
 
-| Metric | Before | After |
-|--------|--------|-------|
-| Test Pass Rate | 91% | 98.4% |
-| setTimeout Race Conditions | 5+ locations | 0 |
-| Keyboard Shortcuts | None | 12+ shortcuts |
-| Lines of Code (net) | - | +470 (features), -200 (refactor) |
+    // Verify paneMarked state
+    // expect(paneMarked).toBe(true)
+  })
 
-## 🛠️ Technical Debt Resolved
+  // More tests...
+})
+```
 
-- ✅ BroadcastChannel race conditions eliminated
-- ✅ Agent cleanup optimization
-- ✅ Keyboard shortcut conflicts resolved
-- ✅ Terminal corruption prevention (API vs send-keys)
+## 📚 Reference Materials
 
-## 💡 Key Learnings
+### Existing Test Files to Study
+1. **`tests/integration/detach-reattach.test.ts`** - Great example of integration testing with mocked APIs
+2. **`tests/integration/split-operations.test.ts`** - Tests split functionality
+3. **`tests/unit/hooks/useKeyboardShortcuts.test.ts`** - If it exists, use as base for new shortcuts
 
-1. **BroadcastChannel Middleware Pattern**: Wrapping Zustand with middleware provides cleaner architecture than manual broadcasts scattered throughout code
+### Test Commands
+```bash
+# Run all tests
+npm test
 
-2. **Tmux API > send-keys**: Always use `/api/tmux/sessions/:name/command` instead of `tmux send-keys` to prevent terminal corruption in TUI apps
+# Run specific test file
+npm test -- tests/integration/pane-context-menu.test.ts
 
-3. **Alt-based Shortcuts**: Using Alt instead of Ctrl avoids ALL browser keyboard conflicts while remaining intuitive
+# Run in watch mode (during development)
+npm run test:watch
 
-4. **Parallel Claude Sessions**: Can work well but need careful file coordination. Sequential is safer for overlapping changes.
+# Run with UI
+npm run test:ui
+```
 
-## 🎨 Code Quality Improvements
+### Key Testing Principles (from CLAUDE.md)
 
-- Centralized sync logic (no more scattered setTimeout calls)
-- Type-safe keyboard shortcuts
-- Documented API patterns in CLAUDE.md
-- Clean separation of concerns (middleware, hooks, components)
+1. **Always run tests before committing** - `npm test` should pass with no failures
+2. **Write tests for complex bugs** - Prevents regressions
+3. **Follow TDD when possible** - Write failing test → fix → test passes → commit
+4. **Test both success and error paths** - Don't just test happy path
+
+## 🚀 Suggested Approach
+
+### Step 1: Start with Integration Tests
+Focus on the **full user workflow** first:
+1. Create `tests/integration/pane-context-menu.test.ts`
+2. Test the complete flow: right-click → menu opens → action → API call → state update
+3. Use existing integration test patterns (mock fetch, mock WebSocket)
+
+### Step 2: Add Unit Tests for Handlers
+Test individual handler functions:
+1. `handlePaneContextMenu()` - Menu opening and state fetching
+2. `executeTmuxPaneCommand()` - Command execution
+3. `fetchTmuxWindows()` - Window list fetching
+4. `handleKillPane()` - Pane removal
+
+### Step 3: Enhance Keyboard Shortcut Tests
+1. Update `tests/unit/hooks/useKeyboardShortcuts.test.ts` (or create if missing)
+2. Test all 5 new shortcuts (U, D, M, S, R)
+3. Verify they only fire when terminal has sessionName
+
+### Step 4: Backend API Tests (Optional but Recommended)
+If backend tests exist, add tests for:
+1. `GET /api/tmux/windows/:name`
+2. Enhanced `GET /api/tmux/info/:name` (paneMarked field)
+
+## ✅ Success Criteria
+
+- [ ] All new features have integration tests
+- [ ] All new handlers have unit tests
+- [ ] All new keyboard shortcuts are tested
+- [ ] All tests pass: `npm test`
+- [ ] Test coverage for critical paths (menu opening, command execution, error handling)
+- [ ] No regressions in existing tests
+
+## 🐛 Common Pitfalls to Avoid
+
+1. **Don't forget to mock fetch** - All API calls need mocking
+2. **Clear store state between tests** - Use `beforeEach(() => useSimpleTerminalStore.getState().clearTerminals())`
+3. **Test error paths** - What happens when API returns 500? Network error?
+4. **Test edge cases** - No sessionName, no terminalId, menu already open, etc.
+5. **Verify cleanup** - Menu closes, state resets, no memory leaks
+
+## 📝 Notes
+
+- **Current test pass rate**: 253/257 (98.4%) - Let's keep it high!
+- **Testing framework**: Vitest (compatible with Jest syntax)
+- **Mocking**: Use `vi.fn()` from vitest for mocks
+- **Store**: Real Zustand store (not mocked) - tests integration properly
+- **See**: `LESSONS_LEARNED.md` for testing checklists and patterns
+
+## 🔗 Related Files
+
+### Implementation Files (Reference for Tests)
+- `src/SimpleTerminalApp.tsx` - Main app with all handlers
+- `src/hooks/useKeyboardShortcuts.ts` - Keyboard shortcut logic
+- `backend/routes/api.js` - API endpoints
+
+### Documentation
+- `CHANGELOG.md` - v1.4.0 release notes (detailed feature list)
+- `CLAUDE.md` - Architecture and testing workflow
+- `LESSONS_LEARNED.md` - Testing patterns and checklists
 
 ---
 
-**Session Duration**: ~3 hours (parallel work with 2 Claude sessions)
-**Tests Fixed**: +214 tests (39→253)
-**Features Added**: Keyboard shortcuts, hotkeys help, state sync middleware
-**Bug Fixes**: 4 critical bugs resolved
-**Lines Changed**: +670, -200
-
-Last Updated: November 14, 2025
+**Good luck!** Focus on integration tests first (user workflows), then unit tests (individual functions). The goal is to prevent regressions and give confidence when refactoring. 🧪

@@ -103,34 +103,11 @@ export function setupKeyboardHandler() {
   // Attach global handler
   document.addEventListener('keydown', keydownHandler, { capture: true });
 
-  // Prevent context menu (right-click) in terminals
-  const contextMenuHandler = (event: MouseEvent) => {
-    // Check if right-click is inside a terminal
-    const target = event.target as HTMLElement;
-    const terminalContainer = target?.closest('.terminal-container');
-
-    if (terminalContainer) {
-      // Prevent browser context menu
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (import.meta.env.DEV) {
-        console.log('[KeyboardHandler] Blocked browser context menu in terminal');
-      }
-
-      // The terminal (tmux/TUI apps) will handle right-click naturally
-    }
-  };
-
-  document.addEventListener('contextmenu', contextMenuHandler, { capture: true });
-
   console.log('[KeyboardHandler] Initialized - terminal shortcuts will override browser shortcuts');
-  console.log('[KeyboardHandler] Browser context menu disabled in terminals');
 
   // Return cleanup function
   return () => {
     document.removeEventListener('keydown', keydownHandler, { capture: true });
-    document.removeEventListener('contextmenu', contextMenuHandler, { capture: true });
   };
 }
 

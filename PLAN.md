@@ -1,6 +1,21 @@
 # PLAN.md - Terminal Tabs Roadmap
 
-## 🚨 CURRENT STATUS - READ FIRST
+## 🌿 FEATURE BRANCHES - READ FIRST
+
+**Multiple experimental branches are in development using git worktrees!**
+
+👉 **See [FEATURE_BRANCHES.md](FEATURE_BRANCHES.md) for complete overview of all active branches**
+
+**Quick Summary**:
+- 6 active branches exploring different directions
+- Located in separate directories: `~/projects/terminal-tabs-*`
+- **tmux-only-simple**: ⚠️ Terminal NOT working yet (UI only)
+- **tmux-manager**: ✅ Phase 1 complete (Go backend replacement)
+- **showcase**, **extension**, **ai-experiments**: Various experiments
+
+---
+
+## 🚨 CURRENT STATUS - MASTER BRANCH
 
 **Status**: ✅ **PRODUCTION READY** - All Major Features Complete
 
