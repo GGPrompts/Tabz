@@ -305,23 +305,32 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
       // Enable Shift+Ctrl+C/V for copy/paste (standard terminal shortcuts)
       // Let plain Ctrl+C/V pass through to terminal for TUI apps and tmux
       xterm.attachCustomKeyEventHandler((event) => {
+        // Only intercept Shift+Ctrl+C and Shift+Ctrl+V
+        // Check for both uppercase (when Shift is pressed) and code-based detection
+        const isShiftCtrlC = event.ctrlKey && event.shiftKey && (event.key === "C" || event.code === "KeyC");
+        const isShiftCtrlV = event.ctrlKey && event.shiftKey && (event.key === "V" || event.code === "KeyV");
+
         // Shift+Ctrl+C for copy (standard terminal emulator shortcut)
-        if (event.ctrlKey && event.shiftKey && event.key === "C" && xterm.hasSelection()) {
+        if (isShiftCtrlC && xterm.hasSelection()) {
           event.preventDefault();
           event.stopPropagation();
           document.execCommand("copy");
           return false;
         }
+
         // Shift+Ctrl+V for paste (standard terminal emulator shortcut)
-        if (event.ctrlKey && event.shiftKey && event.key === "V") {
+        if (isShiftCtrlV) {
           event.preventDefault();
           event.stopPropagation();
           navigator.clipboard.readText().then((text) => {
             xterm.paste(text);
+          }).catch(err => {
+            console.error('Clipboard read failed:', err);
           });
           return false;
         }
-        // Let all other keys (including plain Ctrl+C, Ctrl+V, Ctrl+B for tmux, etc.) pass through
+
+        // Let ALL other keys pass through to xterm (important for arrow keys, etc.)
         return true;
       });
 
@@ -346,25 +355,23 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
 
       attemptOpen();
 
-      // Block browser's native paste handler to prevent duplicate pastes
-      // Our custom key handler (above) already handles Ctrl+Shift+V properly
+      // Paste handler - intercept paste events and send to xterm
       const handlePaste = (e: ClipboardEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
+        // Get clipboard data from the paste event
+        const text = e.clipboardData?.getData('text');
+        if (text) {
+          // We have clipboard data - prevent default browser paste and paste manually
+          e.preventDefault();
+          e.stopPropagation();
+          xterm.paste(text);
+        }
+        // If no clipboard data in event, don't prevent default (let browser handle it)
       };
 
-      // Add paste blocker to both container and xterm textarea
+      // Add paste handler to container
       if (terminalRef.current) {
-        terminalRef.current.addEventListener('paste', handlePaste, { capture: true });
+        terminalRef.current.addEventListener('paste', handlePaste as EventListener);
       }
-
-      // Also block on the xterm helper textarea specifically
-      setTimeout(() => {
-        const textarea = terminalRef.current?.querySelector('.xterm-helper-textarea');
-        if (textarea) {
-          textarea.addEventListener('paste', handlePaste, { capture: true });
-        }
-      }, 100);
 
       // Disable Windows autofill/autocomplete/password manager on the xterm helper textarea
       setTimeout(() => {
@@ -587,13 +594,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
           terminalRef.current.removeEventListener("mousedown", focusHandler);
           terminalRef.current.removeEventListener("click", focusHandler);
           terminalRef.current.removeEventListener("touchstart", focusHandler);
-          terminalRef.current.removeEventListener("paste", handlePaste, { capture: true });
-
-          // Also remove from xterm textarea
-          const textarea = terminalRef.current.querySelector('.xterm-helper-textarea');
-          if (textarea) {
-            textarea.removeEventListener('paste', handlePaste, { capture: true });
-          }
+          terminalRef.current.removeEventListener("paste", handlePaste as EventListener);
         }
 
         // Dispose of the data handler
