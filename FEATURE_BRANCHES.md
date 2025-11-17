@@ -16,7 +16,7 @@ All feature branches are checked out as separate worktrees in `~/projects/`:
 ├── terminal-tabs-showcase/        # feat/component-showcase
 ├── terminal-tabs-tmux-only/       # feat/tmux-only-simple
 ├── terminal-tabs-extension/       # feat/chrome-extension
-├── terminal-tabs-ai/              # feat/ai-experiments
+├── terminal-tabs-ai/              # archive/ai-experiments-2025-11-17 (ARCHIVED)
 └── tmux-manager/                  # tmux-manager branch (Go backend)
 ```
 
@@ -233,48 +233,68 @@ git log
 
 ---
 
-### 5. **feat/ai-experiments** 🤖 EXPERIMENTAL
-**Location**: `~/projects/terminal-tabs-ai`
-**Status**: 90% complete - AI features working
-**Has Working Terminal**: ✅ Yes (same as master + AI features)
+### 5. **feat/ai-experiments** 📦 ARCHIVED (November 17, 2025)
+**Location**: `~/projects/terminal-tabs-ai` (archived worktree)
+**Status**: ❌ ARCHIVED - Branch renamed to `archive/ai-experiments-2025-11-17`
+**Has Working Terminal**: ⚠️ Had issues (0x0 dimensions, behind master)
 
-**What it is**:
-- Adds AI-powered features to terminals
-- Context-aware command suggestions
-- Error detection and diagnostics
-- Requires Ollama running locally
+**Why Archived**:
+- ❌ **Conflicts with core principles** - "Simplicity Over Features"
+- ❌ **Adds complexity** - Tailwind CSS, 15+ dependencies, 7,748 lines added
+- ❌ **Terminals already run AI** - Claude Code, custom AI tools work fine
+- ❌ **Missing features from master** - Behind by 8 commits, removed:
+  - Alt+Number shortcuts
+  - Pane context menu (right-click in terminal)
+  - Tmux window switcher
+  - lucide-react icon system
+- ❌ **AI components not integrated** - Built but not wired into UI
+- ❌ **Technical issues** - Docker Model Runner WSL I/O problems, rendering bugs
 
-**Built Components**:
-- ✅ **AICommandSuggester** - Inline command suggestions
-  - Tab to accept, Esc to dismiss
-  - Context-aware (cwd, git status, recent commands)
-  - Confidence scores
-  - Debounced fetching (3+ chars trigger)
-- ✅ **ErrorDiagnosticsPanel** - Error detection and fixes
-- ✅ **useTerminalContext** hook - Auto-refresh terminal state (5s)
-- ✅ Backend AI service (Ollama with qwen2.5-coder:7b)
+**What Was Built** (for reference):
+- AICommandSuggester - Inline command suggestions
+- ErrorDiagnosticsPanel - Error detection (29 patterns)
+- ErrorDiagnosticsDemo - Demo component
+- Backend AI service (Ollama/vLLM/Docker Model Runner support)
+- shadcn/ui components + Tailwind CSS
+- Error pattern library (654 lines)
 
-**Dependencies**:
-- Radix UI (tooltip, alert, collapsible, tabs)
-- Lucide icons (Loader2, Sparkles, X)
-- Ollama (external dependency)
+**Testing Results**:
+- 98.5% tests passing (256/260)
+- 4 failures in cross-window edge cases
+- See `~/projects/terminal-tabs-ai/BRANCH_TEST_RESULTS.md` for full report
 
-**Files**:
-- `src/components/ai/AICommandSuggester.tsx` - Inline suggestions
-- `src/components/ai/ErrorDiagnosticsPanel.tsx` - Error detection
-- `src/hooks/useTerminalContext.ts` - Context hook
-- Backend: AI service integration (Ollama)
+**Documentation Available**:
+- `~/projects/terminal-tabs-ai/ARCHIVE_README.md` - Why archived, what to do
+- `~/projects/terminal-tabs-ai/BRANCH_TEST_RESULTS.md` - Complete test results
+- `~/projects/terminal-tabs-ai/DOCKER_MODEL_RUNNER_NOTES.md` - Technical details
+- `~/projects/terminal-tabs-ai/FRONTEND_CHANGES_SUMMARY.md` - What changed
+- `~/projects/terminal-tabs-ai/TEST_SUMMARY.md` - Quick summary
 
-**Assessment**:
-- ✅ **Working terminals** - Full functionality + AI features
-- 🤖 **Future-forward** - AI suggestions are genuinely useful
-- 💡 **Error diagnostics** - Could save hours of debugging
-- ⚠️ **Ollama dependency** - Requires external service running
-- 🎯 **Experimental** - Accuracy varies by use case
+**Lessons Learned**:
+1. AI integration doesn't fit every project - consider core principles first
+2. Terminals can already run AI (Claude Code, etc.) - no need to duplicate
+3. Simplicity is a feature, not a limitation
+4. Docker Model Runner has WSL limitations - use Ollama for HTTP API
 
-**Requirements**:
-- Ollama installed and running
-- qwen2.5-coder:7b model downloaded
+**Branch Archive**:
+- ✅ Renamed: `feat/ai-experiments` → `archive/ai-experiments-2025-11-17`
+- ✅ All work committed and documented
+- ✅ Worktree still available at `~/projects/terminal-tabs-ai` for reference
+- ⚠️ Remote branch `origin/feat/ai-experiments` still exists (can delete)
+
+**To Remove Worktree** (optional):
+```bash
+cd ~/projects/terminal-tabs
+git worktree remove ../terminal-tabs-ai
+
+# Branch will still exist in git, just not checked out
+```
+
+**To Delete Branch Entirely** (if desired):
+```bash
+git branch -D archive/ai-experiments-2025-11-17
+git push origin :feat/ai-experiments  # Delete remote branch
+```
 
 ---
 
@@ -366,7 +386,7 @@ tui-tool     <empty>  🛠️    Generic TUI tool
 | **showcase** | `terminal-tabs-showcase/` | ✅ Yes | Working | 90% |
 | **tmux-only** | `terminal-tabs-tmux-only/` | ❌ No | UI only | 80% |
 | **extension** | `terminal-tabs-extension/` | ✅ Yes | ✅ **READY FOR MERGE** | 95% |
-| **ai-experiments** | `terminal-tabs-ai/` | ✅ Yes | Working | 90% |
+| **~~ai-experiments~~** | ~~`terminal-tabs-ai/`~~ | ⚠️ Issues | 📦 **ARCHIVED** | N/A |
 | **tmux-manager** | `tmux-manager/` | N/A (backend) | ⚠️ Misunderstood | 33% (1/3 phases) |
 | **sessionmanager** | N/A | N/A | ❌ Failed | Abandoned |
 
@@ -582,4 +602,4 @@ This lets users create complex workspace layouts safely (tmuxplexer handles send
 
 ---
 
-**Last Updated**: November 15, 2025
+**Last Updated**: November 17, 2025 (Archived feat/ai-experiments)
