@@ -1,8 +1,15 @@
 {
-  "name": "tabz",
+  "name": "tmux-chrome-sidebar",
   "version": "1.0.0",
-  "description": "Tabz - Lightweight, tab-based terminal interface",
+  "description": "Chrome extension for managing tmux sessions in a persistent sidebar",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GGPrompts/tmux-chrome-sidebar.git"
+  },
+  "keywords": ["chrome-extension", "tmux", "terminal", "sidebar", "session-manager"],
+  "author": "Matt",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

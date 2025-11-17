@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react'
 import ReactDOM from 'react-dom/client'
-import { Terminal as TerminalIcon, Pin, PinOff, Settings, Plus } from 'lucide-react'
+import { Terminal as TerminalIcon, Pin, PinOff, Settings, Plus, Code, Zap } from 'lucide-react'
 import { Badge } from '../components/ui/badge'
 import { Terminal } from '../components/Terminal'
+import { QuickCommandsPanel } from '../components/QuickCommandsPanel'
 import { connectToBackground, sendMessage } from '../shared/messaging'
 import { getLocal, setLocal } from '../shared/storage'
 import '../styles/globals.css'
@@ -14,9 +15,12 @@ interface TerminalSession {
   active: boolean
 }
 
+type PanelTab = 'terminals' | 'commands'
+
 function SidePanelTerminal() {
   const [sessions, setSessions] = useState<TerminalSession[]>([])
   const [currentSession, setCurrentSession] = useState<string | null>(null)
+  const [activePanel, setActivePanel] = useState<PanelTab>('terminals')
   const [pinned, setPinned] = useState(false)
   const [wsConnected, setWsConnected] = useState(false)
   const portRef = useRef<chrome.runtime.Port | null>(null)
@@ -78,10 +82,17 @@ function SidePanelTerminal() {
         setCurrentSession(terminal.id)
         break
       case 'terminal-closed':
-        setSessions(prev => prev.filter(s => s.id !== data.terminalId))
-        if (currentSession === data.terminalId) {
-          setCurrentSession(sessions[0]?.id || null)
-        }
+        // Backend sends: { type: 'terminal-closed', data: { id: terminalId } }
+        const closedTerminalId = data.data?.id || data.terminalId || data.id
+        console.log('[Sidepanel] 🗑️ Terminal closed:', closedTerminalId)
+        setSessions(prev => {
+          const updated = prev.filter(s => s.id !== closedTerminalId)
+          // If closed terminal was active, switch to first remaining terminal
+          if (currentSession === closedTerminalId) {
+            setCurrentSession(updated[0]?.id || null)
+          }
+          return updated
+        })
         break
     }
   }
@@ -110,102 +121,147 @@ function SidePanelTerminal() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background text-foreground">
-      {/* Toolbar - compact controls */}
-      <div className="flex items-center justify-between px-3 py-2 border-b bg-card/50">
-        <div className="flex items-center gap-2">
+    <div className="h-screen flex flex-col bg-[#0a0a0a] text-foreground">
+      {/* Main Panel Tabs - gg-hub style */}
+      <div className="flex border-b bg-gradient-to-r from-[#0f0f0f] to-[#1a1a1a]">
+        <button
+          onClick={() => setActivePanel('terminals')}
+          className={`
+            flex items-center gap-2 px-4 py-3 font-medium transition-all relative
+            ${activePanel === 'terminals'
+              ? 'text-[#00ff88] bg-[#00ff88]/5'
+              : 'text-gray-400 hover:text-gray-300 hover:bg-white/5'
+            }
+          `}
+        >
+          <Code className="h-4 w-4" />
+          <span>Terminals</span>
+          {sessions.length > 0 && (
+            <Badge variant="secondary" className="text-xs ml-1 bg-[#00ff88]/20 text-[#00ff88] border-[#00ff88]/30">
+              {sessions.length}
+            </Badge>
+          )}
+          {activePanel === 'terminals' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#00ff88] to-[#00c8ff]" />
+          )}
+        </button>
+
+        <button
+          onClick={() => setActivePanel('commands')}
+          className={`
+            flex items-center gap-2 px-4 py-3 font-medium transition-all relative
+            ${activePanel === 'commands'
+              ? 'text-[#00ff88] bg-[#00ff88]/5'
+              : 'text-gray-400 hover:text-gray-300 hover:bg-white/5'
+            }
+          `}
+        >
+          <Zap className="h-4 w-4" />
+          <span>Commands</span>
+          {activePanel === 'commands' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#00ff88] to-[#00c8ff]" />
+          )}
+        </button>
+
+        <div className="flex-1" />
+
+        {/* Status & Actions */}
+        <div className="flex items-center gap-2 px-3">
           {wsConnected ? (
-            <Badge variant="secondary" className="text-xs">Connected</Badge>
+            <Badge variant="secondary" className="text-xs bg-[#00ff88]/20 text-[#00ff88] border-[#00ff88]/30">
+              Connected
+            </Badge>
           ) : (
             <Badge variant="destructive" className="text-xs">Disconnected</Badge>
           )}
-          {sessions.length > 0 && (
-            <span className="text-xs text-muted-foreground">
-              {sessions.length} session{sessions.length !== 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
 
-        <div className="flex items-center gap-1">
           <button
             onClick={handleSpawnTerminal}
-            className="p-1.5 hover:bg-accent rounded-md transition-colors"
+            className="p-1.5 hover:bg-[#00ff88]/10 rounded-md transition-colors text-[#00ff88]"
             title="New Terminal"
           >
             <Plus className="h-4 w-4" />
           </button>
-
-          <button
-            onClick={handleOpenSettings}
-            className="p-1.5 hover:bg-accent rounded-md transition-colors"
-            title="Settings"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
         </div>
       </div>
 
-      {/* Session Tabs */}
-      {sessions.length > 0 && (
-        <div className="flex gap-1 p-2 border-b bg-muted/30 overflow-x-auto">
-          {sessions.map(session => (
-            <button
-              key={session.id}
-              onClick={() => setCurrentSession(session.id)}
-              className={`
-                px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors
-                ${currentSession === session.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-card hover:bg-accent text-foreground'
-                }
-              `}
-            >
-              {session.name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Terminal View */}
+      {/* Content Area */}
       <div className="flex-1 relative overflow-hidden">
-        {sessions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <TerminalIcon className="h-16 w-16 mb-4 opacity-20" />
-            <p className="text-lg font-medium mb-2">No active terminals</p>
-            <p className="text-sm mb-4">Spawn a terminal to get started</p>
-            <button
-              onClick={handleSpawnTerminal}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-            >
-              <Plus className="inline-block h-4 w-4 mr-2" />
-              New Terminal
-            </button>
-          </div>
-        ) : (
-          <div className="h-full">
-            {sessions.map(session => (
-              <div
-                key={session.id}
-                className="h-full"
-                style={{ display: session.id === currentSession ? 'block' : 'none' }}
-              >
-                <Terminal
-                  terminalId={session.id}
-                  sessionName={session.name}
-                  terminalType={session.type}
-                  onClose={() => {
-                    sendMessage({
-                      type: 'CLOSE_TERMINAL',
-                      terminalId: session.id,
-                    })
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+        {/* Terminals Panel - Keep mounted but hide when inactive */}
+        <div
+          className="h-full flex flex-col"
+          style={{ display: activePanel === 'terminals' ? 'flex' : 'none' }}
+        >
+          {/* Session Tabs */}
+          {sessions.length > 0 && (
+            <div className="flex gap-1 p-2 border-b bg-gradient-to-r from-[#0f0f0f]/50 to-[#1a1a1a]/50 overflow-x-auto">
+              {sessions.map(session => (
+                <button
+                  key={session.id}
+                  onClick={() => setCurrentSession(session.id)}
+                  className={`
+                    px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-all
+                    ${currentSession === session.id
+                      ? 'bg-[#00ff88]/10 text-[#00ff88] border border-[#00ff88]/30'
+                      : 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-gray-300 border border-transparent'
+                    }
+                  `}
+                >
+                  {session.name}
+                </button>
+              ))}
+            </div>
+          )}
 
+          {/* Terminal View */}
+          <div className="flex-1 relative" style={{ height: sessions.length > 0 ? 'calc(100% - 50px)' : '100%' }}>
+            {sessions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                <TerminalIcon className="h-16 w-16 mb-4 opacity-20" />
+                <p className="text-lg font-medium mb-2">No active terminals</p>
+                <p className="text-sm mb-4">Spawn a terminal to get started</p>
+                <button
+                  onClick={handleSpawnTerminal}
+                  className="px-4 py-2 bg-gradient-to-r from-[#00ff88] to-[#00c8ff] text-black rounded-md hover:opacity-90 transition-opacity font-medium"
+                >
+                  <Plus className="inline-block h-4 w-4 mr-2" />
+                  New Terminal
+                </button>
+              </div>
+            ) : (
+              <div className="h-full">
+                {sessions.map(session => (
+                  <div
+                    key={session.id}
+                    className="h-full"
+                    style={{ display: session.id === currentSession ? 'block' : 'none' }}
+                  >
+                    <Terminal
+                      terminalId={session.id}
+                      sessionName={session.name}
+                      terminalType={session.type}
+                      onClose={() => {
+                        sendMessage({
+                          type: 'CLOSE_TERMINAL',
+                          terminalId: session.id,
+                        })
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Commands Panel - Keep mounted but hide when inactive */}
+        <div
+          className="h-full"
+          style={{ display: activePanel === 'commands' ? 'block' : 'none' }}
+        >
+          <QuickCommandsPanel />
+        </div>
+      </div>
     </div>
   )
 }

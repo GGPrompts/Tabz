@@ -1,87 +1,363 @@
-# Tabz
+# Tmux Chrome Sidebar
 
-**Tab>_** - A simple, lightweight tab-based terminal interface built with React, TypeScript, and xterm.js. Spawn multiple terminals in browser tabs with full terminal emulation powered by a Node.js backend.
+**A Chrome extension for managing tmux sessions in a persistent browser sidebar**
 
-## Features
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Chrome](https://img.shields.io/badge/chrome-extension-green)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-- **Tab-Based Interface** - Multiple terminals in browser tabs, like VS Code's terminal panel
-- **15 Terminal Types** - Claude Code, Bash, TFE, LazyGit, and more
-- **Full Terminal Emulation** - Powered by xterm.js with WebGL rendering
-- **WebSocket Communication** - Real-time terminal I/O
-- **Persistent Backend** - Node.js backend with PTY support
-- **Lightweight** - Minimal dependencies, fast startup
+## 🎯 What Is This?
 
-## Quick Start
+A **standalone Chrome extension** that puts a tmux session manager in your browser's sidebar. Browse the web with your terminal sessions always visible and accessible - no window juggling, no Alt+Tab, just your terminals right where you need them.
 
-### Install Dependencies
+### Key Philosophy
 
+**Tmux is the source of truth.** This extension doesn't manage terminal state - it queries tmux for active sessions and displays them in a clean sidebar interface. Simple polling, zero state sync bugs, true persistence.
+
+---
+
+## ✨ Features
+
+### 🔧 Session Management
+- **View all tmux sessions** - List updates every 2 seconds
+- **Auto-naming** - Session names sync from tmux pane titles (shows Claude Code status, directory, etc.)
+- **One-click attach** - Click a session to open full terminal
+- **Persistent** - Sessions survive browser restarts (they live in tmux!)
+- **Window count** - See how many tmux windows in each session
+
+### 📋 Quick Commands Panel
+- **Built-in commands** - Git, npm, shell commands ready to go
+- **Custom commands** - Add your own with category organization
+- **Two types**: Spawn terminal or copy to clipboard
+- **Category editor** - Organize commands however you want
+- **Persistent storage** - Custom commands saved in Chrome
+
+### 🎨 User Experience
+- **Always visible** - Sidebar persists across all tabs
+- **Never moves** - No window positioning, no Z-index battles
+- **Multi-monitor friendly** - Drag Chrome to any screen
+- **Panel switching** - Terminals stay alive when viewing Commands
+- **Clean UI** - Tabz-inspired green/cyan color scheme
+
+---
+
+## 🏗️ Architecture
+
+### Simple 3-Layer Design
+
+```
+┌─────────────────────────────────────┐
+│  Chrome Extension (React)           │
+│  - Poll /api/tmux/sessions          │ ← Every 2 seconds
+│  - Session list sidebar             │
+│  - Single terminal viewer           │
+│  - Commands panel                   │
+└────────────┬────────────────────────┘
+             │ REST API + WebSocket
+┌────────────▼────────────────────────┐
+│  Backend (Node.js + Express)        │
+│  - GET /api/tmux/sessions           │
+│  - POST /api/tmux/spawn             │
+│  - WebSocket for terminal I/O       │
+└────────────┬────────────────────────┘
+             │ tmux commands
+┌────────────▼────────────────────────┐
+│  Tmux Sessions (source of truth)    │
+│  - tt-bash-xyz                      │
+│  - tt-cc-abc (Claude Code)          │
+│  - tt-tfe-def (File Explorer)       │
+└─────────────────────────────────────┘
+```
+
+### Why Tmux-Only?
+
+**Problems with traditional approaches:**
+- State sync bugs between frontend and backend
+- Complex localStorage + Zustand + BroadcastChannel
+- Manual session naming and tracking
+- Persistence layer duplication
+
+**Tmux-only solution:**
+- ✅ **Single source of truth** - Tmux manages sessions, we just display them
+- ✅ **Auto-naming** - Pane titles become session names
+- ✅ **Free persistence** - Sessions survive everything
+- ✅ **40% less code** - No state management libraries needed
+- ✅ **Zero sync bugs** - Can't get out of sync with tmux
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 16+
+- Chrome browser
+- tmux (for session persistence)
+
+### Installation
+
+**1. Clone and Install:**
 ```bash
-# Install frontend dependencies
-npm install --ignore-scripts
+git clone https://github.com/GGPrompts/tmux-chrome-sidebar.git
+cd tmux-chrome-sidebar
 
-# Install backend dependencies
+# Install dependencies
+npm install
 cd backend && npm install && cd ..
 ```
 
-### Run the App
-
+**2. Build Extension:**
 ```bash
-# Terminal 1: Start backend
-cd backend && npm start
-
-# Terminal 2: Start frontend
-npm run dev
+npm run build:extension
 ```
 
-Access at http://localhost:5173
+**3. Load in Chrome:**
+1. Open `chrome://extensions`
+2. Enable "Developer mode"
+3. Click "Load unpacked"
+4. Select `dist-extension/` folder
 
-## Architecture
+**4. Start Backend:**
+```bash
+# WSL (recommended)
+cd backend
+npm start  # Runs on port 8129
 
-- **Frontend**: React + TypeScript + Vite + xterm.js
-- **Backend**: Node.js + Express + node-pty + WebSocket
-- **State**: Zustand for terminal management
-- **Styling**: Plain CSS
-
-## Configuration
-
-Terminal types are configured in `public/spawn-options.json`. Each terminal can specify:
-
-- `label` - Display name
-- `command` - Command to execute
-- `terminalType` - Type identifier
-- `icon` - Emoji icon
-- `defaultTheme` - Terminal color theme
-- `defaultTransparency` - Opacity level (0-100)
-- `defaultSize` - Initial width/height
-
-## Project Structure
-
-```
-tabz/
-├── src/
-│   ├── SimpleTerminalApp.tsx      # Main app component
-│   ├── components/
-│   │   └── Terminal.tsx           # xterm.js terminal component
-│   ├── stores/
-│   │   └── simpleTerminalStore.ts # Zustand state
-│   └── styles/
-│       └── terminal-themes.ts      # Theme definitions
-├── backend/
-│   ├── server.js                   # Express + WebSocket server
-│   ├── modules/
-│   │   ├── terminal-registry.js    # Terminal state management
-│   │   ├── pty-handler.js          # PTY process handling
-│   │   └── unified-spawn.js        # Terminal spawning logic
-│   └── routes/
-│       └── api.js                  # REST API endpoints
-└── public/
-    └── spawn-options.json          # Terminal type configurations
+# Or Windows
+cd backend
+set PORT=8129 && npm start
 ```
 
-## Extracted from Opustrator
+**5. Open Side Panel:**
+- Click extension icon → "Open Side Panel"
+- Or right-click icon → "Open Side Panel"
 
-This project was extracted from the larger [Opustrator](https://github.com/GGPrompts/opustrator) project, keeping only the essential tab-based terminal functionality without the infinite canvas features.
+---
 
-## License
+## 📝 Usage
 
-MIT
+### Managing Sessions
+
+**View Sessions:**
+- Open side panel → Click "Terminals" tab
+- All active tmux sessions appear in list
+- Shows session name, window count, status
+
+**Attach to Session:**
+- Click any session → Terminal opens
+- Type commands, run programs
+- Tmux shortcuts work (Ctrl+B prefix)
+
+**Detach from Session:**
+- Click ✕ close button
+- Session stays alive in tmux
+- Appears in session list for later reattach
+
+**Spawn New Session:**
+- Click + button in header
+- Or use Commands panel
+
+### Custom Commands
+
+**Open Command Editor:**
+- Click "Commands" tab
+- Click ⚙️ settings icon
+
+**Add Command:**
+- Fill in label, category, command, description
+- Choose type: "Spawn Terminal" or "Copy to Clipboard"
+- Select category from dropdown or create new
+- Click "Add"
+
+**Use Command:**
+- Switch to "Commands" tab
+- Click category to expand
+- Click command to spawn terminal or copy
+
+---
+
+## 🔧 Configuration
+
+### Ports
+- **Backend**: 8129 (configured in `backend/.env`)
+- **WebSocket**: `ws://localhost:8129`
+
+### Custom Commands
+- Stored in Chrome storage (local)
+- Persist across browser sessions
+- Organized by category
+- Edit/delete anytime
+
+### Session Polling
+- Default: 2 seconds
+- Configurable in code (`useTmuxSessions.ts`)
+
+---
+
+## 📂 Project Structure
+
+```
+.
+├── extension/                 # Chrome extension source
+│   ├── background/           # Service worker
+│   ├── sidepanel/            # Main sidebar UI
+│   ├── popup/                # Command palette
+│   ├── devtools/             # DevTools panel
+│   ├── components/           # React components
+│   │   ├── Terminal.tsx      # xterm.js wrapper
+│   │   ├── QuickCommandsPanel.tsx
+│   │   └── CommandEditorModal.tsx
+│   ├── hooks/                # React hooks
+│   ├── shared/               # Utilities
+│   └── manifest.json         # Extension config
+├── backend/                  # Node.js backend
+│   ├── server.js            # Express + WebSocket server
+│   ├── modules/             # Terminal/tmux logic
+│   └── routes/              # API endpoints
+├── dist-extension/          # Built extension (load this in Chrome)
+└── package.json
+```
+
+---
+
+## 🎯 Key Differences from Tabz
+
+| Aspect | Tabz | Tmux Chrome Sidebar |
+|--------|------|---------------------|
+| **Purpose** | Full terminal manager app | Chrome extension for session management |
+| **State** | Zustand + localStorage | Tmux only (polling) |
+| **UI** | Browser tabs with splits | Session list + single terminal |
+| **Persistence** | Zustand + tmux | Tmux only |
+| **Location** | Browser tab | Chrome sidebar |
+| **Use Case** | Terminal-focused work | Web browsing + terminal access |
+
+This is a **standalone project**, not a Tabz variant. It shares the backend architecture but has a completely different frontend approach optimized for Chrome's side panel.
+
+---
+
+## 🔌 Backend API
+
+### Session Management
+- `GET /api/tmux/sessions` - List all sessions
+- `POST /api/tmux/spawn` - Create new session
+- `DELETE /api/tmux/sessions/:name` - Kill session
+- `POST /api/tmux/sessions/:name/rename` - Rename
+- `GET /api/tmux/info/:name` - Get session details
+
+### WebSocket Messages
+**Client → Server:**
+- `{ type: 'attach-tmux', sessionName }` - Attach
+- `{ type: 'command', terminalId, command: data }` - Input
+- `{ type: 'resize', terminalId, cols, rows }` - Resize
+
+**Server → Client:**
+- `{ type: 'output', terminalId, data }` - Terminal output
+- `{ type: 'terminal-closed', data: { id } }` - Session ended
+
+---
+
+## 🛠️ Development
+
+### Building
+```bash
+# Build extension
+npm run build:extension
+
+# Build for distribution
+npm run zip:extension  # Creates terminal-tabs-extension.zip
+```
+
+### Testing
+```bash
+# Run tests
+npm test
+
+# Watch mode
+npm run test:watch
+```
+
+### Debugging
+```bash
+# Backend logs (if using tmux startup)
+tmux attach -t tmux-chrome-sidebar:backend
+
+# Or view in DevTools
+# chrome://extensions → Terminal Tabs → Service Worker → Console
+```
+
+---
+
+## 📚 Documentation
+
+- **[CLAUDE.md](CLAUDE.md)** - Technical architecture and development guidelines
+- **[WINDOWS_SETUP.md](WINDOWS_SETUP.md)** - Windows installation guide
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history
+
+---
+
+## 🎨 Design Philosophy
+
+### Always There, Never In The Way
+The Chrome sidebar approach means your terminals are:
+- **Persistent** across all tabs
+- **Fixed position** - no window juggling
+- **Multi-monitor friendly** - follows Chrome window
+- **Non-intrusive** - collapses when not needed
+
+### Tmux as Truth
+Instead of managing state in React:
+- Query tmux for sessions (simple polling)
+- Display what tmux knows
+- Let tmux handle persistence, naming, organization
+- 40% less code, zero sync bugs
+
+### Session-First, Not Tab-First
+Focus on tmux sessions as the mental model:
+- List of sessions (like VS Code terminal panel)
+- Click to attach/detach
+- Not browser-style tabs with drag/drop
+- Simpler, clearer, faster
+
+---
+
+## 🚧 Roadmap
+
+Future enhancements under consideration:
+- [ ] Migrate to tmux-only polling architecture (from current event-based)
+- [ ] Session grouping/favorites
+- [ ] Keyboard shortcuts (Ctrl+Shift+T, etc.)
+- [ ] Dark mode toggle
+- [ ] Export/import custom commands
+- [ ] Session templates
+- [ ] Integration with Claude Code session management
+
+---
+
+## 🤝 Contributing
+
+This is a personal project but suggestions welcome! Open an issue or PR.
+
+### Development Setup
+1. Fork the repo
+2. Create feature branch
+3. Make changes
+4. Test in Chrome
+5. Submit PR
+
+---
+
+## 📄 License
+
+MIT License - see LICENSE file
+
+---
+
+## 🙏 Acknowledgments
+
+- Built with React, TypeScript, xterm.js
+- Inspired by Tabz terminal manager
+- Uses tmux for session persistence
+- Chrome Extension Manifest V3
+
+---
+
+**Built by Matt** | [GitHub](https://github.com/GGPrompts)

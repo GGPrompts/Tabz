@@ -6,7 +6,7 @@ import { parseUrlToPath } from '../shared/utils'
 let ws: WebSocket | null = null
 let reconnectTimeout: NodeJS.Timeout | null = null
 const RECONNECT_DELAY = 5000
-const WS_URL = 'ws://localhost:8128'
+const WS_URL = 'ws://localhost:8129'
 
 // Track connected clients (popup, sidepanel, devtools)
 const connectedClients = new Set<chrome.runtime.Port>()

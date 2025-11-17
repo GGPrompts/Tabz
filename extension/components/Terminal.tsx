@@ -186,15 +186,15 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', onClo
   return (
     <div className="h-full flex flex-col">
       {/* Terminal header */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b bg-card text-xs">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-800 bg-gradient-to-r from-[#0f0f0f] to-[#1a1a1a] text-xs">
         <div className="flex items-center gap-2">
-          <span className="font-mono">{sessionName || terminalId}</span>
-          <span className="text-muted-foreground">({terminalType})</span>
+          <span className="font-mono text-white">{sessionName || terminalId}</span>
+          <span className="text-gray-400">({terminalType})</span>
         </div>
         {onClose && (
           <button
             onClick={onClose}
-            className="px-2 py-0.5 hover:bg-destructive/90 hover:text-destructive-foreground rounded transition-colors"
+            className="px-2 py-0.5 text-gray-400 hover:bg-red-500/20 hover:text-red-400 rounded transition-colors"
             title="Close terminal"
           >
             ✕
