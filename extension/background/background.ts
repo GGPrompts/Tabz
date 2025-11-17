@@ -33,10 +33,11 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     try {
       const message = JSON.parse(event.data)
-      console.log('📨 WS message received:', message.type)
+      console.log('📨 WS message received:', message.type, message.type === 'terminal-spawned' ? JSON.stringify(message).slice(0, 200) : '')
 
       // Handle terminal output specially - broadcast directly as TERMINAL_OUTPUT
-      if (message.type === 'output') {
+      if (message.type === 'output' || message.type === 'terminal-output') {
+        console.log('📟 Terminal output received, broadcasting to clients:', message.terminalId?.slice(-8), message.data?.length, 'bytes')
         broadcastToClients({
           type: 'TERMINAL_OUTPUT',
           terminalId: message.terminalId,
@@ -44,10 +45,14 @@ function connectWebSocket() {
         })
       } else {
         // Broadcast other messages as WS_MESSAGE
-        broadcastToClients({
+        const clientMessage: ExtensionMessage = {
           type: 'WS_MESSAGE',
           data: message,
-        })
+        }
+        if (message.type === 'terminal-spawned') {
+          console.log('📤 Broadcasting to clients:', JSON.stringify(clientMessage).slice(0, 200))
+        }
+        broadcastToClients(clientMessage)
       }
     } catch (err) {
       console.error('Failed to parse WebSocket message:', err)
@@ -55,11 +60,22 @@ function connectWebSocket() {
   }
 
   ws.onerror = (error) => {
-    console.error('❌ WebSocket error:', error)
+    console.error('❌ WebSocket error:', {
+      url: WS_URL,
+      readyState: ws?.readyState,
+      readyStateText: ws?.readyState === 0 ? 'CONNECTING' : ws?.readyState === 1 ? 'OPEN' : ws?.readyState === 2 ? 'CLOSING' : ws?.readyState === 3 ? 'CLOSED' : 'UNKNOWN',
+      error: error,
+    })
   }
 
-  ws.onclose = () => {
-    console.log('WebSocket closed, reconnecting...')
+  ws.onclose = (event) => {
+    console.log('WebSocket closed:', {
+      code: event.code,
+      reason: event.reason || '(no reason provided)',
+      wasClean: event.wasClean,
+      url: WS_URL,
+    })
+
     ws = null
     broadcastToClients({ type: 'WS_DISCONNECTED' })
 
@@ -98,13 +114,27 @@ async function updateBadge() {
 }
 
 // Message handler from extension pages
-chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(async (message: ExtensionMessage, sender, sendResponse) => {
   console.log('📬 Message received from extension:', message.type)
 
   switch (message.type) {
     case 'OPEN_SESSION':
       // Open side panel with specific session
-      chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT })
+      // Get normal browser windows (not popups/devtools) to avoid "Could not create options page" error
+      try {
+        const windows = await chrome.windows.getAll({ windowTypes: ['normal'] })
+        const targetWindow = windows.find(w => w.focused) || windows[0]
+
+        if (targetWindow?.id) {
+          console.log('[Background] Opening side panel in window:', targetWindow.id)
+          await chrome.sidePanel.open({ windowId: targetWindow.id })
+        } else {
+          console.error('[Background] No normal browser window found')
+        }
+      } catch (err) {
+        console.error('[Background] Failed to open side panel:', err)
+      }
+
       sendToWebSocket({
         type: 'attach-terminal',
         sessionName: message.sessionName,
@@ -112,11 +142,23 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
       break
 
     case 'SPAWN_TERMINAL':
+      // Transform extension message to backend spawn format
+      const requestId = `spawn-${Date.now()}`
       sendToWebSocket({
-        type: 'spawn-terminal',
+        type: 'spawn',
+        config: {
+          terminalType: message.spawnOption || 'bash',
+          command: message.command || '',
+          workingDirectory: message.cwd,
+        },
+        requestId,
+      })
+
+      console.log('📤 Spawning terminal:', {
+        terminalType: message.spawnOption,
         command: message.command,
         cwd: message.cwd,
-        spawnOption: message.spawnOption,
+        requestId,
       })
 
       // Track as active session
@@ -145,6 +187,7 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
 
     case 'TERMINAL_INPUT':
       // Forward terminal input to backend
+      console.log('📥 TERMINAL_INPUT:', { terminalId: message.terminalId, dataLength: message.data?.length })
       sendToWebSocket({
         type: 'command',
         terminalId: message.terminalId,
@@ -154,6 +197,7 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
 
     case 'TERMINAL_RESIZE':
       // Forward terminal resize to backend
+      console.log('📏 TERMINAL_RESIZE:', { terminalId: message.terminalId, cols: message.cols, rows: message.rows })
       sendToWebSocket({
         type: 'resize',
         terminalId: message.terminalId,
@@ -178,6 +222,14 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
 chrome.runtime.onConnect.addListener((port) => {
   console.log('🔌 Client connected:', port.name)
   connectedClients.add(port)
+
+  // ✅ IMMEDIATELY send current WebSocket state to newly connected client
+  // This solves the race condition where sidepanel opens after WebSocket is already connected
+  const currentState = ws?.readyState === WebSocket.OPEN
+  port.postMessage({
+    type: 'INITIAL_STATE',
+    wsConnected: currentState,
+  })
 
   port.onDisconnect.addListener(() => {
     console.log('🔌 Client disconnected:', port.name)

@@ -1,6 +1,7 @@
 // Chrome Extension Message Types
 
 export type MessageType =
+  | 'INITIAL_STATE'
   | 'OPEN_SESSION'
   | 'SPAWN_TERMINAL'
   | 'CLOSE_SESSION'
@@ -95,7 +96,13 @@ export interface WSDisconnectedMessage extends BaseMessage {
   type: 'WS_DISCONNECTED';
 }
 
+export interface InitialStateMessage extends BaseMessage {
+  type: 'INITIAL_STATE';
+  wsConnected: boolean;
+}
+
 export type ExtensionMessage =
+  | InitialStateMessage
   | OpenSessionMessage
   | SpawnTerminalMessage
   | CloseSessionMessage
@@ -115,9 +122,28 @@ export function sendMessage(message: ExtensionMessage): Promise<any> {
   return chrome.runtime.sendMessage(message);
 }
 
-// Helper function to listen to messages
+// Helper function to listen to messages (one-time messaging)
 export function onMessage(
   callback: (message: ExtensionMessage, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => void
 ) {
   chrome.runtime.onMessage.addListener(callback);
+}
+
+// Helper function to connect via port and listen to messages (long-lived connection)
+// Use this for components that need to receive broadcasts from background worker
+export function connectToBackground(
+  name: string,
+  onMessageCallback: (message: ExtensionMessage) => void
+): chrome.runtime.Port {
+  const port = chrome.runtime.connect({ name });
+
+  port.onMessage.addListener((message: ExtensionMessage) => {
+    onMessageCallback(message);
+  });
+
+  port.onDisconnect.addListener(() => {
+    // Port disconnected
+  });
+
+  return port;
 }

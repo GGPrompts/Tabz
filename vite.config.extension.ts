@@ -7,6 +7,7 @@ import manifest from './extension/manifest.json' with { type: 'json' }
 // https://vitejs.dev/config/
 export default defineConfig({
   root: 'extension',
+  base: './', // Use relative paths for Chrome extension compatibility
   plugins: [
     react(),
     crx({ manifest }),

@@ -2,8 +2,9 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
-import { sendMessage, onMessage } from '../shared/messaging'
+import { sendMessage, connectToBackground } from '../shared/messaging'
 
 interface TerminalProps {
   terminalId: string
@@ -51,13 +52,17 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', onClo
       },
       scrollback: 10000,
       convertEol: false,
+      allowProposedApi: true,
     })
 
     const fitAddon = new FitAddon()
     const webLinksAddon = new WebLinksAddon()
+    const unicode11Addon = new Unicode11Addon()
 
     xterm.loadAddon(fitAddon)
     xterm.loadAddon(webLinksAddon)
+    xterm.loadAddon(unicode11Addon)
+    xterm.unicode.activeVersion = '11'
 
     // Open terminal
     xterm.open(terminalRef.current)
@@ -122,21 +127,42 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', onClo
     }
   }, [terminalId])
 
-  // Listen for terminal output from background worker
+  // Listen for terminal output from background worker via port
   useEffect(() => {
-    const messageHandler = (message: any) => {
-      if (message.type === 'TERMINAL_OUTPUT' && message.terminalId === terminalId) {
+    console.log('[Terminal] Connecting to background for terminal:', terminalId)
+
+    const port = connectToBackground(`terminal-${terminalId}`, (message) => {
+      // ✅ Handle initial state sent immediately on connection
+      if (message.type === 'INITIAL_STATE') {
+        console.log('[Terminal] 📥 Received initial state - WebSocket:', message.wsConnected ? 'connected' : 'disconnected')
+        setIsConnected(message.wsConnected)
+      } else if (message.type === 'TERMINAL_OUTPUT' && message.terminalId === terminalId) {
+        console.log('[Terminal] 📟 TERMINAL_OUTPUT received:', {
+          terminalId: message.terminalId,
+          dataLength: message.data?.length,
+          hasXterm: !!xtermRef.current,
+          data: message.data?.slice(0, 50)
+        })
         if (xtermRef.current && message.data) {
           xtermRef.current.write(message.data)
+          console.log('[Terminal] ✍️ Wrote to xterm:', message.data.length, 'bytes')
+        } else {
+          console.warn('[Terminal] ⚠️ Cannot write - xterm:', !!xtermRef.current, 'data:', !!message.data)
         }
       } else if (message.type === 'WS_CONNECTED') {
+        console.log('[Terminal] WebSocket connected')
         setIsConnected(true)
       } else if (message.type === 'WS_DISCONNECTED') {
+        console.log('[Terminal] WebSocket disconnected')
         setIsConnected(false)
       }
-    }
+    })
 
-    onMessage(messageHandler)
+    // Cleanup
+    return () => {
+      console.log('[Terminal] Disconnecting from background')
+      port.disconnect()
+    }
   }, [terminalId])
 
   // Handle window resize
@@ -177,11 +203,11 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', onClo
       </div>
 
       {/* Terminal body */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative overflow-hidden">
         <div
           ref={terminalRef}
           className="absolute inset-0"
-          style={{ padding: '8px' }}
+          style={{ padding: '8px', paddingBottom: '4px' }}
         />
       </div>
 

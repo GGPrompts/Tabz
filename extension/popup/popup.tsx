@@ -80,10 +80,17 @@ function ExtensionPopup() {
     // TODO: Create options page
     // For now, just open side panel
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-      if (tab?.windowId) {
-        await chrome.sidePanel.open({ windowId: tab.windowId })
+      // Get the browser window (not the popup) by getting the last focused window
+      // Popups themselves have windowId -1, so we need the actual browser window
+      const windows = await chrome.windows.getAll({ windowTypes: ['normal'] })
+      const lastFocused = windows.find(w => w.focused) || windows[0]
+
+      if (lastFocused?.id) {
+        console.log('[Popup] Opening side panel in window:', lastFocused.id)
+        await chrome.sidePanel.open({ windowId: lastFocused.id })
         window.close()
+      } else {
+        console.error('[Popup] No browser window found')
       }
     } catch (error) {
       console.error('[Popup] Failed to open side panel:', error)
@@ -92,10 +99,17 @@ function ExtensionPopup() {
 
   const handleOpenSidePanel = async () => {
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-      if (tab?.windowId) {
-        await chrome.sidePanel.open({ windowId: tab.windowId })
+      // Get the browser window (not the popup) by getting the last focused window
+      // Popups themselves have windowId -1, so we need the actual browser window
+      const windows = await chrome.windows.getAll({ windowTypes: ['normal'] })
+      const lastFocused = windows.find(w => w.focused) || windows[0]
+
+      if (lastFocused?.id) {
+        console.log('[Popup] Opening side panel in window:', lastFocused.id)
+        await chrome.sidePanel.open({ windowId: lastFocused.id })
         window.close()
+      } else {
+        console.error('[Popup] No browser window found')
       }
     } catch (error) {
       console.error('[Popup] Failed to open side panel:', error)
@@ -159,6 +173,7 @@ function ExtensionPopup() {
                     key={session.name}
                     value={session.name}
                     onSelect={() => handleSessionSelect(session.name)}
+                    disabled={false}
                   >
                     <Clock className="mr-2 h-4 w-4" />
                     <div className="flex-1">
@@ -179,6 +194,7 @@ function ExtensionPopup() {
             <CommandItem
               value="open-side-panel"
               onSelect={handleOpenSidePanel}
+              disabled={false}
             >
               <Plus className="mr-2 h-4 w-4" />
               <div className="flex-1">
@@ -194,6 +210,7 @@ function ExtensionPopup() {
                 key={option.terminalType}
                 value={option.label}
                 onSelect={() => handleSpawn(option)}
+                disabled={false}
               >
                 <span className="mr-2 text-lg">{option.icon}</span>
                 <div className="flex-1">

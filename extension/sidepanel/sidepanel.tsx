@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import ReactDOM from 'react-dom/client'
 import { Terminal as TerminalIcon, Pin, PinOff, Settings, Plus } from 'lucide-react'
 import { Badge } from '../components/ui/badge'
 import { Terminal } from '../components/Terminal'
-import { onMessage, sendMessage } from '../shared/messaging'
+import { connectToBackground, sendMessage } from '../shared/messaging'
 import { getLocal, setLocal } from '../shared/storage'
 import '../styles/globals.css'
 
@@ -19,6 +19,7 @@ function SidePanelTerminal() {
   const [currentSession, setCurrentSession] = useState<string | null>(null)
   const [pinned, setPinned] = useState(false)
   const [wsConnected, setWsConnected] = useState(false)
+  const portRef = useRef<chrome.runtime.Port | null>(null)
 
   useEffect(() => {
     // Load pinned state from storage
@@ -28,35 +29,53 @@ function SidePanelTerminal() {
       }
     })
 
-    // Listen for messages from background
-    onMessage((message) => {
-      if (message.type === 'WS_CONNECTED') {
+    // Connect to background worker via port for broadcasts
+    const port = connectToBackground('sidepanel', (message) => {
+      // ✅ Handle initial state sent immediately on connection
+      if (message.type === 'INITIAL_STATE') {
+        setWsConnected(message.wsConnected)
+      } else if (message.type === 'WS_CONNECTED') {
         setWsConnected(true)
       } else if (message.type === 'WS_DISCONNECTED') {
         setWsConnected(false)
       } else if (message.type === 'WS_MESSAGE') {
         handleWebSocketMessage(message.data)
+      } else if (message.type === 'TERMINAL_OUTPUT') {
+        // Terminal component will handle this
       }
     })
 
-    // Request initial session list
-    sendMessage({ type: 'WS_MESSAGE', data: { type: 'list-sessions' } })
+    portRef.current = port
+
+    // Cleanup
+    return () => {
+      port.disconnect()
+      portRef.current = null
+    }
   }, [])
 
   const handleWebSocketMessage = (data: any) => {
+    console.log('[Sidepanel] handleWebSocketMessage:', data.type, data.type === 'terminal-spawned' ? JSON.stringify(data).slice(0, 200) : '')
     switch (data.type) {
       case 'session-list':
         setSessions(data.sessions || [])
         break
       case 'terminal-spawned':
-        // Add new session
+        // Backend sends: { type: 'terminal-spawned', data: terminalObject, requestId }
+        // terminalObject has: { id, name, terminalType, ... }
+        const terminal = data.data || data
+        console.log('[Sidepanel] 📥 Terminal spawned:', {
+          id: terminal.id,
+          name: terminal.name,
+          type: terminal.terminalType,
+        })
         setSessions(prev => [...prev, {
-          id: data.terminalId,
-          name: data.sessionName || data.terminalId,
-          type: data.spawnOption || 'bash',
+          id: terminal.id,
+          name: terminal.name || terminal.id,
+          type: terminal.terminalType || 'bash',
           active: false,
         }])
-        setCurrentSession(data.terminalId)
+        setCurrentSession(terminal.id)
         break
       case 'terminal-closed':
         setSessions(prev => prev.filter(s => s.id !== data.terminalId))
@@ -92,15 +111,18 @@ function SidePanelTerminal() {
 
   return (
     <div className="h-screen flex flex-col bg-background text-foreground">
-      {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b bg-card">
+      {/* Toolbar - compact controls */}
+      <div className="flex items-center justify-between px-3 py-2 border-b bg-card/50">
         <div className="flex items-center gap-2">
-          <TerminalIcon className="h-4 w-4" />
-          <h1 className="text-sm font-semibold">Terminal Tabs</h1>
           {wsConnected ? (
             <Badge variant="secondary" className="text-xs">Connected</Badge>
           ) : (
             <Badge variant="destructive" className="text-xs">Disconnected</Badge>
+          )}
+          {sessions.length > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {sessions.length} session{sessions.length !== 1 ? 's' : ''}
+            </span>
           )}
         </div>
 
@@ -111,18 +133,6 @@ function SidePanelTerminal() {
             title="New Terminal"
           >
             <Plus className="h-4 w-4" />
-          </button>
-
-          <button
-            onClick={handleTogglePin}
-            className="p-1.5 hover:bg-accent rounded-md transition-colors"
-            title={pinned ? 'Unpin' : 'Pin'}
-          >
-            {pinned ? (
-              <PinOff className="h-4 w-4" />
-            ) : (
-              <Pin className="h-4 w-4" />
-            )}
           </button>
 
           <button
@@ -196,18 +206,6 @@ function SidePanelTerminal() {
         )}
       </div>
 
-      {/* Footer */}
-      <div className="p-2 border-t bg-card text-xs text-center text-muted-foreground">
-        <div className="flex items-center justify-center gap-2">
-          <span>{sessions.length} active session{sessions.length !== 1 ? 's' : ''}</span>
-          {pinned && (
-            <>
-              <span>•</span>
-              <span>📌 Pinned</span>
-            </>
-          )}
-        </div>
-      </div>
     </div>
   )
 }

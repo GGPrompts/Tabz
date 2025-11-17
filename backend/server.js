@@ -188,11 +188,13 @@ wss.on('connection', (ws) => {
               alreadyOwned: wasAlreadyOwned
             });
             // Include requestId if provided
-            broadcast({
+            const spawnMessage = {
               type: 'terminal-spawned',
               data: result.terminal,
               requestId: data.requestId
-            });
+            };
+            console.log('[Server] 📤 Broadcasting terminal-spawned:', JSON.stringify(spawnMessage).slice(0, 200));
+            broadcast(spawnMessage);
           } else {
             // Include requestId in error response for tracking
             ws.send(JSON.stringify({

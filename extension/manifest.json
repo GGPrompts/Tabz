@@ -12,6 +12,9 @@
   "host_permissions": [
     "http://localhost:8128/*"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
   "background": {
     "service_worker": "background/background.ts",
     "type": "module"
