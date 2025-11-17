@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Removed
+
+#### Archived feat/ai-experiments Branch (2025-11-17)
+- **Archived experimental AI integration branch** that conflicted with core "Simplicity Over Features" principle
+  - Branch renamed: `feat/ai-experiments` → `archive/ai-experiments-2025-11-17`
+  - **Why archived**:
+    - Added significant complexity (Tailwind CSS, 15+ dependencies, 7,748 lines)
+    - Terminals already run AI tools effectively (Claude Code, etc.)
+    - Behind master by 8 commits, missing key features (Alt shortcuts, context menus, window switcher)
+    - AI components built but not integrated into UI
+    - Technical issues (Docker Model Runner WSL I/O problems, terminal rendering bugs)
+  - **Testing results**: 98.5% tests passing (256/260), 4 failures in edge cases
+  - **Documentation**: All testing and technical notes preserved in `~/projects/terminal-tabs-ai/`
+  - **Lesson learned**: AI integration doesn't align with project's focus on simplicity and lightweight design
+  - See [FEATURE_BRANCHES.md](FEATURE_BRANCHES.md#5-featai-experiments--archived-november-17-2025) for full details
+
+---
+
 ## [1.4.0] - 2025-11-16
 
 ### 🚀 Major Features
