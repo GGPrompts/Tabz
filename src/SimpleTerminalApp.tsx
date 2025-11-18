@@ -411,6 +411,14 @@ function SimpleTerminalApp() {
   const [spawnOptions, setSpawnOptions] = useState<SpawnOption[]>([])
   const spawnOptionsRef = useRef<SpawnOption[]>([]) // Ref to avoid closure issues
 
+  // Chat input mode (alternative to direct terminal paste)
+  const [showChatInput, setShowChatInput] = useState(false)
+  const [chatInputText, setChatInputText] = useState('')
+  const [chatInputMode, setChatInputMode] = useState<'execute' | 'send'>('execute')
+  const [showChatModeDropdown, setShowChatModeDropdown] = useState(false)
+  const chatInputRef = useRef<HTMLInputElement>(null)
+  const chatModeDropdownRef = useRef<HTMLDivElement>(null)
+
   // Multi-select spawn options
   const [spawnSearchText, setSpawnSearchText] = useState('')
   const [spawnWorkingDirOverride, setSpawnWorkingDirOverride] = useState('')
@@ -1908,6 +1916,79 @@ End of error report
     // No tmux-level refresh needed - it would interfere with running applications
   }
 
+  // Chat input handlers - alternative to direct terminal paste
+  const handleChatInputSend = (submitToTerminal: boolean = true) => {
+    if (!chatInputText.trim()) return
+
+    // Get the active terminal (focused pane or active tab)
+    const targetTerminal = focusedTerminalId
+      ? storedTerminals.find(t => t.id === focusedTerminalId)
+      : storedTerminals.find(t => t.id === activeTerminalId)
+
+    if (!targetTerminal?.agentId) {
+      console.warn('[SimpleTerminalApp] Cannot send chat input - no active terminal')
+      return
+    }
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      // Send text first (without Enter)
+      wsRef.current.send(JSON.stringify({
+        type: 'command',
+        terminalId: targetTerminal.agentId,
+        command: chatInputText,
+      }))
+      console.log('[SimpleTerminalApp] Sent chat input to terminal:', targetTerminal.agentId.slice(-8))
+
+      // If execute mode, send Enter after 300ms delay
+      // CRITICAL: Delay prevents submit before text loads (especially for Claude Code)
+      if (submitToTerminal) {
+        setTimeout(() => {
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+              type: 'command',
+              terminalId: targetTerminal.agentId,
+              command: '\r',
+            }))
+            console.log('[SimpleTerminalApp] Sent Enter key after 300ms delay')
+          }
+        }, 300)
+      }
+    }
+
+    // Clear input after sending
+    setChatInputText('')
+
+    // Focus input for next message
+    chatInputRef.current?.focus()
+  }
+
+  const handleChatInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      // Use the current mode setting
+      const submitToTerminal = chatInputMode === 'execute'
+      handleChatInputSend(submitToTerminal)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      setShowChatInput(false)
+      setChatInputText('')
+    }
+  }
+
+  // Close chat mode dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (chatModeDropdownRef.current && !chatModeDropdownRef.current.contains(event.target as Node)) {
+        setShowChatModeDropdown(false)
+      }
+    }
+
+    if (showChatModeDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showChatModeDropdown])
+
   // Compute dynamic background based on active terminal's background setting
   const appBackgroundStyle: React.CSSProperties = {
     background: activeTerminal?.background
@@ -2600,46 +2681,131 @@ End of error report
           </div>
 
           <div className="footer-controls">
-            {/* Font Size Controls */}
+            {/* Chat Input Mode Toggle */}
             <button
-              className="footer-control-btn"
-              onClick={(e) => handleFontSizeChange(-1, e)}
-              title="Decrease font size"
-              disabled={!displayTerminal.fontSize || displayTerminal.fontSize <= 10}
-            >
-              −
-            </button>
-            <span className="font-size-display">{displayTerminal.fontSize || useSettingsStore.getState().terminalDefaultFontSize}px</span>
-            <button
-              className="footer-control-btn"
-              onClick={(e) => handleFontSizeChange(1, e)}
-              title="Increase font size"
-              disabled={!!displayTerminal.fontSize && displayTerminal.fontSize >= 24}
-            >
-              +
-            </button>
-
-            {/* Reset to Defaults Button */}
-            <button
-              className="footer-control-btn"
-              onClick={(e) => handleResetToDefaults(e)}
-              title="Reset to spawn-option defaults (theme, font, transparency)"
-            >
-              ↺
-            </button>
-
-            {/* Customize Panel Toggle */}
-            <button
-              className="footer-control-btn"
+              className={`footer-control-btn ${showChatInput ? 'active' : ''}`}
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
-                setShowCustomizePanel(!showCustomizePanel)
+                setShowChatInput(!showChatInput)
+                // Focus input when enabled
+                if (!showChatInput) {
+                  setTimeout(() => chatInputRef.current?.focus(), 50)
+                }
               }}
-              title="Customize theme, transparency, font"
+              title={showChatInput ? "Hide chat input (paste workaround)" : "Show chat input (paste workaround)"}
             >
-              🎨
+              💬
             </button>
+
+            {!showChatInput && (
+              <>
+                {/* Font Size Controls */}
+                <button
+                  className="footer-control-btn"
+                  onClick={(e) => handleFontSizeChange(-1, e)}
+                  title="Decrease font size"
+                  disabled={!displayTerminal.fontSize || displayTerminal.fontSize <= 10}
+                >
+                  −
+                </button>
+                <span className="font-size-display">{displayTerminal.fontSize || useSettingsStore.getState().terminalDefaultFontSize}px</span>
+                <button
+                  className="footer-control-btn"
+                  onClick={(e) => handleFontSizeChange(1, e)}
+                  title="Increase font size"
+                  disabled={!!displayTerminal.fontSize && displayTerminal.fontSize >= 24}
+                >
+                  +
+                </button>
+
+                {/* Reset to Defaults Button */}
+                <button
+                  className="footer-control-btn"
+                  onClick={(e) => handleResetToDefaults(e)}
+                  title="Reset to spawn-option defaults (theme, font, transparency)"
+                >
+                  ↺
+                </button>
+
+                {/* Customize Panel Toggle */}
+                <button
+                  className="footer-control-btn"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setShowCustomizePanel(!showCustomizePanel)
+                  }}
+                  title="Customize theme, transparency, font"
+                >
+                  🎨
+                </button>
+              </>
+            )}
+
+            {showChatInput && (
+              <div className="chat-input-container">
+                <input
+                  ref={chatInputRef}
+                  type="text"
+                  className="chat-input"
+                  value={chatInputText}
+                  onChange={(e) => setChatInputText(e.target.value)}
+                  onKeyDown={handleChatInputKeyDown}
+                  placeholder={chatInputMode === 'execute'
+                    ? "Type command and press Enter to execute (Escape to close)"
+                    : "Type text and press Enter to send without executing (Escape to close)"}
+                  autoFocus
+                />
+                <div className="chat-mode-selector" ref={chatModeDropdownRef}>
+                  <button
+                    className="chat-send-btn"
+                    onClick={() => handleChatInputSend(chatInputMode === 'execute')}
+                    disabled={!chatInputText.trim()}
+                    title={chatInputMode === 'execute' ? "Send and execute (Enter)" : "Send without executing (Enter)"}
+                  >
+                    {chatInputMode === 'execute' ? 'Execute' : 'Send'}
+                  </button>
+                  <button
+                    className="chat-mode-dropdown-btn"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setShowChatModeDropdown(!showChatModeDropdown)
+                    }}
+                    title="Change send mode"
+                  >
+                    ▼
+                  </button>
+                  {showChatModeDropdown && (
+                    <div className="chat-mode-dropdown">
+                      <button
+                        className={`chat-mode-option ${chatInputMode === 'execute' ? 'active' : ''}`}
+                        onClick={() => {
+                          setChatInputMode('execute')
+                          setShowChatModeDropdown(false)
+                          chatInputRef.current?.focus()
+                        }}
+                      >
+                        <span className="mode-label"><span className="mode-icon">⚡</span> Execute</span>
+                        <span className="mode-description">Send with Enter (runs command)</span>
+                      </button>
+                      <button
+                        className={`chat-mode-option ${chatInputMode === 'send' ? 'active' : ''}`}
+                        onClick={() => {
+                          setChatInputMode('send')
+                          setShowChatModeDropdown(false)
+                          chatInputRef.current?.focus()
+                        }}
+                      >
+                        <span className="mode-label"><span className="mode-icon">📝</span> Send Only</span>
+                        <span className="mode-description">Send without Enter (paste text)</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
