@@ -14,6 +14,7 @@ interface TerminalSession {
   name: string
   type: string
   active: boolean
+  sessionName?: string  // Tmux session name (only for tmux-based terminals)
 }
 
 type PanelTab = 'terminals' | 'commands'
@@ -27,6 +28,14 @@ function SidePanelTerminal() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const portRef = useRef<chrome.runtime.Port | null>(null)
   const terminalSettings = useTerminalSettings()
+
+  // Tab context menu state (for session management)
+  const [contextMenu, setContextMenu] = useState<{
+    show: boolean
+    x: number
+    y: number
+    terminalId: string | null
+  }>({ show: false, x: 0, y: 0, terminalId: null })
 
   useEffect(() => {
     // Load pinned state from storage
@@ -61,6 +70,20 @@ function SidePanelTerminal() {
     }
   }, [])
 
+  // Close tab context menu on outside click
+  useEffect(() => {
+    if (!contextMenu.show) return
+
+    const handleClick = () => {
+      setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+    }
+
+    document.addEventListener('click', handleClick)
+    return () => {
+      document.removeEventListener('click', handleClick)
+    }
+  }, [contextMenu.show])
+
   const handleWebSocketMessage = (data: any) => {
     console.log('[Sidepanel] handleWebSocketMessage:', data.type, data.type === 'terminal-spawned' ? JSON.stringify(data).slice(0, 200) : '')
     switch (data.type) {
@@ -81,6 +104,7 @@ function SidePanelTerminal() {
           name: terminal.name || terminal.id,
           type: terminal.terminalType || 'bash',
           active: false,
+          sessionName: terminal.sessionName,  // Store tmux session name
         }])
         setCurrentSession(terminal.id)
         break
@@ -126,6 +150,100 @@ function SidePanelTerminal() {
     sendMessage({
       type: 'REFRESH_TERMINALS',
     })
+  }
+
+  // Handle right-click on tab (session-level operations)
+  const handleTabContextMenu = (e: React.MouseEvent, terminalId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setContextMenu({
+      show: true,
+      x: e.clientX,
+      y: e.clientY,
+      terminalId
+    })
+  }
+
+  // Handle "Rename Tab" from tab menu
+  const handleContextRename = () => {
+    if (!contextMenu.terminalId) return
+    const terminal = sessions.find(s => s.id === contextMenu.terminalId)
+    if (!terminal) return
+
+    // TODO: Add rename dialog (Phase 2)
+    const newName = prompt('Enter new name:', terminal.name)
+    if (newName) {
+      // Update local session name
+      setSessions(prev => prev.map(s =>
+        s.id === terminal.id ? { ...s, name: newName } : s
+      ))
+    }
+
+    setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+  }
+
+  // Handle "Detach Session" from tab menu
+  const handleDetachSession = async () => {
+    if (!contextMenu.terminalId) return
+
+    const terminal = sessions.find(s => s.id === contextMenu.terminalId)
+    if (!terminal?.sessionName) return
+
+    console.log(`[handleDetachSession] Detaching session: ${terminal.sessionName}`)
+
+    try {
+      const response = await fetch(`http://localhost:8127/api/tmux/detach/${terminal.sessionName}`, {
+        method: 'POST'
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        console.log('[handleDetachSession] Session detached successfully')
+        // Remove from UI but session stays alive in tmux
+        setSessions(prev => prev.filter(s => s.id !== terminal.id))
+        if (currentSession === terminal.id) {
+          setCurrentSession(sessions[0]?.id || null)
+        }
+      } else {
+        console.error('[handleDetachSession] Failed to detach:', data.error)
+      }
+
+      setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+    } catch (error) {
+      console.error('[handleDetachSession] Error:', error)
+    }
+  }
+
+  // Handle "Kill Session" from tab menu
+  const handleKillSession = async () => {
+    if (!contextMenu.terminalId) return
+
+    const terminal = sessions.find(s => s.id === contextMenu.terminalId)
+    if (!terminal?.sessionName) return
+
+    console.log(`[handleKillSession] Killing session: ${terminal.sessionName}`)
+
+    try {
+      const response = await fetch(`http://localhost:8127/api/tmux/sessions/${terminal.sessionName}`, {
+        method: 'DELETE'
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        console.log('[handleKillSession] Session killed successfully')
+        // Remove from UI and session is destroyed
+        setSessions(prev => prev.filter(s => s.id !== terminal.id))
+        if (currentSession === terminal.id) {
+          setCurrentSession(sessions[0]?.id || null)
+        }
+      } else {
+        console.error('[handleKillSession] Failed to kill:', data.error)
+      }
+
+      setContextMenu({ show: false, x: 0, y: 0, terminalId: null })
+    } catch (error) {
+      console.error('[handleKillSession] Error:', error)
+    }
   }
 
   return (
@@ -223,6 +341,7 @@ function SidePanelTerminal() {
                 <button
                   key={session.id}
                   onClick={() => setCurrentSession(session.id)}
+                  onContextMenu={(e) => handleTabContextMenu(e, session.id)}
                   className={`
                     px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-all
                     ${currentSession === session.id
@@ -294,6 +413,54 @@ function SidePanelTerminal() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
       />
+
+      {/* Tab Context Menu */}
+      {contextMenu.show && contextMenu.terminalId && (
+        <div
+          className="tab-context-menu"
+          style={{
+            position: 'fixed',
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+            zIndex: 10000,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {(() => {
+            const terminal = sessions.find(t => t.id === contextMenu.terminalId)
+            const hasSession = terminal?.sessionName  // Only tmux sessions
+
+            return (
+              <>
+                <button
+                  className="context-menu-item"
+                  onClick={handleContextRename}
+                >
+                  ✏️ Rename Tab...
+                </button>
+                {hasSession && (
+                  <>
+                    <div className="context-menu-divider" />
+                    <button
+                      className="context-menu-item"
+                      onClick={handleDetachSession}
+                    >
+                      📌 Detach Session
+                    </button>
+                    <button
+                      className="context-menu-item"
+                      onClick={handleKillSession}
+                    >
+                      ❌ Kill Session
+                    </button>
+                  </>
+                )}
+              </>
+            )
+          })()}
+        </div>
+      )}
+
     </div>
   )
 }

@@ -801,14 +801,16 @@ router.get('/tmux/info/:name', asyncHandler(async (req, res) => {
       });
     }
 
-    // Get window name, pane title, window count, pane count, and current working directory
-    // Format: "window_name|pane_title|session_windows|window_index|pane_count|pane_current_path"
+    // Get window name, pane title, window count, pane count, current working directory, and pane state
+    // Format: "window_name|pane_title|session_windows|window_index|pane_count|pane_current_path|pane_marked|window_zoomed_flag"
     const info = execSync(
-      `tmux display-message -t "${name}" -p "#{window_name}|#{pane_title}|#{session_windows}|#{window_index}|#{window_panes}|#{pane_current_path}"`,
+      `tmux display-message -t "${name}" -p "#{window_name}|#{pane_title}|#{session_windows}|#{window_index}|#{window_panes}|#{pane_current_path}|#{pane_marked}|#{window_zoomed_flag}"`,
       { encoding: 'utf-8' }
     ).trim();
 
-    const [windowName, paneTitle, windowCountStr, activeWindowStr, paneCountStr, currentPath] = info.split('|');
+    const [windowName, paneTitle, windowCountStr, activeWindowStr, paneCountStr, currentPath, paneMarkedStr, paneZoomedStr] = info.split('|');
+    const paneMarked = paneMarkedStr === '1';
+    const paneZoomed = paneZoomedStr === '1';
     const windowCount = parseInt(windowCountStr, 10);
     const activeWindow = parseInt(activeWindowStr, 10);
     const paneCount = parseInt(paneCountStr, 10);
@@ -873,6 +875,8 @@ router.get('/tmux/info/:name', asyncHandler(async (req, res) => {
       windowCount: windowCount || 1,
       activeWindow: activeWindow || 0,
       paneCount: paneCount || 1,
+      paneMarked,      // NEW: Pane is marked (for swap operations)
+      paneZoomed,      // NEW: Pane is zoomed (full screen)
       sessionName: name
     });
   } catch (err) {

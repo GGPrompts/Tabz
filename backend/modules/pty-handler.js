@@ -73,7 +73,7 @@ class PTYHandler extends EventEmitter {
       id,
       terminalType,
       name,
-      workingDir = process.cwd(),
+      workingDir = process.env.HOME || process.cwd(),
       cols = this.defaultCols,
       rows = this.defaultRows,
       env = {}
@@ -133,7 +133,7 @@ class PTYHandler extends EventEmitter {
     };
 
     // Validate working directory
-    const validWorkingDir = workingDir || process.cwd();
+    const validWorkingDir = workingDir || process.env.HOME || process.cwd();
 
     try {
       let ptyProcess;

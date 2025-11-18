@@ -482,6 +482,12 @@ class UnifiedSpawnSystem {
       console.log(`[UnifiedSpawn] Setting bash command from commands array:`, config.command);
     }
 
+    // Ensure tmux is enabled for resumable terminals
+    // pty-handler checks useTmux, but unified-spawn uses resumable
+    if (config.resumable && !config.useTmux) {
+      config.useTmux = true;
+    }
+
     // Register terminal
     const terminal = await terminalRegistry.registerTerminal(config);
 
