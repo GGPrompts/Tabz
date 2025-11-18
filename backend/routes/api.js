@@ -1330,6 +1330,28 @@ router.post('/execute', asyncHandler(async (req, res) => {
       }
     }
 
+    // Auto-create session if it doesn't exist (for gg-hub integration)
+    let sessionCreated = false;
+    if (targetSession) {
+      try {
+        // Check if session exists
+        await execAsync(`tmux has-session -t "${targetSession}" 2>/dev/null`);
+        console.log(`[API] Using existing tmux session: ${targetSession}`);
+      } catch (err) {
+        // Session doesn't exist - create it
+        try {
+          await execAsync(`tmux new-session -d -s "${targetSession}" -c "${workingDir}"`);
+          sessionCreated = true;
+          console.log(`[API] Created new tmux session: ${targetSession} in ${workingDir}`);
+        } catch (createErr) {
+          return res.status(500).json({
+            success: false,
+            error: `Failed to create tmux session '${targetSession}': ${createErr.message}`
+          });
+        }
+      }
+    }
+
     // Escape command for shell execution
     const shellCmd = command || 'bash';
     const escapedCmd = shellCmd.replace(/"/g, '\\"');
@@ -1362,8 +1384,11 @@ router.post('/execute', asyncHandler(async (req, res) => {
       command: shellCmd,
       workingDir,
       sessionName: targetSession,
+      sessionCreated,
       paneId,
-      message: `Command executed in ${mode} mode`
+      message: sessionCreated
+        ? `Created session '${targetSession}' and executed command in ${mode} mode`
+        : `Command executed in ${mode} mode`
     });
   } catch (error) {
     console.error('[API] Execute command failed:', error);
