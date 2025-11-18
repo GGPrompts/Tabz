@@ -8,6 +8,8 @@ interface Command {
   category: string
   type: 'spawn' | 'clipboard'
   isCustom?: boolean
+  workingDir?: string
+  url?: string
 }
 
 interface CommandEditorModalProps {
@@ -16,9 +18,10 @@ interface CommandEditorModalProps {
   onSave: (commands: Command[]) => void
   customCommands: Command[]
   allCategories: string[] // All existing categories from default + custom commands
+  initialEditCommand?: Command | null // Optional command to edit when opening modal
 }
 
-export function CommandEditorModal({ isOpen, onClose, onSave, customCommands, allCategories }: CommandEditorModalProps) {
+export function CommandEditorModal({ isOpen, onClose, onSave, customCommands, allCategories, initialEditCommand }: CommandEditorModalProps) {
   const [commands, setCommands] = useState<Command[]>(customCommands)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [showCategoryInput, setShowCategoryInput] = useState(false)
@@ -29,11 +32,46 @@ export function CommandEditorModal({ isOpen, onClose, onSave, customCommands, al
     category: 'Custom',
     type: 'clipboard',
     isCustom: true,
+    workingDir: '',
+    url: '',
   })
 
   useEffect(() => {
     setCommands(customCommands)
   }, [customCommands])
+
+  // Handle modal open/close and edit command
+  useEffect(() => {
+    if (isOpen) {
+      // When opening, always sync with parent's custom commands
+      setCommands(customCommands)
+
+      // If opening to edit a specific command
+      if (initialEditCommand) {
+        const index = customCommands.findIndex(
+          cmd => cmd.label === initialEditCommand.label &&
+                 cmd.command === initialEditCommand.command
+        )
+        if (index !== -1) {
+          setFormData(initialEditCommand)
+          setEditingIndex(index)
+        }
+      }
+    } else {
+      // Reset when modal closes
+      setEditingIndex(null)
+      setFormData({
+        label: '',
+        command: '',
+        description: '',
+        category: 'Custom',
+        type: 'clipboard',
+        isCustom: true,
+        workingDir: '',
+        url: '',
+      })
+    }
+  }, [isOpen, initialEditCommand, customCommands])
 
   // Get unique categories including custom ones
   const availableCategories = Array.from(new Set([...allCategories, ...commands.map(c => c.category)]))
@@ -62,6 +100,8 @@ export function CommandEditorModal({ isOpen, onClose, onSave, customCommands, al
       category: 'Custom',
       type: 'clipboard',
       isCustom: true,
+      workingDir: '',
+      url: '',
     })
   }
 
@@ -89,6 +129,8 @@ export function CommandEditorModal({ isOpen, onClose, onSave, customCommands, al
       category: 'Custom',
       type: 'clipboard',
       isCustom: true,
+      workingDir: '',
+      url: '',
     })
   }
 
@@ -192,6 +234,32 @@ export function CommandEditorModal({ isOpen, onClose, onSave, customCommands, al
                   placeholder="e.g., List all files with details"
                   className="w-full px-3 py-2 bg-black/50 border border-gray-700 rounded text-white text-sm focus:border-[#00ff88] focus:outline-none"
                 />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs text-gray-400 mb-1">Working Directory (optional)</label>
+                <input
+                  type="text"
+                  value={formData.workingDir || ''}
+                  onChange={(e) => setFormData({ ...formData, workingDir: e.target.value })}
+                  placeholder="e.g., /home/user/projects/my-app"
+                  className="w-full px-3 py-2 bg-black/50 border border-gray-700 rounded text-white text-sm font-mono focus:border-[#00ff88] focus:outline-none"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  If set, this command will always use this directory (overrides global setting)
+                </p>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs text-gray-400 mb-1">URL (optional)</label>
+                <input
+                  type="text"
+                  value={formData.url || ''}
+                  onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                  placeholder="e.g., https://github.com/user/repo"
+                  className="w-full px-3 py-2 bg-black/50 border border-gray-700 rounded text-white text-sm font-mono focus:border-[#00ff88] focus:outline-none"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Link to documentation, installation guide, or related resources
+                </p>
               </div>
               <div>
                 <label className="block text-xs text-gray-400 mb-1">Type</label>

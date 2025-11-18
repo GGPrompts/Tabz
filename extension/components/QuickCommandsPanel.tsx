@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Terminal, Copy, Play, ChevronDown, ChevronRight, Check, Settings } from 'lucide-react'
+import { Terminal, Copy, Play, ChevronDown, ChevronRight, Check, Settings, Search, Folder, Edit, ExternalLink } from 'lucide-react'
 import { sendMessage } from '../shared/messaging'
 import { CommandEditorModal } from './CommandEditorModal'
 
@@ -10,6 +10,8 @@ interface Command {
   category: string
   type: 'spawn' | 'clipboard'
   isCustom?: boolean
+  workingDir?: string
+  url?: string
 }
 
 export function QuickCommandsPanel() {
@@ -19,15 +21,28 @@ export function QuickCommandsPanel() {
   const [lastCopied, setLastCopied] = useState<string | null>(null)
   const [customCommands, setCustomCommands] = useState<Command[]>([])
   const [isEditorOpen, setIsEditorOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [workingDirOverride, setWorkingDirOverride] = useState('')
+  const [commandToEdit, setCommandToEdit] = useState<Command | null>(null)
 
-  // Load custom commands from storage on mount
+  // Load custom commands and working dir override from storage on mount
   useEffect(() => {
-    chrome.storage.local.get(['customCommands'], (result) => {
+    chrome.storage.local.get(['customCommands', 'commandsWorkingDirectory'], (result) => {
       if (result.customCommands && Array.isArray(result.customCommands)) {
         setCustomCommands(result.customCommands as Command[])
       }
+      if (result.commandsWorkingDirectory && typeof result.commandsWorkingDirectory === 'string') {
+        setWorkingDirOverride(result.commandsWorkingDirectory)
+      }
     })
   }, [])
+
+  // Save working directory override to storage when it changes
+  useEffect(() => {
+    chrome.storage.local.set({ commandsWorkingDirectory: workingDirOverride }, () => {
+      console.log('Working directory override saved:', workingDirOverride)
+    })
+  }, [workingDirOverride])
 
   const handleSaveCommands = (commands: Command[]) => {
     setCustomCommands(commands)
@@ -38,11 +53,11 @@ export function QuickCommandsPanel() {
 
   const defaultCommands: Command[] = [
     // Terminal Spawning
-    { label: 'Claude Code', command: 'claude-code', description: 'Start Claude Code interactive session', category: 'Terminal Spawning', type: 'spawn' },
+    { label: 'Claude Code', command: 'claude-code', description: 'Start Claude Code interactive session', category: 'Terminal Spawning', type: 'spawn', url: 'https://github.com/anthropics/claude-code' },
     { label: 'Bash Terminal', command: 'bash', description: 'Standard Bash shell', category: 'Terminal Spawning', type: 'spawn' },
-    { label: 'TFE (Terminal File Editor)', command: 'tfe', description: 'Terminal File Explorer', category: 'Terminal Spawning', type: 'spawn' },
-    { label: 'LazyGit', command: 'lazygit', description: 'Git TUI interface', category: 'Terminal Spawning', type: 'spawn' },
-    { label: 'Htop', command: 'htop', description: 'Interactive process viewer', category: 'Terminal Spawning', type: 'spawn' },
+    { label: 'TFE (Terminal File Editor)', command: 'tfe', description: 'Terminal File Explorer', category: 'Terminal Spawning', type: 'spawn', url: 'https://github.com/GGPrompts/tfe' },
+    { label: 'LazyGit', command: 'lazygit', description: 'Git TUI interface', category: 'Terminal Spawning', type: 'spawn', url: 'https://github.com/jesseduffield/lazygit' },
+    { label: 'Htop', command: 'htop', description: 'Interactive process viewer', category: 'Terminal Spawning', type: 'spawn', url: 'https://htop.dev' },
 
     // Git Commands (copy to clipboard)
     { label: 'Git Status', command: 'git status', description: 'Show working tree status', category: 'Git', type: 'clipboard' },
@@ -70,9 +85,33 @@ export function QuickCommandsPanel() {
   // Merge default commands with custom commands
   const commands: Command[] = [...defaultCommands, ...customCommands]
 
-  // Get all unique categories
-  const categories = [...new Set(commands.map(c => c.category))]
+  // Filter commands based on search query
+  const filteredCommands = searchQuery.trim()
+    ? commands.filter(cmd => {
+        const query = searchQuery.toLowerCase()
+        return (
+          cmd.label.toLowerCase().includes(query) ||
+          cmd.command.toLowerCase().includes(query) ||
+          cmd.description.toLowerCase().includes(query) ||
+          cmd.category.toLowerCase().includes(query)
+        )
+      })
+    : commands
+
+  // Get all unique categories from filtered commands
+  const categories = [...new Set(filteredCommands.map(c => c.category))]
   const allCategories = [...new Set([...defaultCommands.map(c => c.category), ...customCommands.map(c => c.category)])]
+
+  // Auto-expand categories with matches when searching
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      // Expand all categories that have matching commands
+      setExpandedCategories(new Set(categories))
+    } else {
+      // Reset to default expanded categories when search is cleared
+      setExpandedCategories(new Set(['Terminal Spawning', 'Development']))
+    }
+  }, [searchQuery, categories.join(',')])
 
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => {
@@ -88,10 +127,17 @@ export function QuickCommandsPanel() {
 
   const handleCommandClick = async (command: Command) => {
     if (command.type === 'spawn') {
+      // Determine working directory with priority logic:
+      // 1. Command-specific working dir (highest priority)
+      // 2. Global override
+      // 3. Undefined (backend will use default)
+      const workingDir = command.workingDir || workingDirOverride || undefined
+
       // Spawn a new terminal
       sendMessage({
         type: 'SPAWN_TERMINAL',
         spawnOption: command.command,
+        cwd: workingDir,
       })
       setLastCopied(`Spawning: ${command.label}`)
       setTimeout(() => setLastCopied(null), 2000)
@@ -112,29 +158,25 @@ export function QuickCommandsPanel() {
     return Copy
   }
 
+  const handleEditCommand = (command: Command, event: React.MouseEvent) => {
+    event.stopPropagation() // Prevent command execution
+    setCommandToEdit(command)
+    setIsEditorOpen(true)
+  }
+
+  const handleCloseEditor = () => {
+    setIsEditorOpen(false)
+    setCommandToEdit(null)
+  }
+
+  const handleOpenUrl = (url: string, event: React.MouseEvent) => {
+    event.stopPropagation() // Prevent command execution
+    chrome.tabs.create({ url, active: false }) // Open in background tab
+  }
+
   return (
     <>
       <div className="h-full flex flex-col bg-[#0a0a0a] text-gray-200 overflow-hidden">
-        {/* Header */}
-        <div className="px-4 py-3 border-b border-gray-800 bg-gradient-to-r from-[#0f0f0f] to-[#1a1a1a] flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Terminal className="h-5 w-5 text-[#00ff88]" />
-            <h3 className="font-semibold text-white">Quick Commands</h3>
-            {customCommands.length > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded bg-[#00ff88]/20 text-[#00ff88] border border-[#00ff88]/30">
-                {customCommands.length} custom
-              </span>
-            )}
-          </div>
-          <button
-            onClick={() => setIsEditorOpen(true)}
-            className="p-1.5 hover:bg-[#00ff88]/10 rounded transition-colors text-gray-400 hover:text-[#00ff88]"
-            title="Edit Commands"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
-        </div>
-
       {/* Notification */}
       {lastCopied && (
         <div className="mx-4 mt-3 px-3 py-2 bg-[#00ff88]/10 border border-[#00ff88]/30 rounded-md flex items-center gap-2 text-sm text-[#00ff88]">
@@ -143,10 +185,58 @@ export function QuickCommandsPanel() {
         </div>
       )}
 
+      {/* Working Directory Override */}
+      <div className="px-4 py-3 border-b border-gray-800 bg-[#0a0a0a]">
+        <label className="block text-xs text-gray-400 mb-2">
+          Working Directory (global override)
+        </label>
+        <div className="relative">
+          <Folder className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+          <input
+            type="text"
+            value={workingDirOverride}
+            onChange={(e) => setWorkingDirOverride(e.target.value)}
+            placeholder="/home/user/projects/..."
+            className="w-full pl-10 pr-4 py-2 bg-black/50 border border-gray-700 rounded-md text-white text-sm font-mono placeholder-gray-500 focus:border-[#00ff88] focus:outline-none transition-colors"
+          />
+        </div>
+        <p className="text-xs text-gray-500 mt-1">
+          Used for spawned terminals unless command has specific working directory
+        </p>
+      </div>
+
+      {/* Search Input */}
+      <div className="px-4 py-3 border-b border-gray-800 bg-[#0a0a0a]">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search commands..."
+              className="w-full pl-10 pr-4 py-2 bg-black/50 border border-gray-700 rounded-md text-white text-sm placeholder-gray-500 focus:border-[#00ff88] focus:outline-none transition-colors"
+            />
+          </div>
+          <button
+            onClick={() => setIsEditorOpen(true)}
+            className="p-2 hover:bg-[#00ff88]/10 rounded transition-colors text-gray-400 hover:text-[#00ff88] border border-gray-700 hover:border-[#00ff88]"
+            title="Edit Commands"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
       {/* Commands List */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
-        {categories.map(category => {
-          const categoryCommands = commands.filter(c => c.category === category)
+        {categories.length === 0 ? (
+          <div className="text-center py-8 text-gray-500 text-sm">
+            No commands found matching "{searchQuery}"
+          </div>
+        ) : (
+          categories.map(category => {
+            const categoryCommands = filteredCommands.filter(c => c.category === category)
           const isExpanded = expandedCategories.has(category)
           const Icon = isExpanded ? ChevronDown : ChevronRight
 
@@ -171,42 +261,78 @@ export function QuickCommandsPanel() {
                     const CommandIcon = getCommandIcon(command)
 
                     return (
-                      <button
-                        key={index}
-                        className="w-full text-left px-3 py-2 rounded-md hover:bg-white/5 transition-colors group"
-                        onClick={() => handleCommandClick(command)}
-                        title={`${command.type === 'spawn' ? 'Spawn' : 'Copy'}: ${command.command}`}
-                      >
-                        <div className="flex items-start gap-2">
-                          <CommandIcon className="h-4 w-4 mt-0.5 text-[#00ff88] group-hover:text-[#00c8ff] transition-colors" />
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm text-white">{command.label}</div>
-                            <div className="text-xs text-gray-400 mt-0.5">
-                              {command.description}
-                            </div>
-                            <div className="mt-1 px-2 py-1 bg-black/30 rounded text-xs font-mono truncate text-gray-300 border border-gray-800">
-                              {command.command}
+                      <div key={index} className="relative group">
+                        <button
+                          className="w-full text-left px-3 py-2 pr-20 rounded-md hover:bg-white/5 transition-colors"
+                          onClick={() => handleCommandClick(command)}
+                          title={`${command.type === 'spawn' ? 'Spawn' : 'Copy'}: ${command.command}`}
+                        >
+                          <div className="flex items-start gap-2">
+                            <CommandIcon className="h-4 w-4 mt-0.5 text-[#00ff88] transition-colors" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <div className="font-medium text-sm text-white">{command.label}</div>
+                                {command.isCustom && (
+                                  <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                    custom
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-400 mt-0.5">
+                                {command.description}
+                              </div>
+                              <div className="mt-1 px-2 py-1 bg-black/30 rounded text-xs font-mono truncate text-gray-300 border border-gray-800">
+                                {command.command}
+                              </div>
+                              {command.workingDir && (
+                                <div className="mt-1 text-xs text-gray-500 flex items-center gap-1">
+                                  <Folder className="h-3 w-3" />
+                                  <span className="font-mono truncate">{command.workingDir}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
+                        </button>
+                        <div className="absolute right-2 top-2 flex items-center gap-1">
+                          {command.url && (
+                            <button
+                              onClick={(e) => handleOpenUrl(command.url!, e)}
+                              className="p-1.5 rounded bg-black/80 border border-gray-700 opacity-40 group-hover:opacity-100 hover:bg-blue-500/10 hover:border-blue-500 transition-all"
+                              title={`Open: ${command.url}`}
+                            >
+                              <ExternalLink className="h-3.5 w-3.5 text-gray-400 hover:text-blue-400" />
+                            </button>
+                          )}
+                          {command.isCustom && (
+                            <button
+                              onClick={(e) => handleEditCommand(command, e)}
+                              className="p-1.5 rounded bg-black/80 border border-gray-700 opacity-40 group-hover:opacity-100 hover:bg-[#00ff88]/10 hover:border-[#00ff88] transition-all"
+                              title="Edit command"
+                            >
+                              <Edit className="h-3.5 w-3.5 text-gray-400 group-hover:text-[#00ff88]" />
+                            </button>
+                          )}
                         </div>
-                      </button>
+                      </div>
                     )
                   })}
                 </div>
               )}
             </div>
           )
-        })}
+          })
+        )}
       </div>
       </div>
 
       {/* Command Editor Modal */}
       <CommandEditorModal
         isOpen={isEditorOpen}
-        onClose={() => setIsEditorOpen(false)}
+        onClose={handleCloseEditor}
         onSave={handleSaveCommands}
         customCommands={customCommands}
         allCategories={allCategories}
+        initialEditCommand={commandToEdit}
       />
     </>
   )

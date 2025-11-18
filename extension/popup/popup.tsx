@@ -173,7 +173,6 @@ function ExtensionPopup() {
                     key={session.name}
                     value={session.name}
                     onSelect={() => handleSessionSelect(session.name)}
-                    disabled={false}
                   >
                     <Clock className="mr-2 h-4 w-4" />
                     <div className="flex-1">
@@ -194,7 +193,6 @@ function ExtensionPopup() {
             <CommandItem
               value="open-side-panel"
               onSelect={handleOpenSidePanel}
-              disabled={false}
             >
               <Plus className="mr-2 h-4 w-4" />
               <div className="flex-1">
@@ -210,7 +208,6 @@ function ExtensionPopup() {
                 key={option.terminalType}
                 value={option.label}
                 onSelect={() => handleSpawn(option)}
-                disabled={false}
               >
                 <span className="mr-2 text-lg">{option.icon}</span>
                 <div className="flex-1">
@@ -228,7 +225,7 @@ function ExtensionPopup() {
       {/* Footer */}
       <div className="absolute bottom-0 left-0 right-0 p-2 border-t bg-background">
         <div className="text-xs text-center text-muted-foreground">
-          Press <kbd className="px-1 py-0.5 bg-muted rounded text-xs">⌘K</kbd> or <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Ctrl+K</kbd> in any page
+          Click the extension icon or use context menu
         </div>
       </div>
     </div>

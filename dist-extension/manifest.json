@@ -7,7 +7,9 @@
     "storage",
     "contextMenus",
     "tabs",
-    "sidePanel"
+    "sidePanel",
+    "clipboardRead",
+    "clipboardWrite"
   ],
   "host_permissions": [
     "http://localhost:8129/*"
@@ -20,7 +22,6 @@
     "type": "module"
   },
   "action": {
-    "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -29,6 +30,17 @@
   },
   "side_panel": {
     "default_path": "sidepanel/sidepanel.html"
+  },
+  "commands": {
+    "toggle-sidebar": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+9",
+        "windows": "Ctrl+Shift+9",
+        "mac": "Command+Shift+9",
+        "linux": "Ctrl+Shift+9"
+      },
+      "description": "Toggle terminal sidebar"
+    }
   },
   "devtools_page": "devtools/devtools.html",
   "content_scripts": [

@@ -1,33 +1,35 @@
-# CLAUDE.md - Tabz
+# CLAUDE.md - Tmux Chrome Sidebar
 
 ## 🎯 Project Overview
 
-Tabz (Tab>_) is a **lightweight, tab-based terminal interface** for the web. Built with React, TypeScript, and xterm.js, it provides a simple alternative to complex canvas-based terminal managers.
+A **Chrome extension for managing tmux sessions in a persistent browser sidebar**. Built with React, TypeScript, and xterm.js, it provides terminal access directly in Chrome's side panel.
 
-**Version**: 1.2.0
-**Status**: Multi-Window + Split Terminals + Auto-Naming Complete ✅
-**Architecture**: Tab-based UI with WebSocket terminal backend
-**Extracted from**: [Opustrator](https://github.com/GGPrompts/opustrator) v3.14.2
-**Cleanup Complete**: November 8, 2025 - Removed ~1,000 lines of Opustrator legacy code
+**Version**: 1.0.0
+**Status**: Standalone Chrome Extension - Settings + Commands Complete ✅
+**Architecture**: Chrome Extension (Side Panel) + WebSocket terminal backend
+**Original Project**: Extracted from [Tabz](https://github.com/GGPrompts/Tabz)
+**Last Updated**: November 17, 2025
 
 ---
 
 ## 🏗️ Architecture
 
-### Frontend (React + TypeScript + Vite)
+### Chrome Extension (React + TypeScript + Vite)
 ```
-src/
-├── SimpleTerminalApp.tsx       # Main app with tab bar
+extension/
+├── sidepanel/
+│   └── sidepanel.tsx           # Main sidebar UI with tabs/terminals
 ├── components/
-│   └── Terminal.tsx            # xterm.js terminal component
-├── stores/
-│   ├── simpleTerminalStore.ts  # Zustand store (terminals array)
-│   └── useSettingsStore.ts     # Global settings
-├── services/
-│   └── SimpleSpawnService.ts   # Minimal spawning service
-├── styles/
-│   └── terminal-themes.ts      # 14 terminal themes
-└── types.ts                    # Shared TypeScript types
+│   ├── Terminal.tsx            # xterm.js terminal component
+│   ├── QuickCommandsPanel.tsx  # Commands panel with categories
+│   ├── CommandEditorModal.tsx  # Custom command editor
+│   └── SettingsModal.tsx       # Font size + theme settings
+├── background/
+│   └── background.ts           # Service worker (WebSocket + shortcuts)
+├── shared/
+│   ├── messaging.ts            # Extension messaging helpers
+│   └── storage.ts              # Chrome storage helpers
+└── manifest.json               # Extension configuration
 ```
 
 ### Backend (Node.js + Express + PTY)
@@ -39,22 +41,23 @@ backend/
 │   ├── pty-handler.js          # PTY process spawning
 │   └── unified-spawn.js        # Terminal spawning logic
 └── routes/
-    └── api.js                  # REST API endpoints
+    └── api.js                  # REST API endpoints (tmux session management)
 ```
 
 ### Communication
-- **WebSocket**: Real-time terminal I/O
-- **REST API**: Terminal management, file operations
+- **WebSocket**: Real-time terminal I/O (background worker → terminals)
+- **Chrome Messages**: Extension page communication
+- **Chrome Storage**: Settings persistence (font size, theme, custom commands)
 
 ---
 
 ## 🎨 Core Principles
 
 1. **Simplicity Over Features** - Minimal, focused functionality
-2. **Tab-Based Only** - No canvas, no dragging, no zoom complexity
-3. **Fast & Lightweight** - ~74 npm packages (vs 200+ in Opustrator)
-4. **Mobile-Friendly** - Works on tablets/phones (future goal)
-5. **Easy to Deploy** - Frontend (Vercel/Netlify) + Backend (any VPS)
+2. **Sidebar-First** - Always accessible, never in the way
+3. **Chrome Native** - Uses Chrome's side panel API (Manifest V3)
+4. **Settings Persistence** - Font size, theme, custom commands saved in Chrome storage
+5. **Easy to Deploy** - Extension (load unpacked) + Backend (any server with tmux)
 
 ---
 
@@ -99,279 +102,161 @@ backend/
 
 **Keep this file focused on "how the system works NOW", not "how we got here".**
 
+### 🏗️ Building & Deploying the Extension
+
+**Build the extension:**
+```bash
+npm run build:extension
+```
+
+**Copy to Windows (for Chrome on Windows):**
+```bash
+# From WSL, copy built extension to Windows desktop
+rsync -av --delete /home/matt/projects/terminal-tabs-extension/dist-extension/ /mnt/c/Users/marci/Desktop/terminal-tabs-extension/dist-extension/
+```
+
+**Load/Reload in Chrome:**
+1. Navigate to `chrome://extensions`
+2. Enable "Developer mode" (top-right toggle)
+3. First time: Click "Load unpacked" → Select `C:\Users\marci\Desktop\terminal-tabs-extension\dist-extension`
+4. After rebuilding: Click the 🔄 **Reload** button on the extension card
+
+**Quick rebuild and deploy workflow:**
+```bash
+npm run build:extension && rsync -av --delete dist-extension/ /mnt/c/Users/marci/Desktop/terminal-tabs-extension/dist-extension/
+```
+
 ---
 
-## 🚀 Key Features (MVP Complete)
+## 🚀 Key Features (Current)
 
-✅ **Tab-Based Interface** - Browser-style tabs for terminals
-✅ **Multi-Window Support** - Move tabs between browser windows for multi-monitor setups
-✅ **Split Terminals** - Split tabs horizontally/vertically with independent panes
-✅ **Auto-Naming from Tmux** - Tab names update live from tmux pane titles (shows Claude Code status, window count)
-✅ **15 Terminal Types** - Claude Code, Bash, TFE, LazyGit, etc.
-✅ **Full Terminal Emulation** - xterm.js with WebGL rendering
-✅ **WebSocket Communication** - Real-time I/O
-✅ **Theme System** - 14 themes with aliases (amber, matrix, etc.)
-✅ **Spawn Menu** - Right-click spawn with 15 options
+✅ **Chrome Side Panel** - Always accessible, never blocks content
+✅ **Settings Modal** - Font size (12-24px) + Light/Dark theme toggle
+✅ **Custom Commands** - Add your own commands with categories
+✅ **Quick Commands Panel** - Built-in git, npm, shell commands + terminal spawning
+✅ **Terminal Spawning** - 15+ terminal types (Claude Code, Bash, TFE, LazyGit, etc.)
+✅ **Full Terminal Emulation** - xterm.js with copy/paste support
+✅ **WebSocket Communication** - Real-time I/O via background worker
+✅ **Keyboard Shortcut** - Ctrl+Shift+9 to open sidebar (customizable)
+✅ **Context Menu** - Right-click → "Open Terminal Sidebar"
 ✅ **Connection Status** - WebSocket connection indicator
-✅ **Settings Modal** - Edit spawn options and global defaults with visual priority system
+✅ **Clipboard Support** - Copy (Ctrl+Shift+C) / Paste (Ctrl+Shift+V) in terminals
 
 ---
 
 ## 📋 Current State
 
 ### What Works
-- Spawning terminals (Claude Code, Bash, TFE tested)
-- Tab switching
-- Terminal I/O (keyboard input, output display)
-- WebSocket auto-reconnect
-- Basic styling (glassmorphic panels)
-- Spawn menu with 15 terminal types
-- **Tab persistence** - Terminals persist through refresh with tmux sessions
-- **Per-tab customization** - Font size, theme, transparency persist per tab
-- **Conditional scrollbar** - Hidden with tmux (default), visible without
-- **Multi-window support** - Move tabs between browser windows with ↗ button
-- **Split terminals** - Horizontal/vertical splits with drag-to-resize
-- **Window isolation** - Each browser window independently manages its terminals
-- **Chrome side panel integration** - Perfect for multi-monitor setups with Chrome's built-in split view + reading list
+- ✅ Chrome side panel integration (sidebar persists across tabs)
+- ✅ Extension icon click → Opens sidebar directly
+- ✅ Keyboard shortcut (Ctrl+Shift+9) → Opens sidebar
+- ✅ Context menu → "Open Terminal Sidebar"
+- ✅ Settings modal with font size + theme toggle
+- ✅ Custom commands with category organization
+- ✅ Commands panel (spawn terminals, copy commands to clipboard)
+- ✅ Terminal spawning (bash, Claude Code, TFE, LazyGit, etc.)
+- ✅ Terminal I/O (keyboard input, output display)
+- ✅ WebSocket auto-reconnect
+- ✅ Copy/paste in terminals (Ctrl+Shift+C/V)
+- ✅ Session tabs (switch between multiple terminals)
+- ✅ Terminal close button
 
-### What Needs Work
-- Keyboard shortcuts (Ctrl+T, Ctrl+W, Ctrl+Tab)
-- Tab reordering (drag tabs) - currently can only drag to split
-- Mobile responsiveness improvements
+### Known Issues
+- ⚠️ **Font size changes require extension reload** to take effect (not live update)
+- ⚠️ Theme toggle works but may need terminal reconnect for full effect
 
----
-
-## 🪟 Multi-Window Support
-
-**NEW in v1.1.0** - Move terminals between browser windows for multi-monitor setups!
-
-### How It Works
-
-Each browser window/tab has a unique ID tracked in the URL (`?window=<id>`):
-- **Main window**: `?window=main` (or no parameter)
-- **Additional windows**: `?window=window-1762685xxx-abc123`
-
-Terminals are assigned to specific windows via the `windowId` property. Each window only shows and connects to its own terminals.
-
-### Using Multi-Window
-
-1. **Move a tab to new window**: Click the ↗ button on any tab
-   - Tab disappears from current window
-   - New browser window opens with that tab
-   - Terminal session stays connected via tmux
-
-2. **Multi-monitor setup**:
-   - Click ↗ on tabs you want on second monitor
-   - Drag new window to second monitor
-   - Each window independently manages its terminals
-
-3. **Chrome side panel workflow** (highly recommended):
-   - Use Chrome's built-in side panel / reading list
-   - Split main window with side panel showing different terminals
-   - Organize terminals across multiple splits and windows
-   - Perfect for 2+ monitor setups
-
-### Technical Details
-
-- **Shared state**: All windows share localStorage via Zustand persist
-- **Independent reconnection**: Each window only reconnects to terminals with matching `windowId`
-- **Backend coordination**: Single WebSocket connection per window, backend routes messages correctly
-- **Persistence**: Window assignments survive refresh/restart
-
-### Critical Architecture (Popout Flow)
-
-**⚠️ IMPORTANT**: Multi-window support requires strict window isolation to prevent cross-contamination. Follow these principles:
-
-> **See Also:** [LESSONS_LEARNED.md](LESSONS_LEARNED.md#multi-window-architecture) for detailed debugging lessons on window isolation bugs and prevention strategies.
-
-#### 1. **Backend Output Routing** (backend/server.js:114-443)
-```javascript
-// CRITICAL: terminalOwners map tracks WebSocket ownership
-const terminalOwners = new Map(); // terminalId -> Set<WebSocket>
-
-// On spawn/reconnect: register ownership
-terminalOwners.get(terminalId).add(ws)
-
-// On output: send ONLY to owners (no broadcast!)
-terminalRegistry.on('output', (terminalId, data) => {
-  const owners = terminalOwners.get(terminalId)
-  owners.forEach(client => client.send(message))
-})
-```
-**Why**: Broadcasting terminal output to all clients causes escape sequence corruption (DSR) in wrong windows.
-
-#### 2. **Frontend Window Filtering** (src/SimpleTerminalApp.tsx:757-785)
-```typescript
-// CRITICAL: Check windowId BEFORE adding to webSocketAgents
-if (existingTerminal) {
-  const terminalWindow = existingTerminal.windowId || 'main'
-  if (terminalWindow !== currentWindowId) {
-    return  // Ignore terminals from other windows
-  }
-  // Now safe to add to webSocketAgents
-}
-```
-**Why**: Without this check, Window 1 can adopt terminals spawned in Window 2, creating duplicate connections to the same tmux session.
-
-#### 3. **No Fallback Terminal Creation** (src/SimpleTerminalApp.tsx:812-819)
-```typescript
-} else {
-  // Do NOT create new terminal for unmatched spawns
-  console.warn('⏭️ Ignoring terminal-spawned - no matching terminal')
-  return  // Prevents cross-window adoption
-}
-```
-**Why**: The old fallback created terminals for broadcasts from other windows, bypassing windowId filtering.
-
-#### 4. **Tmux Detach API** (backend/routes/api.js:696-733)
-```javascript
-// POST /api/tmux/detach/:name
-execSync(`tmux detach-client -s "${sessionName}"`)
-```
-**Flow**: Original window → detach via API → clear agentId → new window → reconnect
-**Why**: Clean handoff prevents both windows from having active agents to same session.
-
-#### 5. **URL Parameter Activation** (src/SimpleTerminalApp.tsx:362-395)
-```typescript
-// Watch FULL storedTerminals array (not just length!)
-useEffect(() => {
-  const activeFromUrl = urlParams.get('active')
-  if (terminal && terminal.windowId === currentWindowId) {
-    setActiveTerminal(activeFromUrl)
-  }
-}, [storedTerminals, currentWindowId])  // Critical dependencies
-```
-**Why**: Watching only `storedTerminals.length` misses windowId updates from localStorage sync.
-
-#### 6. **xterm.open Retry Logic** (src/components/Terminal.tsx:269-288)
-```typescript
-// Bounded retry for 0x0 containers
-let retryCount = 0
-const attemptOpen = () => {
-  if (has_dimensions) xterm.open()
-  else if (retryCount < 10) setTimeout(attemptOpen, 50)
-}
-```
-**Why**: Popout windows may have 0x0 dimensions initially; xterm needs to retry instead of giving up.
-
-> **See Also:** [LESSONS_LEARNED.md](LESSONS_LEARNED.md#xtermjs--terminal-rendering) for xterm initialization patterns and dimension requirements.
-
-### Common Pitfalls to Avoid
-
-> **See Also:** [LESSONS_LEARNED.md](LESSONS_LEARNED.md#lesson-backend-broadcasting-breaks-multi-window-nov-12-2025) for the "Backend Broadcasting" lesson that explains why broadcasting breaks multi-window setups.
-
-❌ **DON'T** broadcast terminal output to all WebSocket clients
-✅ **DO** route output only to terminal owners via `terminalOwners` map
-
-❌ **DON'T** create terminals for unmatched `terminal-spawned` events
-✅ **DO** return early if no matching terminal in current window
-
-❌ **DON'T** watch `storedTerminals.length` for URL activation
-✅ **DO** watch full `storedTerminals` array to catch windowId changes
-
-❌ **DON'T** set `activeTerminalId` in `addTerminal` unconditionally
-✅ **DO** only set if `!state.activeTerminalId` to prevent cross-window interference
-
-❌ **DON'T** skip windowId filtering in terminal-spawned handler
-✅ **DO** check windowId BEFORE adding to webSocketAgents
-
-### Debugging Multi-Window Issues
-
-> **See Also:** [LESSONS_LEARNED.md](LESSONS_LEARNED.md#multi-window-architecture) for root cause analysis and prevention patterns.
-
-If you see escape sequences (`1;2c0;276;0c`) in terminals:
-- Check backend output routing - should use `terminalOwners`, not `broadcast()`
-- Check frontend windowId filtering - verify early return for wrong window
-- Check for duplicate terminals - both windows might have same `agent.id`
-
-If popout windows show blank terminals:
-- Check `?active=` parameter handling - should watch full `storedTerminals`
-- Check xterm.open retry logic - should retry up to 10 times for 0x0 containers
-- Check tmux detach API - original window should clear `agentId` before popout
-
-### Example Workflow
-
-```bash
-# Monitor 1: Main development window
-- Tab 1: Claude Code (main)
-- Tab 2: TFE (main)
-
-# Monitor 2: Popped out window
-- Tab 3: Bash (window-abc123) - moved via ↗
-- Tab 4: LazyGit (window-abc123) - moved via ↗
-
-# All terminals persist and reconnect correctly!
-```
+### What Needs Work (See PLAN.md)
+- Search/filter in Commands panel
+- Working directory field for spawn options
+- Tmux session management integration (future)
 
 ---
 
-## 📝 Auto-Naming from Tmux
 
-**NEW in v1.2.0** - Tab names automatically update from tmux pane titles!
+### Settings Modal
 
-> **See Also:** [CHANGELOG.md](CHANGELOG.md#122---2025-11-12) for implementation details and TUI tool smart naming.
+Click the ⚙️ icon in the sidebar header to open settings.
 
-### How It Works
+**Font Size** (12-24px)
+- Adjust terminal font size with slider
+- See live preview before saving
+- ⚠️ **Note:** Font size changes require extension reload to fully take effect
 
-Tabz polls tmux every 2 seconds to read the **pane title** (what applications like Claude Code set via escape sequences) and updates tab names accordingly. This gives you live, dynamic tab names just like WezTerm!
+**Theme Toggle** (Dark/Light)
+- **Dark** (default): Black background (#0a0a0a) + green text (#00ff88)
+- **Light**: White background (#ffffff) + dark text (#24292e)
+- Changes apply immediately
 
-### What You See
+**Settings Persistence:**
+- Stored in Chrome storage (local)
+- Survives browser restart
+- Applies to all terminals
 
-**Single Window:**
-```
-"bash"  →  "Editing: Terminal.tsx"  →  "Running tests"
-```
+### Custom Commands
 
-**Multiple Windows (tmux Ctrl+B c):**
-```
-"Editing: file.ts (2)"  ←  Shows you have 2 windows in this session
-"Running tests (3)"     ←  Shows 3 windows
-```
+Click the ⚙️ icon in the Commands panel to manage custom commands.
 
-### Right-Click Menu: "Rename Tab..."
+**Adding Commands:**
+1. Fill in label, command, description
+2. Select category (or create new)
+3. Choose type:
+   - **Spawn Terminal**: Opens new terminal with command
+   - **Copy to Clipboard**: Copies command for manual use
+4. Click "Add"
 
-- **Auto-update ON** (default): Tab name syncs from tmux pane title every 2 seconds
-- **Auto-update OFF**: Set a custom name that won't change
-- **Toggle anytime**: Re-enable auto-update to sync with tmux again
+**Built-in Categories:**
+- Terminal Spawning (Claude Code, Bash, TFE, LazyGit, etc.)
+- Git (status, pull, push, commit, branch)
+- Development (npm, build, test)
+- Shell (ls, find, mkdir, ps)
 
-### Technical Details
+**Custom Categories:**
+- Create your own organization
+- Group related commands
+- Collapsible/expandable
 
-**Backend:**
-- `GET /api/tmux/info/:sessionName` - Returns pane title + window count
-- Uses tmux format: `#{pane_title}|#{session_windows}|#{window_index}`
+### Keyboard Shortcuts
 
-**Frontend:**
-- `useTerminalNameSync` hook polls every 2 seconds (only for visible terminals)
-- Only updates if name actually changed (avoids unnecessary re-renders)
-- Terminal fields: `autoUpdateName` (boolean), `customName` (string)
+**Open Sidebar:**
+- Default: `Ctrl+Shift+9`
+- Customize at: `chrome://extensions/shortcuts`
 
-**Files:**
-- `backend/routes/api.js` - API endpoint
-- `src/hooks/useTerminalNameSync.ts` - Polling logic
-- `src/stores/simpleTerminalStore.ts` - Terminal interface
-- `src/SimpleTerminalApp.tsx` - Rename dialog UI
+**In Terminal:**
+- Copy: `Ctrl+Shift+C` (when text selected)
+- Paste: `Ctrl+Shift+V`
 
-### Use Cases
+### Context Menu
 
-1. **Claude Code Status**: See exactly what Claude is working on in real-time
-2. **Multiple Tmux Windows**: Know how many windows exist in each session
-3. **Custom Organization**: Manually name tabs like "Main Dev", "Logs", "Tests"
-4. **Mixed Mode**: Some tabs auto-update, others stay manually named
+Right-click anywhere on a webpage → **"Open Terminal Sidebar"**
 
-### Example Workflow
+---
 
-```bash
-# Spawn Claude Code terminal
-# Tab shows: "Claude Code"
+## 🔧 Configuration
 
-# Claude starts working
-# Tab updates: "Editing: Terminal.tsx"
+### Extension Manifest
 
-# Create 2nd tmux window (Ctrl+B c)
-# Tab updates: "Editing: Terminal.tsx (2)"
+Located at `extension/manifest.json`:
 
-# Right-click → Rename Tab... → "Main Dev" + uncheck auto-update
-# Tab stays: "Main Dev" (no more updates)
+```json
+{
+  "name": "Terminal Tabs - Browser Edition",
+  "version": "1.0.0",
+  "permissions": [
+    "storage",          // Settings persistence
+    "contextMenus",     // Right-click menu
+    "tabs",             // Tab information
+    "sidePanel",        // Sidebar access
+    "clipboardRead",    // Paste in terminal
+    "clipboardWrite"    // Copy from terminal
+  ],
+  "commands": {
+    "toggle-sidebar": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+9"
+      }
+    }
+  }
+}
 ```
 
 ---

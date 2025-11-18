@@ -1,6 +1,5 @@
 import type { ExtensionMessage } from '../shared/messaging'
 import { getActiveSessionCount, addActiveSession, removeActiveSession, addRecentSession } from '../shared/storage'
-import { parseUrlToPath } from '../shared/utils'
 
 // WebSocket connection to backend
 let ws: WebSocket | null = null
@@ -246,34 +245,10 @@ chrome.runtime.onConnect.addListener((port) => {
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Installing context menus...')
 
-  // Main context menu
-  chrome.contextMenus.create({
-    id: 'terminal-tabs',
-    title: 'Terminal Tabs',
-    contexts: ['all'],
-  })
-
-  // Open in terminal (for links)
-  chrome.contextMenus.create({
-    id: 'open-url-in-terminal',
-    parentId: 'terminal-tabs',
-    title: 'Open URL in Terminal',
-    contexts: ['link'],
-  })
-
-  // Run selected text as command
-  chrome.contextMenus.create({
-    id: 'run-command',
-    parentId: 'terminal-tabs',
-    title: 'Run in Terminal',
-    contexts: ['selection'],
-  })
-
-  // Open side panel
+  // Simple context menu: just open side panel
   chrome.contextMenus.create({
     id: 'open-sidepanel',
-    parentId: 'terminal-tabs',
-    title: 'Open Side Panel',
+    title: 'Open Terminal Sidebar',
     contexts: ['all'],
   })
 })
@@ -282,32 +257,46 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   console.log('Context menu clicked:', info.menuItemId)
 
-  switch (info.menuItemId) {
-    case 'open-url-in-terminal':
-      if (info.linkUrl) {
-        const path = parseUrlToPath(info.linkUrl)
-        chrome.runtime.sendMessage({
-          type: 'SPAWN_TERMINAL',
-          cwd: path || undefined,
-          command: `echo "Opened from: ${info.linkUrl}"`,
-        })
-      }
-      break
+  if (info.menuItemId === 'open-sidepanel' && tab?.windowId) {
+    chrome.sidePanel.open({ windowId: tab.windowId })
+  }
+})
 
-    case 'run-command':
-      if (info.selectionText) {
-        chrome.runtime.sendMessage({
-          type: 'SPAWN_TERMINAL',
-          command: info.selectionText,
-        })
-      }
-      break
+// Extension icon click handler - open sidebar
+chrome.action.onClicked.addListener(async (tab) => {
+  console.log('🖱️ Extension icon clicked')
 
-    case 'open-sidepanel':
-      if (tab?.windowId) {
-        chrome.sidePanel.open({ windowId: tab.windowId })
+  if (tab.windowId) {
+    try {
+      await chrome.sidePanel.open({ windowId: tab.windowId })
+      console.log('[Background] Opened sidebar via icon click')
+    } catch (err) {
+      console.error('[Background] Failed to open sidebar:', err)
+    }
+  }
+})
+
+// Keyboard command handler
+chrome.commands.onCommand.addListener(async (command) => {
+  console.log('⌨️ Keyboard command:', command)
+
+  if (command === 'toggle-sidebar') {
+    try {
+      // Get the current window
+      const windows = await chrome.windows.getAll({ windowTypes: ['normal'] })
+      const currentWindow = windows.find(w => w.focused) || windows[0]
+
+      if (currentWindow?.id) {
+        console.log('[Background] Toggling sidebar in window:', currentWindow.id)
+        // Chrome's sidePanel API doesn't have a toggle, so we just open it
+        // If it's already open, clicking Alt+S again will focus it
+        await chrome.sidePanel.open({ windowId: currentWindow.id })
+      } else {
+        console.error('[Background] No normal browser window found')
       }
-      break
+    } catch (err) {
+      console.error('[Background] Failed to toggle sidebar:', err)
+    }
   }
 })
 

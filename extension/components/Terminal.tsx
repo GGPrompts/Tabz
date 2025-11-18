@@ -10,10 +10,12 @@ interface TerminalProps {
   terminalId: string
   sessionName?: string
   terminalType?: string
+  fontSize?: number
+  theme?: 'dark' | 'light'
   onClose?: () => void
 }
 
-export function Terminal({ terminalId, sessionName, terminalType = 'bash', onClose }: TerminalProps) {
+export function Terminal({ terminalId, sessionName, terminalType = 'bash', fontSize = 14, theme = 'dark', onClose }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -25,31 +27,56 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', onClo
 
     console.log('[Terminal] Initializing xterm for terminal:', terminalId)
 
+    // Theme definitions
+    const darkTheme = {
+      background: '#0a0a0a',
+      foreground: '#00ff88',
+      cursor: '#00ff88',
+      black: '#000000',
+      red: '#ff5555',
+      green: '#00ff88',
+      yellow: '#ffff55',
+      blue: '#5555ff',
+      magenta: '#ff55ff',
+      cyan: '#00c8ff',
+      white: '#bbbbbb',
+      brightBlack: '#555555',
+      brightRed: '#ff5555',
+      brightGreen: '#00ff88',
+      brightYellow: '#ffff55',
+      brightBlue: '#5555ff',
+      brightMagenta: '#ff55ff',
+      brightCyan: '#00c8ff',
+      brightWhite: '#ffffff',
+    }
+
+    const lightTheme = {
+      background: '#ffffff',
+      foreground: '#24292e',
+      cursor: '#24292e',
+      black: '#24292e',
+      red: '#d73a49',
+      green: '#22863a',
+      yellow: '#b08800',
+      blue: '#0366d6',
+      magenta: '#6f42c1',
+      cyan: '#1b7c83',
+      white: '#6a737d',
+      brightBlack: '#959da5',
+      brightRed: '#cb2431',
+      brightGreen: '#22863a',
+      brightYellow: '#b08800',
+      brightBlue: '#0366d6',
+      brightMagenta: '#6f42c1',
+      brightCyan: '#1b7c83',
+      brightWhite: '#24292e',
+    }
+
     const xterm = new XTerm({
       cursorBlink: true,
-      fontSize: 14,
+      fontSize,
       fontFamily: 'monospace',
-      theme: {
-        background: '#1a1b26',
-        foreground: '#c0caf5',
-        cursor: '#c0caf5',
-        black: '#15161e',
-        red: '#f7768e',
-        green: '#9ece6a',
-        yellow: '#e0af68',
-        blue: '#7aa2f7',
-        magenta: '#bb9af7',
-        cyan: '#7dcfff',
-        white: '#a9b1d6',
-        brightBlack: '#414868',
-        brightRed: '#f7768e',
-        brightGreen: '#9ece6a',
-        brightYellow: '#e0af68',
-        brightBlue: '#7aa2f7',
-        brightMagenta: '#bb9af7',
-        brightCyan: '#7dcfff',
-        brightWhite: '#c0caf5',
-      },
+      theme: theme === 'dark' ? darkTheme : lightTheme,
       scrollback: 10000,
       convertEol: false,
       allowProposedApi: true,
@@ -164,6 +191,105 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', onClo
       port.disconnect()
     }
   }, [terminalId])
+
+  // Update terminal settings when props change
+  useEffect(() => {
+    const xterm = xtermRef.current
+    if (!xterm) return
+
+    console.log('[Terminal] Updating settings:', { fontSize, theme })
+
+    // Theme definitions (same as initialization)
+    const darkTheme = {
+      background: '#0a0a0a',
+      foreground: '#00ff88',
+      cursor: '#00ff88',
+      black: '#000000',
+      red: '#ff5555',
+      green: '#00ff88',
+      yellow: '#ffff55',
+      blue: '#5555ff',
+      magenta: '#ff55ff',
+      cyan: '#00c8ff',
+      white: '#bbbbbb',
+      brightBlack: '#555555',
+      brightRed: '#ff5555',
+      brightGreen: '#00ff88',
+      brightYellow: '#ffff55',
+      brightBlue: '#5555ff',
+      brightMagenta: '#ff55ff',
+      brightCyan: '#00c8ff',
+      brightWhite: '#ffffff',
+    }
+
+    const lightTheme = {
+      background: '#ffffff',
+      foreground: '#24292e',
+      cursor: '#24292e',
+      black: '#24292e',
+      red: '#d73a49',
+      green: '#22863a',
+      yellow: '#b08800',
+      blue: '#0366d6',
+      magenta: '#6f42c1',
+      cyan: '#1b7c83',
+      white: '#6a737d',
+      brightBlack: '#959da5',
+      brightRed: '#cb2431',
+      brightGreen: '#22863a',
+      brightYellow: '#b08800',
+      brightBlue: '#0366d6',
+      brightMagenta: '#6f42c1',
+      brightCyan: '#1b7c83',
+      brightWhite: '#24292e',
+    }
+
+    // Update font size first
+    if (xterm.options.fontSize !== fontSize) {
+      console.log('[Terminal] Changing font size from', xterm.options.fontSize, 'to', fontSize)
+      xterm.options.fontSize = fontSize
+    }
+
+    // Update theme
+    const currentTheme = theme === 'dark' ? darkTheme : lightTheme
+    xterm.options.theme = currentTheme
+
+    // Force refresh the terminal content
+    xterm.refresh(0, xterm.rows - 1)
+    console.log('[Terminal] Settings updated - fontSize:', fontSize, 'theme:', theme)
+
+    // Use resize trick to force complete redraw (prevents visual artifacts)
+    // This works by temporarily resizing the terminal, which forces xterm.js to redraw everything
+    setTimeout(() => {
+      if (xtermRef.current && fitAddonRef.current) {
+        const currentCols = xtermRef.current.cols
+        const currentRows = xtermRef.current.rows
+
+        // Step 1: Resize down by 1 column
+        xtermRef.current.resize(currentCols - 1, currentRows)
+        sendMessage({
+          type: 'TERMINAL_RESIZE',
+          terminalId,
+          cols: currentCols - 1,
+          rows: currentRows,
+        })
+
+        // Step 2: Wait then resize back to original size
+        setTimeout(() => {
+          if (xtermRef.current) {
+            xtermRef.current.resize(currentCols, currentRows)
+            sendMessage({
+              type: 'TERMINAL_RESIZE',
+              terminalId,
+              cols: currentCols,
+              rows: currentRows,
+            })
+            console.log('[Terminal] Resize trick completed - settings fully applied')
+          }
+        }, 100)
+      }
+    }, 50)
+  }, [fontSize, theme, terminalId])
 
   // Handle window resize
   useEffect(() => {

@@ -1,173 +1,218 @@
-# Session Complete: State Management Refactor + Keyboard Shortcuts (Nov 14, 2025)
+# Next Session: Commands Panel Enhancements
 
-## 🎉 Major Achievements
+## 🎯 Project Context
 
-### 1. Eliminated State Sync Race Conditions (Session 12)
+This is a **Chrome extension** (side panel) for managing terminal sessions. Built with React, TypeScript, xterm.js, and a Node.js backend.
 
-**Problem:** App used `setTimeout(150ms)` hoping localStorage finishes writing before broadcasting state changes. This caused 4 test failures and unpredictable cross-window sync behavior.
+**Current working directory:** `/home/matt/projects/terminal-tabs-extension/`
 
-**Solution:** Created BroadcastChannel middleware that wraps Zustand store and broadcasts synchronously after every state update.
-
-**Results:**
-- ✅ Test pass rate: 91% → 98.4% (39/43 → 253/257 tests)
-- ✅ Eliminated ALL setTimeout(150) race conditions
-- ✅ Guaranteed ordering - broadcasts happen after state updates
-- ✅ Centralized sync logic in middleware
-- ✅ Optimized agent cleanup to only run on status changes
-
-**Files Created:**
-- `src/stores/broadcastMiddleware.ts` - Zustand middleware for cross-window sync
-
-**Files Modified:**
-- `src/stores/simpleTerminalStore.ts` - Integrated middleware
-- `src/SimpleTerminalApp.tsx` - Removed manual BroadcastChannel setup (59 lines removed)
-- `src/hooks/useWebSocketManager.ts` - Optimized agent cleanup dependencies
-
-### 2. Added Keyboard Shortcuts + Hotkeys Help (Session 13)
-
-**Problem:** Browser shortcuts conflict with tmux/terminal usage:
-- Ctrl+C → Opens browser console (not terminal copy)
-- Ctrl+T → New browser tab (not tmux)
-- Ctrl+W → Close browser tab
-- Tab cycling (Ctrl+Tab) doesn't work
-
-**Solution:** Implemented Alt-based keyboard shortcuts and visual hotkeys help sidebar.
-
-**Shortcuts Added:**
-- `Alt+1-9` - Jump to tab 1-9
-- `Alt+0` - Jump to last tab
-- `Alt+[` / `Alt+]` - Previous/Next tab
-- `Alt+H` - Split horizontal (tmux)
-- `Alt+V` - Split vertical (tmux)
-- `Alt+X` - Close pane (tmux)
-- `Alt+Z` - Zoom toggle (tmux)
-- `Alt+Arrow` - Navigate between panes (tmux)
-
-**Features:**
-- ✅ ⌨️ Hotkeys button in header
-- ✅ Sidebar modal (doesn't blur page, can see shortcuts working)
-- ✅ Organized by category (Tab Navigation, Tmux Controls)
-- ✅ Glassmorphic design matching app theme
-- ✅ sendTmuxCommand helper using API (not send-keys)
-
-**Files Created:**
-- `src/components/HotkeysHelpModal.tsx` - Sidebar modal component
-- `src/components/HotkeysHelpModal.css` - Sidebar styling
-
-**Files Modified:**
-- `src/hooks/useKeyboardShortcuts.ts` - Added tmux command shortcuts
-- `src/SimpleTerminalApp.tsx` - Added hotkeys button + modal + sendTmuxCommand
-- `backend/modules/tmux-session-manager.js` - Added executeTmuxCommand()
-- `backend/routes/api.js` - Updated API to use executeTmuxCommand (safe for TUI apps)
-
-## 📝 Documentation Updates
-
-- Added rule to CLAUDE.md: "Don't Use `tmux send-keys` for Commands" - Use API instead to prevent terminal corruption
-- Updated tmux send-keys delay to 0.3s for long prompts
-- Documented both fixes in CHANGELOG.md v1.2.5
-
-## 🐛 Bug Fixes Completed This Session
-
-1. **Unsplit Terminal Disappearing** (Earlier in session)
-   - Root cause: Split container IS the terminal itself
-   - Fix: Clear splitLayout instead of deleting container
-   - Both terminals now remain visible after unsplit
-
-2. **Multi-Window Detach Sync** (Earlier in session)
-   - Root cause: WebSocket agents not cleaned up after broadcast
-   - Fix: Monitor terminals becoming detached and clean up agents
-   - All windows now properly sync detached state
-
-3. **State Sync Race Conditions** (Session 12)
-   - Root cause: setTimeout hoping localStorage finishes
-   - Fix: BroadcastChannel middleware with synchronous broadcasts
-   - Test pass rate improved to 98.4%
-
-4. **Keyboard Shortcuts Not Working** (Session 13)
-   - Root cause: Using send-keys instead of API
-   - Fix: Switch to /api/tmux/sessions/:name/command
-   - All shortcuts now work without corrupting terminals
-
-## 🚀 What's Working Now
-
-### State Management
-- ✅ Cross-window sync with no race conditions
-- ✅ Automatic broadcasts on every state mutation
-- ✅ Agent cleanup only runs when needed
-- ✅ 98.4% test pass rate (253/257 tests)
-
-### Keyboard Shortcuts
-- ✅ Tab navigation (Alt+1-9, Alt+0, Alt+[/])
-- ✅ Tmux pane controls (Alt+H/V/X/Z)
-- ✅ Tmux pane navigation (Alt+Arrow)
-- ✅ No browser conflicts (uses Alt instead of Ctrl)
-- ✅ Hotkeys help always accessible (⌨️ button)
-
-### Multi-Window Support
-- ✅ Terminals move between windows
-- ✅ Detach/reattach works correctly
-- ✅ Split containers detach with preserved layout
-- ✅ State syncs instantly across windows
-
-### Split Terminals
-- ✅ Unsplit restores both terminals
-- ✅ Split layout preserved on detach/reattach
-- ✅ Drag to split from tab bar
-
-## 🎯 Future Work (Optional)
-
-### High Priority
-- None! Major issues resolved.
-
-### Medium Priority
-- Fix 4 remaining failing tests (legacy test infrastructure)
-- Mobile responsiveness improvements
-- Tmux-native rewrite exploration (long-term simplification)
-
-### Low Priority
-- Tab reordering via drag (currently can only drag to split)
-- Chrome extension for advanced window management
-- Project templates feature
-
-## 📊 Metrics
-
-| Metric | Before | After |
-|--------|--------|-------|
-| Test Pass Rate | 91% | 98.4% |
-| setTimeout Race Conditions | 5+ locations | 0 |
-| Keyboard Shortcuts | None | 12+ shortcuts |
-| Lines of Code (net) | - | +470 (features), -200 (refactor) |
-
-## 🛠️ Technical Debt Resolved
-
-- ✅ BroadcastChannel race conditions eliminated
-- ✅ Agent cleanup optimization
-- ✅ Keyboard shortcut conflicts resolved
-- ✅ Terminal corruption prevention (API vs send-keys)
-
-## 💡 Key Learnings
-
-1. **BroadcastChannel Middleware Pattern**: Wrapping Zustand with middleware provides cleaner architecture than manual broadcasts scattered throughout code
-
-2. **Tmux API > send-keys**: Always use `/api/tmux/sessions/:name/command` instead of `tmux send-keys` to prevent terminal corruption in TUI apps
-
-3. **Alt-based Shortcuts**: Using Alt instead of Ctrl avoids ALL browser keyboard conflicts while remaining intuitive
-
-4. **Parallel Claude Sessions**: Can work well but need careful file coordination. Sequential is safer for overlapping changes.
-
-## 🎨 Code Quality Improvements
-
-- Centralized sync logic (no more scattered setTimeout calls)
-- Type-safe keyboard shortcuts
-- Documented API patterns in CLAUDE.md
-- Clean separation of concerns (middleware, hooks, components)
+**Key files:**
+- Documentation: `CLAUDE.md`, `README.md`, `PLAN.md`
+- Extension source: `extension/` (React components, background worker)
+- Built extension: `dist-extension/` (load this in Chrome)
+- Backend: `backend/` (Express + WebSocket server)
 
 ---
 
-**Session Duration**: ~3 hours (parallel work with 2 Claude sessions)
-**Tests Fixed**: +214 tests (39→253)
-**Features Added**: Keyboard shortcuts, hotkeys help, state sync middleware
-**Bug Fixes**: 4 critical bugs resolved
-**Lines Changed**: +670, -200
+## 📋 Tasks to Implement
 
-Last Updated: November 14, 2025
+Implement the two enhancements documented in `PLAN.md`:
+
+### 1. Commands Panel - Search/Filter (High Priority)
+
+**Goal:** Add search input to filter commands by label, command text, description, or category.
+
+**Requirements:**
+- Search input at top of Commands panel (below header)
+- Filter commands as user types
+- Search across: label, command, description, category name
+- Auto-expand categories with matches
+- Show match count per category
+- Highlight matching text (optional, nice-to-have)
+
+**Files to modify:**
+- `extension/components/QuickCommandsPanel.tsx`
+
+**UI placement:**
+```
+┌─────────────────────────────────┐
+│ 🖥️ Quick Commands         ⚙️   │
+├─────────────────────────────────┤
+│ 🔍 [Search commands...]         │  ← NEW
+├─────────────────────────────────┤
+│ ▼ Terminal Spawning (5)         │
+│ ▼ Git (6)                        │
+└─────────────────────────────────┘
+```
+
+---
+
+### 2. Working Directory Field (Medium-High Priority)
+
+**Goal:** Add working directory field to Commands panel + per-command working dir support.
+
+**Requirements:**
+
+**A. Global Override Field**
+- Input field in Commands panel header
+- Persists in Chrome storage
+- Placeholder: `/home/user/projects/...`
+
+**B. Per-Command Working Dir**
+- Add `workingDir` field to command editor modal
+- Optional field (can be empty)
+- When set, command always uses this dir (never overridden)
+
+**C. Priority Logic (CRITICAL):**
+```typescript
+function getWorkingDirectory(command, globalOverride) {
+  // 1. If command has specific working dir, ALWAYS use it (never override)
+  if (command.workingDir) {
+    return command.workingDir
+  }
+
+  // 2. If global override is set, use it
+  if (globalOverride) {
+    return globalOverride
+  }
+
+  // 3. Otherwise use default
+  return defaultWorkingDir
+}
+```
+
+**Files to modify:**
+- `extension/components/QuickCommandsPanel.tsx` - Add working dir override field
+- `extension/components/CommandEditorModal.tsx` - Add working dir field to form
+- `extension/shared/storage.ts` - Add `workingDir` to Command interface
+- `extension/background/background.ts` - Implement priority logic
+
+**Storage keys:**
+- `commandsWorkingDirectory` (string) - Global override
+- Custom commands: Add `workingDir?: string` to Command interface
+
+**UI Design:**
+```
+┌─────────────────────────────────┐
+│ 🖥️ Quick Commands         ⚙️   │
+├─────────────────────────────────┤
+│ 📁 Working Dir: /home/user/...  │  ← NEW (global override)
+├─────────────────────────────────┤
+│ 🔍 [Search commands...]         │
+├─────────────────────────────────┤
+│ ▼ Terminal Spawning (5)         │
+└─────────────────────────────────┘
+```
+
+**Command Editor Modal:**
+```
+┌─────────────────────────────────┐
+│ Add New Command                  │
+├─────────────────────────────────┤
+│ Label: [                    ]    │
+│ Category: [Git          ▼]       │
+│ Command: [git status        ]    │
+│ Description: [Show status   ]    │
+│ Working Dir: [/home/user... ]    │  ← NEW (optional)
+│ Type: [○ Copy  ● Spawn]          │
+└─────────────────────────────────┘
+```
+
+---
+
+## 🔧 Implementation Order
+
+**Suggested approach:**
+
+1. **Start with Search/Filter** (easier, immediate value)
+   - Add search state to QuickCommandsPanel
+   - Filter logic for commands
+   - Auto-expand matching categories
+   - Test with built-in and custom commands
+
+2. **Then Working Directory**
+   - Update Command interface with `workingDir?: string`
+   - Add field to CommandEditorModal
+   - Add global override field to QuickCommandsPanel
+   - Update background worker spawn logic with priority
+   - Test priority logic thoroughly
+
+3. **Build and Test**
+   - `npm run build:extension`
+   - Test in Chrome (`chrome://extensions`, reload extension)
+   - Verify both features work together
+
+---
+
+## 📝 Testing Checklist
+
+**Search/Filter:**
+- [ ] Search filters by command label
+- [ ] Search filters by command text
+- [ ] Search filters by description
+- [ ] Search filters by category name
+- [ ] Categories with matches auto-expand
+- [ ] Empty search shows all commands
+- [ ] Search is case-insensitive
+
+**Working Directory:**
+- [ ] Global override field persists in Chrome storage
+- [ ] Command with specific working dir uses it (ignores global override)
+- [ ] Command without working dir uses global override (if set)
+- [ ] Command without working dir uses default (if no override)
+- [ ] Working dir field in editor is optional
+- [ ] Priority logic works correctly for all 3 cases
+
+---
+
+## 🐛 Known Issues to Avoid
+
+**From PLAN.md:**
+- Font size changes require extension reload (known issue, not blocking)
+- Theme toggle works but may need terminal reconnect
+
+**Don't worry about:**
+- Tmux session management (future enhancement)
+- Command templates with variables (future enhancement)
+
+---
+
+## 🚀 Getting Started
+
+1. Read `PLAN.md` for full context
+2. Review `extension/components/QuickCommandsPanel.tsx` (current implementation)
+3. Review `extension/components/CommandEditorModal.tsx` (command editor)
+4. Implement search/filter first (simpler)
+5. Then add working directory support
+6. Build, test, iterate
+
+**Build command:**
+```bash
+npm run build:extension
+```
+
+**Chrome extension location:**
+Load from: `C:\Users\marci\Desktop\terminal-tabs-extension\dist-extension\`
+
+---
+
+## 📚 Reference Files
+
+- **PLAN.md** - Full specifications for these features
+- **CLAUDE.md** - Project architecture and development rules
+- **README.md** - User-facing feature documentation
+- **extension/components/QuickCommandsPanel.tsx** - Commands panel implementation
+- **extension/components/CommandEditorModal.tsx** - Command editor modal
+- **extension/shared/storage.ts** - Chrome storage helpers and interfaces
+
+---
+
+## 💡 Tips
+
+- Commands panel already has category collapsing/expanding logic - reuse it
+- Use React state for search and working dir override
+- Chrome storage pattern already used in SettingsModal - follow same pattern
+- Background worker already handles SPAWN_TERMINAL messages - extend it
+- Test with both built-in commands (Terminal Spawning, Git) and custom commands
+
+Good luck! 🎉

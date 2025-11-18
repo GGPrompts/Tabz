@@ -4,6 +4,7 @@ import { Terminal as TerminalIcon, Pin, PinOff, Settings, Plus, Code, Zap } from
 import { Badge } from '../components/ui/badge'
 import { Terminal } from '../components/Terminal'
 import { QuickCommandsPanel } from '../components/QuickCommandsPanel'
+import { SettingsModal, useTerminalSettings } from '../components/SettingsModal'
 import { connectToBackground, sendMessage } from '../shared/messaging'
 import { getLocal, setLocal } from '../shared/storage'
 import '../styles/globals.css'
@@ -23,7 +24,9 @@ function SidePanelTerminal() {
   const [activePanel, setActivePanel] = useState<PanelTab>('terminals')
   const [pinned, setPinned] = useState(false)
   const [wsConnected, setWsConnected] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const portRef = useRef<chrome.runtime.Port | null>(null)
+  const terminalSettings = useTerminalSettings()
 
   useEffect(() => {
     // Load pinned state from storage
@@ -176,6 +179,14 @@ function SidePanelTerminal() {
           )}
 
           <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="p-1.5 hover:bg-[#00ff88]/10 rounded-md transition-colors text-gray-400 hover:text-[#00ff88]"
+            title="Settings"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+
+          <button
             onClick={handleSpawnTerminal}
             className="p-1.5 hover:bg-[#00ff88]/10 rounded-md transition-colors text-[#00ff88]"
             title="New Terminal"
@@ -240,6 +251,8 @@ function SidePanelTerminal() {
                       terminalId={session.id}
                       sessionName={session.name}
                       terminalType={session.type}
+                      fontSize={terminalSettings.fontSize}
+                      theme={terminalSettings.theme}
                       onClose={() => {
                         sendMessage({
                           type: 'CLOSE_TERMINAL',
@@ -262,6 +275,12 @@ function SidePanelTerminal() {
           <QuickCommandsPanel />
         </div>
       </div>
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </div>
   )
 }

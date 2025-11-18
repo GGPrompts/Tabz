@@ -1257,3 +1257,230 @@ For completed features, bug fixes, and session notes, see:
 **Last Updated**: November 9, 2025
 **Current Version**: v1.2.0
 **Repository**: https://github.com/GGPrompts/Tabz
+
+---
+
+## 🐛 Known Issues
+
+### Settings Modal - Font Size Changes
+**Issue:** Font size changes in the settings modal require extension reload to fully take effect.
+
+**Current Behavior:**
+- User changes font size slider (12-24px)
+- Clicks "Save Settings"
+- Settings save to Chrome storage
+- `xterm.options.fontSize` updates
+- `xterm.refresh()` is called
+- Font size appears to change in the terminal
+
+**Problem:** 
+The font size change doesn't fully apply to existing terminal instances until the extension is reloaded.
+
+**Workaround:**
+1. Change font size in Settings
+2. Click "Save Settings"
+3. Go to `chrome://extensions`
+4. Click refresh on the extension
+5. Reopen sidebar - font size now fully applied
+
+**Why This Happens:**
+- xterm.js may cache certain layout calculations based on initial font size
+- The FitAddon might not recalculate dimensions correctly after runtime font changes
+- Chrome extension context may need full reload to reinitialize xterm instances
+
+**Solution (from ~/projects/terminal-tabs):**
+The main terminal-tabs project solves this with a "resize trick" that forces xterm.js to completely redraw without killing terminals:
+
+1. Apply new theme/font size to `xterm.options`
+2. Call `xterm.refresh()` to refresh content
+3. **Resize trick** (forces complete redraw):
+   - Resize xterm to `(cols - 1, rows)`
+   - Send resize message to backend via WebSocket: `{type: 'resize', terminalId, cols: cols-1, rows}`
+   - Wait 100ms
+   - Resize back to original `(cols, rows)`
+   - Send resize message with original dimensions
+
+**Implementation:**
+```typescript
+// In Terminal.tsx, after applying theme/fontSize changes
+const currentCols = xterm.cols
+const currentRows = xterm.rows
+
+// Resize down
+xterm.resize(currentCols - 1, currentRows)
+chrome.runtime.sendMessage({
+  type: 'TERMINAL_RESIZE',
+  terminalId,
+  cols: currentCols - 1,
+  rows: currentRows
+})
+
+// Wait then resize back
+setTimeout(() => {
+  xterm.resize(currentCols, currentRows)
+  chrome.runtime.sendMessage({
+    type: 'TERMINAL_RESIZE',
+    terminalId,
+    cols: currentCols,
+    rows: currentRows
+  })
+}, 100)
+```
+
+**Files to Modify:**
+- `extension/components/Terminal.tsx` - Add resize trick after theme/font changes (line 276-279)
+- Background worker already forwards TERMINAL_RESIZE messages to backend (background.ts:197-206) ✅
+
+**Extension vs Web App:**
+- ✅ Chrome extension background worker already handles TERMINAL_RESIZE messages
+- ✅ Forwards them as WebSocket 'resize' messages to backend (same protocol as web app)
+- ✅ The resize trick will work identically in both versions
+- ✅ No tmux dependency - uses WebSocket resize messages directly to backend PTY
+
+**Reference:**
+- See ~/projects/terminal-tabs/src/hooks/useTerminalTheme.ts:38-79 for working implementation
+- Extension background worker: background.ts:197-206 (already supports this)
+
+**Priority:** Medium (workaround available, but fix is straightforward - ~30min)
+
+---
+
+## 🎯 Planned Enhancements
+
+### Commands Panel - Search/Filter
+**Requested:** User wants to filter/search commands in the Commands panel.
+
+**Proposed Implementation:**
+- Add search input above category list
+- Filter commands by:
+  - Label (command name)
+  - Command text
+  - Description
+  - Category name
+- Highlight matching text in results
+- Auto-expand categories with matches
+- Show match count per category
+
+**UI Location:** Top of Commands panel, below header
+
+**Files to Modify:**
+- `extension/components/QuickCommandsPanel.tsx` - Add search input state
+- UI pattern similar to spawn-options search in popup
+
+**Priority:** High (frequently requested, improves usability)
+
+---
+
+### Commands Panel - Working Directory Field
+**Requested:** User wants to specify working directory when spawning from Commands panel.
+
+**Proposed Implementation:**
+- Add "Working Directory" input field in Commands panel header
+- Persist in Chrome storage (like font size)
+- **Working Directory Priority (when spawning):**
+  1. **If spawn option has `workingDir` defined** → Use spawn option's dir (never override)
+  2. **If global override field is set** → Use override dir
+  3. **Otherwise** → Use default from `spawn-options.json`
+
+**Important:** Spawn options with their own `workingDir` are never affected by the global override field. This allows users to:
+- Create spawn options with specific, fixed working directories
+- Use the override field only for spawn options without a predefined directory
+
+**UI Design:**
+```
+┌─────────────────────────────────┐
+│ 🖥️ Quick Commands         ⚙️   │
+├─────────────────────────────────┤
+│ 📁 Working Dir: /home/user/...  │  ← New input field
+├─────────────────────────────────┤
+│ [Search commands...]            │  ← Existing search (to add)
+└─────────────────────────────────┘
+```
+
+**Backend Changes:**
+- Modify spawn message to include `workingDirectory` parameter
+- Background worker passes it to backend `/api/spawn`
+
+**Files to Modify:**
+- `extension/components/QuickCommandsPanel.tsx` - Add working dir override field
+- `extension/components/CommandEditorModal.tsx` - Add working dir field to custom command form
+- `extension/shared/storage.ts` - Add working dir to storage interface
+- `extension/background/background.ts` - Implement priority logic for working dir
+
+**Storage Keys:**
+- `commandsWorkingDirectory` (string) - Global override field
+- Custom commands already stored, need to add `workingDir` field
+
+**Implementation Logic (Background Worker):**
+```typescript
+function getWorkingDirectory(command, globalOverride) {
+  // 1. If command has specific working dir, always use it
+  if (command.workingDir) {
+    return command.workingDir
+  }
+
+  // 2. If global override is set, use it
+  if (globalOverride) {
+    return globalOverride
+  }
+
+  // 3. Otherwise use default
+  return defaultWorkingDir
+}
+```
+
+**Priority:** Medium-High (useful for project-specific workflows)
+
+---
+
+## 📋 Future Enhancements
+
+### Tmux Session Management (Long-term)
+**Goal:** Deeper integration with tmux session lifecycle.
+
+**Possible Features:**
+- List all tmux sessions (not just terminals spawned by extension)
+- Attach to existing tmux sessions
+- Detach from sessions without closing
+- Session renaming
+- Kill sessions
+
+**Requires:**
+- Backend API endpoints for tmux control
+- UI for session management (separate panel or modal)
+
+**Priority:** Low (current functionality sufficient for most use cases)
+
+---
+
+### Command Templates with Variables
+**Idea:** Allow placeholders in custom commands.
+
+**Example:**
+```
+Command: cd {{projectDir}} && npm run dev
+Variables:
+  - projectDir: /home/user/my-project
+```
+
+**UI:**
+- Command editor shows available variables
+- Before execution, prompt user for values
+- Save common values in storage
+
+**Priority:** Low (nice-to-have, not essential)
+
+---
+
+### Keyboard Shortcuts for Commands
+**Idea:** Assign hotkeys to frequently-used commands.
+
+**Implementation:**
+- Add "Shortcut" field in command editor
+- Register with Chrome commands API
+- Limit to 4-5 shortcuts (Chrome API limitation)
+
+**Priority:** Low (current keyboard shortcut for sidebar is sufficient)
+
+---
+

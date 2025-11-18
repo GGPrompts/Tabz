@@ -18,12 +18,18 @@ A **standalone Chrome extension** that puts a tmux session manager in your brows
 
 ## ✨ Features
 
-### 🔧 Session Management
-- **View all tmux sessions** - List updates every 2 seconds
-- **Auto-naming** - Session names sync from tmux pane titles (shows Claude Code status, directory, etc.)
-- **One-click attach** - Click a session to open full terminal
-- **Persistent** - Sessions survive browser restarts (they live in tmux!)
-- **Window count** - See how many tmux windows in each session
+### ⚙️ Settings & Customization
+- **Font Size Control** - Adjust 12-24px with live preview
+- **Theme Toggle** - Switch between Dark (green on black) and Light (dark on white)
+- **Settings Persistence** - Saved in Chrome storage, survives restart
+- **Note:** Font size changes require extension reload to fully apply
+
+### 🔧 Terminal Management
+- **Session Tabs** - Switch between multiple terminals
+- **One-click spawn** - 15+ terminal types (Claude Code, Bash, TFE, LazyGit, etc.)
+- **Copy/Paste** - Ctrl+Shift+C/V in terminals
+- **Connection Status** - WebSocket indicator
+- **Terminal I/O** - Full xterm.js emulation with real-time communication
 
 ### 📋 Quick Commands Panel
 - **Built-in commands** - Git, npm, shell commands ready to go
@@ -31,13 +37,16 @@ A **standalone Chrome extension** that puts a tmux session manager in your brows
 - **Two types**: Spawn terminal or copy to clipboard
 - **Category editor** - Organize commands however you want
 - **Persistent storage** - Custom commands saved in Chrome
+- **Coming soon:** Search/filter + working directory field
 
 ### 🎨 User Experience
 - **Always visible** - Sidebar persists across all tabs
 - **Never moves** - No window positioning, no Z-index battles
 - **Multi-monitor friendly** - Drag Chrome to any screen
 - **Panel switching** - Terminals stay alive when viewing Commands
-- **Clean UI** - Tabz-inspired green/cyan color scheme
+- **Clean UI** - Green/cyan color scheme
+- **Keyboard shortcut** - Ctrl+Shift+9 to open (customizable)
+- **Context menu** - Right-click → "Open Terminal Sidebar"
 
 ---
 
@@ -128,8 +137,9 @@ set PORT=8129 && npm start
 ```
 
 **5. Open Side Panel:**
-- Click extension icon → "Open Side Panel"
-- Or right-click icon → "Open Side Panel"
+- **Click extension icon** → Opens sidebar directly
+- **Press Ctrl+Shift+9** → Opens sidebar
+- **Right-click page** → "Open Terminal Sidebar"
 
 ---
 
