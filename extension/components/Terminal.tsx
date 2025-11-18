@@ -111,7 +111,7 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', fontS
       fontSize,
       fontFamily,
       theme: theme === 'dark' ? darkTheme : lightTheme,
-      scrollback: 10000,
+      scrollback: sessionName ? 0 : 10000, // No scrollbar for tmux (tmux handles scrolling)
       convertEol: false,
       allowProposedApi: true,
     })
@@ -368,7 +368,10 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', fontS
         <div
           ref={terminalRef}
           className="absolute inset-0"
-          style={{ padding: '8px', paddingBottom: '4px' }}
+          style={{
+            padding: '8px',
+            paddingBottom: sessionName ? '20px' : '4px', // More padding for tmux status bar
+          }}
         />
       </div>
 

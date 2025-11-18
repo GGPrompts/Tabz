@@ -22,16 +22,17 @@ export function QuickCommandsPanel() {
   const [lastCopied, setLastCopied] = useState<string | null>(null)
   const [customCommands, setCustomCommands] = useState<Command[]>([])
   const [spawnCommands, setSpawnCommands] = useState<Command[]>([])
+  const [clipboardCommands, setClipboardCommands] = useState<Command[]>([])
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [workingDirOverride, setWorkingDirOverride] = useState('')
   const [commandToEdit, setCommandToEdit] = useState<Command | null>(null)
 
-  // Load spawn options from Chrome storage (primary) or JSON (fallback) on mount
+  // Load spawn options and clipboard commands from Chrome storage (primary) or JSON (fallback) on mount
   useEffect(() => {
-    const loadSpawnOptions = async () => {
+    const loadCommandsFromJSON = async () => {
       try {
-        // First, try to load from Chrome storage (user edits)
+        // First, try to load from Chrome storage (user edits for spawn options)
         chrome.storage.local.get(['spawnOptions'], async (result) => {
           if (result.spawnOptions && Array.isArray(result.spawnOptions) && result.spawnOptions.length > 0) {
             // User has custom spawn options in storage - use those
@@ -54,6 +55,7 @@ export function QuickCommandsPanel() {
               const response = await fetch(url)
               const data = await response.json()
 
+              // Load spawn options
               if (data.spawnOptions && Array.isArray(data.spawnOptions)) {
                 const commands: Command[] = data.spawnOptions.map((opt: any) => ({
                   label: opt.label,
@@ -68,17 +70,30 @@ export function QuickCommandsPanel() {
                 setSpawnCommands(commands)
                 console.log('[QuickCommandsPanel] ✅ Loaded spawn options from JSON:', commands.length)
               }
+
+              // Load clipboard commands
+              if (data.clipboardCommands && Array.isArray(data.clipboardCommands)) {
+                const commands: Command[] = data.clipboardCommands.map((cmd: any) => ({
+                  label: cmd.label,
+                  command: cmd.command,
+                  description: cmd.description || '',
+                  category: cmd.category,
+                  type: 'clipboard' as const,
+                }))
+                setClipboardCommands(commands)
+                console.log('[QuickCommandsPanel] ✅ Loaded clipboard commands from JSON:', commands.length)
+              }
             } catch (error) {
               console.error('[QuickCommandsPanel] Failed to load spawn-options.json:', error)
             }
           }
         })
       } catch (error) {
-        console.error('[QuickCommandsPanel] Failed to load spawn options:', error)
+        console.error('[QuickCommandsPanel] Failed to load commands:', error)
       }
     }
 
-    loadSpawnOptions()
+    loadCommandsFromJSON()
   }, [])
 
   // Load custom commands and working dir override from storage on mount
@@ -107,32 +122,7 @@ export function QuickCommandsPanel() {
     })
   }
 
-  // Clipboard commands (Git, Development, Shell)
-  const clipboardCommands: Command[] = [
-    // Git Commands (copy to clipboard)
-    { label: 'Git Status', command: 'git status', description: 'Show working tree status', category: 'Git', type: 'clipboard' },
-    { label: 'Git Pull', command: 'git pull', description: 'Pull from remote', category: 'Git', type: 'clipboard' },
-    { label: 'Git Push', command: 'git push', description: 'Push to remote', category: 'Git', type: 'clipboard' },
-    { label: 'Stage All', command: 'git add .', description: 'Stage all changes', category: 'Git', type: 'clipboard' },
-    { label: 'Commit', command: 'git commit -m "message"', description: 'Commit with message', category: 'Git', type: 'clipboard' },
-    { label: 'New Branch', command: 'git checkout -b feature-branch', description: 'Create and switch branch', category: 'Git', type: 'clipboard' },
-
-    // Development Commands
-    { label: 'Start Dev Server', command: 'npm run dev', description: 'Start development server', category: 'Development', type: 'clipboard' },
-    { label: 'Install Dependencies', command: 'npm install', description: 'Install node modules', category: 'Development', type: 'clipboard' },
-    { label: 'Build', command: 'npm run build', description: 'Build for production', category: 'Development', type: 'clipboard' },
-    { label: 'Test', command: 'npm test', description: 'Run tests', category: 'Development', type: 'clipboard' },
-    { label: 'Clean Install', command: 'rm -rf node_modules && npm install', description: 'Delete node_modules and reinstall', category: 'Development', type: 'clipboard' },
-
-    // Shell Commands
-    { label: 'List Files', command: 'ls -la', description: 'List directory contents with details', category: 'Shell', type: 'clipboard' },
-    { label: 'Create Folder', command: 'mkdir new-folder', description: 'Create new directory', category: 'Shell', type: 'clipboard' },
-    { label: 'Find Files', command: 'find . -name "*.ts"', description: 'Find TypeScript files', category: 'Shell', type: 'clipboard' },
-    { label: 'Disk Usage', command: 'du -sh *', description: 'Show disk usage by directory', category: 'Shell', type: 'clipboard' },
-    { label: 'Process List', command: 'ps aux | grep node', description: 'List Node.js processes', category: 'Shell', type: 'clipboard' },
-  ]
-
-  // Merge spawn options from JSON, clipboard commands, and custom commands
+  // Merge spawn options, clipboard commands from JSON, and custom commands
   const commands: Command[] = [...spawnCommands, ...clipboardCommands, ...customCommands]
 
   // Filter commands based on search query
