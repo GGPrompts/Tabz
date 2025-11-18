@@ -31,6 +31,8 @@ export interface SpawnTerminalMessage extends BaseMessage {
   command?: string;
   cwd?: string;
   spawnOption?: string;
+  useTmux?: boolean;
+  name?: string; // Friendly name for the tab
 }
 
 export interface CloseSessionMessage extends BaseMessage {

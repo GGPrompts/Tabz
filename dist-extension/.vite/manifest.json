@@ -9,17 +9,17 @@
     "file": "assets/modulepreload-polyfill-B5Qt9EMX.js",
     "name": "modulepreload-polyfill"
   },
-  "_storage-CzyTXWyI.js": {
-    "file": "assets/storage-CzyTXWyI.js",
+  "_storage-CPSgRUQe.js": {
+    "file": "assets/storage-CPSgRUQe.js",
     "name": "storage"
   },
   "background/background.ts": {
-    "file": "assets/background.ts-Dk08UJFd.js",
+    "file": "assets/background.ts-Cz-BDfrz.js",
     "name": "background.ts",
     "src": "background/background.ts",
     "isEntry": true,
     "imports": [
-      "_storage-CzyTXWyI.js"
+      "_storage-CPSgRUQe.js"
     ]
   },
   "content/content.ts": {
@@ -38,16 +38,16 @@
     ]
   },
   "sidepanel/sidepanel.html": {
-    "file": "assets/sidepanel.html-CmaMxIO_.js",
+    "file": "assets/sidepanel.html-Dfo79WWP.js",
     "name": "sidepanel.html",
     "src": "sidepanel/sidepanel.html",
     "isEntry": true,
     "imports": [
       "_modulepreload-polyfill-B5Qt9EMX.js",
-      "_storage-CzyTXWyI.js"
+      "_storage-CPSgRUQe.js"
     ],
     "css": [
-      "assets/sidepanel-D7Uvv4ul.css"
+      "assets/sidepanel-BijGsAPP.css"
     ]
   }
 }

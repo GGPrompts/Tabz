@@ -4,11 +4,11 @@
 
 A **Chrome extension for managing tmux sessions in a persistent browser sidebar**. Built with React, TypeScript, and xterm.js, it provides terminal access directly in Chrome's side panel.
 
-**Version**: 1.0.0
-**Status**: Standalone Chrome Extension - Settings + Commands Complete ✅
+**Version**: 1.0.1
+**Status**: Standalone Chrome Extension - Full Feature Set Complete ✅
 **Architecture**: Chrome Extension (Side Panel) + WebSocket terminal backend
 **Original Project**: Extracted from [Tabz](https://github.com/GGPrompts/Tabz)
-**Last Updated**: November 17, 2025
+**Last Updated**: November 18, 2025
 
 ---
 
@@ -37,17 +37,44 @@ extension/
 backend/
 ├── server.js                   # Express + WebSocket server
 ├── modules/
-│   ├── terminal-registry.js    # Terminal state management
+│   ├── terminal-registry.js    # Terminal state management (generates ctt- IDs)
 │   ├── pty-handler.js          # PTY process spawning
 │   └── unified-spawn.js        # Terminal spawning logic
 └── routes/
     └── api.js                  # REST API endpoints (tmux session management)
 ```
 
+### Terminal ID Prefixing (`ctt-`)
+**All Chrome extension terminals use `ctt-` prefix** (Chrome Terminal Tabs)
+- Terminal IDs: `ctt-{uuid}` (e.g., `ctt-a1b2c3d4-e5f6...`)
+- Generated in: `backend/modules/terminal-registry.js` (line 217)
+- Purpose:
+  - Distinguish from web app terminals (`tt-` prefix)
+  - Easy identification: `tmux ls | grep "^ctt-"`
+  - Easy cleanup of orphaned sessions
+- Kill orphaned sessions:
+  ```bash
+  tmux list-sessions | grep "^ctt-" | cut -d: -f1 | xargs -I {} tmux kill-session -t {}
+  ```
+
 ### Communication
 - **WebSocket**: Real-time terminal I/O (background worker → terminals)
 - **Chrome Messages**: Extension page communication
-- **Chrome Storage**: Settings persistence (font size, theme, custom commands)
+- **Chrome Storage**: Settings persistence (font size, theme, spawn options)
+
+### Session Persistence & Restoration
+**Tmux sessions survive extension reloads** - No more orphaned background sessions!
+- **On WebSocket Connect**: Backend sends terminal list (`type: 'terminals'`)
+- **Sidepanel Restores**: Creates tabs for all existing terminals
+- **Terminal Components**: Reconnect to tmux sessions automatically
+- **Benefits**:
+  - Extension reload doesn't lose terminals
+  - Terminal output history preserved
+  - No accumulation of orphaned tmux sessions
+  - Seamless user experience across reloads
+- **Files**:
+  - `extension/background/background.ts` (WebSocket message handling)
+  - `extension/sidepanel/sidepanel.tsx` (session restoration logic)
 
 ---
 
@@ -131,11 +158,15 @@ npm run build:extension && rsync -av --delete dist-extension/ /mnt/c/Users/marci
 ## 🚀 Key Features (Current)
 
 ✅ **Chrome Side Panel** - Always accessible, never blocks content
-✅ **Settings Modal** - Font size (12-24px) + Light/Dark theme toggle
-✅ **Custom Commands** - Add your own commands with categories
+✅ **Settings Modal (Tabbed)** - General + Spawn Options tabs
+  - Font size (12-24px), Font family (6 options), Light/Dark theme
+  - Spawn options editor (add/edit/delete terminals in UI)
+✅ **Session Persistence** - Tmux sessions survive extension reloads
+✅ **Global "Use Tmux" Toggle** - Force all terminals to use tmux
+✅ **Custom Commands** - Add your own clipboard commands
 ✅ **Quick Commands Panel** - Built-in git, npm, shell commands + terminal spawning
-✅ **Terminal Spawning** - 15+ terminal types (Claude Code, Bash, TFE, LazyGit, etc.)
-✅ **Full Terminal Emulation** - xterm.js with copy/paste support
+✅ **Terminal Spawning** - 18+ terminal types (loaded from spawn-options.json)
+✅ **Full Terminal Emulation** - xterm.js with copy/paste support, auto-fit
 ✅ **WebSocket Communication** - Real-time I/O via background worker
 ✅ **Keyboard Shortcut** - Ctrl+Shift+9 to open sidebar (customizable)
 ✅ **Context Menu** - Right-click → "Open Terminal Sidebar"

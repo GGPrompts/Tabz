@@ -12,6 +12,7 @@ interface Command {
   isCustom?: boolean
   workingDir?: string
   url?: string
+  terminalType?: string // For spawn options from JSON (bash, claude-code, etc.)
 }
 
 export function QuickCommandsPanel() {
@@ -20,10 +21,65 @@ export function QuickCommandsPanel() {
   )
   const [lastCopied, setLastCopied] = useState<string | null>(null)
   const [customCommands, setCustomCommands] = useState<Command[]>([])
+  const [spawnCommands, setSpawnCommands] = useState<Command[]>([])
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [workingDirOverride, setWorkingDirOverride] = useState('')
   const [commandToEdit, setCommandToEdit] = useState<Command | null>(null)
+
+  // Load spawn options from Chrome storage (primary) or JSON (fallback) on mount
+  useEffect(() => {
+    const loadSpawnOptions = async () => {
+      try {
+        // First, try to load from Chrome storage (user edits)
+        chrome.storage.local.get(['spawnOptions'], async (result) => {
+          if (result.spawnOptions && Array.isArray(result.spawnOptions) && result.spawnOptions.length > 0) {
+            // User has custom spawn options in storage - use those
+            const commands: Command[] = result.spawnOptions.map((opt: any) => ({
+              label: opt.label,
+              command: opt.command || '',
+              description: opt.description || '',
+              category: 'Terminal Spawning',
+              type: 'spawn' as const,
+              workingDir: opt.workingDir,
+              url: opt.url,
+              terminalType: opt.terminalType,
+            }))
+            setSpawnCommands(commands)
+            console.log('[QuickCommandsPanel] ✅ Loaded spawn options from storage:', commands.length)
+          } else {
+            // No custom options - load from JSON as fallback
+            try {
+              const url = chrome.runtime.getURL('spawn-options.json')
+              const response = await fetch(url)
+              const data = await response.json()
+
+              if (data.spawnOptions && Array.isArray(data.spawnOptions)) {
+                const commands: Command[] = data.spawnOptions.map((opt: any) => ({
+                  label: opt.label,
+                  command: opt.command || '',
+                  description: opt.description || '',
+                  category: 'Terminal Spawning',
+                  type: 'spawn' as const,
+                  workingDir: opt.workingDir,
+                  url: opt.url,
+                  terminalType: opt.terminalType,
+                }))
+                setSpawnCommands(commands)
+                console.log('[QuickCommandsPanel] ✅ Loaded spawn options from JSON:', commands.length)
+              }
+            } catch (error) {
+              console.error('[QuickCommandsPanel] Failed to load spawn-options.json:', error)
+            }
+          }
+        })
+      } catch (error) {
+        console.error('[QuickCommandsPanel] Failed to load spawn options:', error)
+      }
+    }
+
+    loadSpawnOptions()
+  }, [])
 
   // Load custom commands and working dir override from storage on mount
   useEffect(() => {
@@ -51,14 +107,8 @@ export function QuickCommandsPanel() {
     })
   }
 
-  const defaultCommands: Command[] = [
-    // Terminal Spawning
-    { label: 'Claude Code', command: 'claude-code', description: 'Start Claude Code interactive session', category: 'Terminal Spawning', type: 'spawn', url: 'https://github.com/anthropics/claude-code' },
-    { label: 'Bash Terminal', command: 'bash', description: 'Standard Bash shell', category: 'Terminal Spawning', type: 'spawn' },
-    { label: 'TFE (Terminal File Editor)', command: 'tfe', description: 'Terminal File Explorer', category: 'Terminal Spawning', type: 'spawn', url: 'https://github.com/GGPrompts/tfe' },
-    { label: 'LazyGit', command: 'lazygit', description: 'Git TUI interface', category: 'Terminal Spawning', type: 'spawn', url: 'https://github.com/jesseduffield/lazygit' },
-    { label: 'Htop', command: 'htop', description: 'Interactive process viewer', category: 'Terminal Spawning', type: 'spawn', url: 'https://htop.dev' },
-
+  // Clipboard commands (Git, Development, Shell)
+  const clipboardCommands: Command[] = [
     // Git Commands (copy to clipboard)
     { label: 'Git Status', command: 'git status', description: 'Show working tree status', category: 'Git', type: 'clipboard' },
     { label: 'Git Pull', command: 'git pull', description: 'Pull from remote', category: 'Git', type: 'clipboard' },
@@ -82,8 +132,8 @@ export function QuickCommandsPanel() {
     { label: 'Process List', command: 'ps aux | grep node', description: 'List Node.js processes', category: 'Shell', type: 'clipboard' },
   ]
 
-  // Merge default commands with custom commands
-  const commands: Command[] = [...defaultCommands, ...customCommands]
+  // Merge spawn options from JSON, clipboard commands, and custom commands
+  const commands: Command[] = [...spawnCommands, ...clipboardCommands, ...customCommands]
 
   // Filter commands based on search query
   const filteredCommands = searchQuery.trim()
@@ -100,7 +150,7 @@ export function QuickCommandsPanel() {
 
   // Get all unique categories from filtered commands
   const categories = [...new Set(filteredCommands.map(c => c.category))]
-  const allCategories = [...new Set([...defaultCommands.map(c => c.category), ...customCommands.map(c => c.category)])]
+  const allCategories = [...new Set([...spawnCommands.map(c => c.category), ...clipboardCommands.map(c => c.category), ...customCommands.map(c => c.category)])]
 
   // Auto-expand categories with matches when searching
   useEffect(() => {
@@ -134,10 +184,13 @@ export function QuickCommandsPanel() {
       const workingDir = command.workingDir || workingDirOverride || undefined
 
       // Spawn a new terminal
+      // Use terminalType (from JSON) or fall back to command for spawn option
       sendMessage({
         type: 'SPAWN_TERMINAL',
-        spawnOption: command.command,
+        spawnOption: command.terminalType || command.command,
+        command: command.command, // Actual command to run (e.g., "claude --dangerously-skip-permissions")
         cwd: workingDir,
+        name: command.label, // Friendly name for the tab
       })
       setLastCopied(`Spawning: ${command.label}`)
       setTimeout(() => setLastCopied(null), 2000)

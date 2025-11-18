@@ -11,11 +11,12 @@ interface TerminalProps {
   sessionName?: string
   terminalType?: string
   fontSize?: number
+  fontFamily?: string
   theme?: 'dark' | 'light'
   onClose?: () => void
 }
 
-export function Terminal({ terminalId, sessionName, terminalType = 'bash', fontSize = 14, theme = 'dark', onClose }: TerminalProps) {
+export function Terminal({ terminalId, sessionName, terminalType = 'bash', fontSize = 14, fontFamily = 'monospace', theme = 'dark', onClose }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -108,7 +109,7 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', fontS
     const xterm = new XTerm({
       cursorBlink: true,
       fontSize,
-      fontFamily: 'monospace',
+      fontFamily,
       theme: theme === 'dark' ? darkTheme : lightTheme,
       scrollback: 10000,
       convertEol: false,
@@ -157,11 +158,11 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', fontS
     xtermRef.current = xterm
     fitAddonRef.current = fitAddon
 
-    // Fit terminal to container
-    setTimeout(() => {
+    // Fit terminal to container (with longer timeout for initial render)
+    const fitTerminal = () => {
       if (fitAddonRef.current && terminalRef.current?.offsetWidth) {
         fitAddonRef.current.fit()
-        console.log('[Terminal] Initial fit:', xterm.cols, 'x', xterm.rows)
+        console.log('[Terminal] Fit:', xterm.cols, 'x', xterm.rows)
 
         // Send resize to backend
         sendMessage({
@@ -171,16 +172,32 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', fontS
           rows: xterm.rows,
         })
       }
-    }, 100)
+    }
+
+    // Initial fit with timeout
+    setTimeout(fitTerminal, 100)
+
+    // Second fit to catch cases where container wasn't ready
+    setTimeout(fitTerminal, 300)
 
     // Focus terminal
     setTimeout(() => {
       xterm.focus()
     }, 150)
 
+    // ResizeObserver to fit when container size changes
+    const resizeObserver = new ResizeObserver(() => {
+      fitTerminal()
+    })
+
+    if (terminalRef.current) {
+      resizeObserver.observe(terminalRef.current)
+    }
+
     // Cleanup
     return () => {
       console.log('[Terminal] Cleaning up xterm for terminal:', terminalId)
+      resizeObserver.disconnect()
       xterm.dispose()
       xtermRef.current = null
       fitAddonRef.current = null
@@ -236,7 +253,7 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', fontS
     const xterm = xtermRef.current
     if (!xterm) return
 
-    console.log('[Terminal] Updating settings:', { fontSize, theme })
+    console.log('[Terminal] Updating settings:', { fontSize, fontFamily, theme })
 
     // Theme definitions (same as initialization)
     const darkTheme = {
@@ -283,10 +300,16 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', fontS
       brightWhite: '#24292e',
     }
 
-    // Update font size first
+    // Update font size
     if (xterm.options.fontSize !== fontSize) {
       console.log('[Terminal] Changing font size from', xterm.options.fontSize, 'to', fontSize)
       xterm.options.fontSize = fontSize
+    }
+
+    // Update font family
+    if (xterm.options.fontFamily !== fontFamily) {
+      console.log('[Terminal] Changing font family from', xterm.options.fontFamily, 'to', fontFamily)
+      xterm.options.fontFamily = fontFamily
     }
 
     // Update theme
@@ -295,13 +318,13 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', fontS
 
     // Force refresh the terminal content
     xterm.refresh(0, xterm.rows - 1)
-    console.log('[Terminal] Settings updated - fontSize:', fontSize, 'theme:', theme)
+    console.log('[Terminal] Settings updated - fontSize:', fontSize, 'fontFamily:', fontFamily, 'theme:', theme)
 
     // Use resize trick to force complete redraw (prevents visual artifacts)
     setTimeout(() => {
       triggerResizeTrick()
     }, 50)
-  }, [fontSize, theme, terminalId])
+  }, [fontSize, fontFamily, theme, terminalId])
 
   // Handle window resize
   useEffect(() => {

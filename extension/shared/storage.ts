@@ -16,6 +16,7 @@ export interface StorageData {
     fontSize?: number;
     defaultShell?: string;
     sidePanelPinned?: boolean;
+    globalUseTmux?: boolean;
   };
 }
 

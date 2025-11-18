@@ -26,6 +26,7 @@ function SidePanelTerminal() {
   const [pinned, setPinned] = useState(false)
   const [wsConnected, setWsConnected] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [globalUseTmux, setGlobalUseTmux] = useState(false)
   const portRef = useRef<chrome.runtime.Port | null>(null)
   const terminalSettings = useTerminalSettings()
 
@@ -38,10 +39,13 @@ function SidePanelTerminal() {
   }>({ show: false, x: 0, y: 0, terminalId: null })
 
   useEffect(() => {
-    // Load pinned state from storage
+    // Load pinned state and global tmux setting from storage
     getLocal(['settings']).then(({ settings }) => {
       if (settings?.sidePanelPinned !== undefined) {
         setPinned(settings.sidePanelPinned)
+      }
+      if (settings?.globalUseTmux !== undefined) {
+        setGlobalUseTmux(settings.globalUseTmux)
       }
     })
 
@@ -85,8 +89,24 @@ function SidePanelTerminal() {
   }, [contextMenu.show])
 
   const handleWebSocketMessage = (data: any) => {
-    console.log('[Sidepanel] handleWebSocketMessage:', data.type, data.type === 'terminal-spawned' ? JSON.stringify(data).slice(0, 200) : '')
+    console.log('[Sidepanel] handleWebSocketMessage:', data.type, data.type === 'terminal-spawned' || data.type === 'terminals' ? JSON.stringify(data).slice(0, 300) : '')
     switch (data.type) {
+      case 'terminals':
+        // Terminal list received on connection - restore existing terminals
+        const existingTerminals = data.data || []
+        console.log('[Sidepanel] 🔄 Restoring terminals:', existingTerminals.length)
+        if (existingTerminals.length > 0) {
+          setSessions(existingTerminals.map((t: any) => ({
+            id: t.id,
+            name: t.name || t.id,
+            type: t.terminalType || 'bash',
+            active: false,
+            sessionName: t.sessionName,
+          })))
+          // Set first terminal as active
+          setCurrentSession(existingTerminals[0].id)
+        }
+        break
       case 'session-list':
         setSessions(data.sessions || [])
         break
@@ -99,13 +119,20 @@ function SidePanelTerminal() {
           name: terminal.name,
           type: terminal.terminalType,
         })
-        setSessions(prev => [...prev, {
-          id: terminal.id,
-          name: terminal.name || terminal.id,
-          type: terminal.terminalType || 'bash',
-          active: false,
-          sessionName: terminal.sessionName,  // Store tmux session name
-        }])
+        setSessions(prev => {
+          // Check if terminal already exists (from restore)
+          if (prev.find(s => s.id === terminal.id)) {
+            console.log('[Sidepanel] Terminal already exists, skipping add')
+            return prev
+          }
+          return [...prev, {
+            id: terminal.id,
+            name: terminal.name || terminal.id,
+            type: terminal.terminalType || 'bash',
+            active: false,
+            sessionName: terminal.sessionName,  // Store tmux session name
+          }]
+        })
         setCurrentSession(terminal.id)
         break
       case 'terminal-closed':
@@ -134,10 +161,21 @@ function SidePanelTerminal() {
     })
   }
 
+  const handleToggleTmux = () => {
+    const newUseTmux = !globalUseTmux
+    setGlobalUseTmux(newUseTmux)
+    setLocal({
+      settings: {
+        globalUseTmux: newUseTmux,
+      },
+    })
+  }
+
   const handleSpawnTerminal = () => {
     sendMessage({
       type: 'SPAWN_TERMINAL',
       spawnOption: 'bash',
+      name: 'Bash',
     })
   }
 
@@ -301,6 +339,27 @@ function SidePanelTerminal() {
             <Badge variant="destructive" className="text-xs">Disconnected</Badge>
           )}
 
+          {/* Use Tmux Toggle */}
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/20 border border-gray-700">
+            <TerminalIcon className="h-3.5 w-3.5 text-gray-400" />
+            <span className="text-xs text-gray-400">Tmux</span>
+            <button
+              onClick={handleToggleTmux}
+              className={`
+                relative inline-flex h-4 w-7 items-center rounded-full transition-colors
+                ${globalUseTmux ? 'bg-[#00ff88]' : 'bg-gray-600'}
+              `}
+              title={globalUseTmux ? 'Tmux enabled for all terminals' : 'Tmux disabled (default behavior)'}
+            >
+              <span
+                className={`
+                  inline-block h-3 w-3 transform rounded-full bg-white transition-transform
+                  ${globalUseTmux ? 'translate-x-3.5' : 'translate-x-0.5'}
+                `}
+              />
+            </button>
+          </div>
+
           <button
             onClick={handleRefreshTerminals}
             className="p-1.5 hover:bg-[#00ff88]/10 rounded-md transition-colors text-gray-400 hover:text-[#00ff88]"
@@ -384,6 +443,7 @@ function SidePanelTerminal() {
                       sessionName={session.name}
                       terminalType={session.type}
                       fontSize={terminalSettings.fontSize}
+                      fontFamily={terminalSettings.fontFamily}
                       theme={terminalSettings.theme}
                       onClose={() => {
                         sendMessage({

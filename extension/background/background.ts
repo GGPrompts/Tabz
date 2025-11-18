@@ -1,5 +1,5 @@
 import type { ExtensionMessage } from '../shared/messaging'
-import { getActiveSessionCount, addActiveSession, removeActiveSession, addRecentSession } from '../shared/storage'
+import { getActiveSessionCount, addActiveSession, removeActiveSession, addRecentSession, getLocal } from '../shared/storage'
 
 // WebSocket connection to backend
 let ws: WebSocket | null = null
@@ -41,6 +41,13 @@ function connectWebSocket() {
           type: 'TERMINAL_OUTPUT',
           terminalId: message.terminalId,
           data: message.data,
+        })
+      } else if (message.type === 'terminals') {
+        // Terminal list received on connection - restore sessions
+        console.log('📋 Terminal list received:', message.data?.length, 'terminals')
+        broadcastToClients({
+          type: 'WS_MESSAGE',
+          data: message,
         })
       } else {
         // Broadcast other messages as WS_MESSAGE
@@ -143,20 +150,30 @@ chrome.runtime.onMessage.addListener(async (message: ExtensionMessage, sender, s
     case 'SPAWN_TERMINAL':
       // Transform extension message to backend spawn format
       const requestId = `spawn-${Date.now()}`
+
+      // Check global tmux setting
+      const { settings } = await getLocal(['settings'])
+      const globalUseTmux = settings?.globalUseTmux || false
+
       sendToWebSocket({
         type: 'spawn',
         config: {
           terminalType: message.spawnOption || 'bash',
           command: message.command || '',
           workingDirectory: message.cwd,
+          useTmux: globalUseTmux || message.useTmux || false, // Apply global override
+          name: message.name || message.spawnOption || 'Terminal', // Friendly name
         },
         requestId,
       })
 
       console.log('📤 Spawning terminal:', {
         terminalType: message.spawnOption,
+        name: message.name,
         command: message.command,
         cwd: message.cwd,
+        useTmux: globalUseTmux || message.useTmux || false,
+        globalUseTmux,
         requestId,
       })
 
