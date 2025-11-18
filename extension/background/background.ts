@@ -209,6 +209,12 @@ chrome.runtime.onMessage.addListener(async (message: ExtensionMessage, sender, s
       updateBadge()
       break
 
+    case 'REFRESH_TERMINALS':
+      // Broadcast refresh message to all terminals
+      console.log('🔄 Broadcasting REFRESH_TERMINALS to all clients')
+      broadcastToClients({ type: 'REFRESH_TERMINALS' })
+      break
+
     default:
       // Forward other messages to WebSocket
       sendToWebSocket(message)

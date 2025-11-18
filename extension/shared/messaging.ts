@@ -9,6 +9,7 @@ export type MessageType =
   | 'TERMINAL_INPUT'
   | 'TERMINAL_OUTPUT'
   | 'TERMINAL_RESIZE'
+  | 'REFRESH_TERMINALS'
   | 'ADD_CONTEXT_MENU'
   | 'SHOW_ERROR_SUGGESTION'
   | 'UPDATE_BADGE'
@@ -61,6 +62,10 @@ export interface TerminalResizeMessage extends BaseMessage {
   rows: number;
 }
 
+export interface RefreshTerminalsMessage extends BaseMessage {
+  type: 'REFRESH_TERMINALS';
+}
+
 export interface AddContextMenuMessage extends BaseMessage {
   type: 'ADD_CONTEXT_MENU';
   items: ContextMenuItem[];
@@ -110,6 +115,7 @@ export type ExtensionMessage =
   | TerminalInputMessage
   | TerminalOutputMessage
   | TerminalResizeMessage
+  | RefreshTerminalsMessage
   | AddContextMenuMessage
   | ShowErrorSuggestionMessage
   | UpdateBadgeMessage

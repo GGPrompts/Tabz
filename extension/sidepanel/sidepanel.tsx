@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react'
 import ReactDOM from 'react-dom/client'
-import { Terminal as TerminalIcon, Pin, PinOff, Settings, Plus, Code, Zap } from 'lucide-react'
+import { Terminal as TerminalIcon, Pin, PinOff, Settings, Plus, Code, Zap, RefreshCw } from 'lucide-react'
 import { Badge } from '../components/ui/badge'
 import { Terminal } from '../components/Terminal'
 import { QuickCommandsPanel } from '../components/QuickCommandsPanel'
@@ -118,9 +118,14 @@ function SidePanelTerminal() {
   }
 
   const handleOpenSettings = () => {
-    // TODO: Create options page
-    // For now, do nothing
-    console.log('[Sidepanel] Settings clicked - options page not yet implemented')
+    setIsSettingsOpen(true)
+  }
+
+  const handleRefreshTerminals = () => {
+    // Broadcast refresh message to all terminals
+    sendMessage({
+      type: 'REFRESH_TERMINALS',
+    })
   }
 
   return (
@@ -177,6 +182,14 @@ function SidePanelTerminal() {
           ) : (
             <Badge variant="destructive" className="text-xs">Disconnected</Badge>
           )}
+
+          <button
+            onClick={handleRefreshTerminals}
+            className="p-1.5 hover:bg-[#00ff88]/10 rounded-md transition-colors text-gray-400 hover:text-[#00ff88]"
+            title="Refresh Terminals (force redraw)"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
 
           <button
             onClick={() => setIsSettingsOpen(true)}

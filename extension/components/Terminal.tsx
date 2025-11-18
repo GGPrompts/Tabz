@@ -21,6 +21,39 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', fontS
   const fitAddonRef = useRef<FitAddon | null>(null)
   const [isConnected, setIsConnected] = useState(false)
 
+  // Resize trick to force complete redraw (used for theme/font changes and manual refresh)
+  const triggerResizeTrick = () => {
+    if (xtermRef.current && fitAddonRef.current) {
+      const currentCols = xtermRef.current.cols
+      const currentRows = xtermRef.current.rows
+
+      console.log('[Terminal] Triggering resize trick for:', terminalId)
+
+      // Step 1: Resize down by 1 column
+      xtermRef.current.resize(currentCols - 1, currentRows)
+      sendMessage({
+        type: 'TERMINAL_RESIZE',
+        terminalId,
+        cols: currentCols - 1,
+        rows: currentRows,
+      })
+
+      // Step 2: Wait then resize back to original size
+      setTimeout(() => {
+        if (xtermRef.current) {
+          xtermRef.current.resize(currentCols, currentRows)
+          sendMessage({
+            type: 'TERMINAL_RESIZE',
+            terminalId,
+            cols: currentCols,
+            rows: currentRows,
+          })
+          console.log('[Terminal] Resize trick completed')
+        }
+      }, 100)
+    }
+  }
+
   // Initialize xterm.js
   useEffect(() => {
     if (!terminalRef.current || xtermRef.current) return
@@ -182,6 +215,12 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', fontS
       } else if (message.type === 'WS_DISCONNECTED') {
         console.log('[Terminal] WebSocket disconnected')
         setIsConnected(false)
+      } else if (message.type === 'REFRESH_TERMINALS') {
+        console.log('[Terminal] 🔄 Refresh requested for:', terminalId)
+        // Use timeout to ensure xterm is fully ready
+        setTimeout(() => {
+          triggerResizeTrick()
+        }, 50)
       }
     })
 
@@ -259,35 +298,8 @@ export function Terminal({ terminalId, sessionName, terminalType = 'bash', fontS
     console.log('[Terminal] Settings updated - fontSize:', fontSize, 'theme:', theme)
 
     // Use resize trick to force complete redraw (prevents visual artifacts)
-    // This works by temporarily resizing the terminal, which forces xterm.js to redraw everything
     setTimeout(() => {
-      if (xtermRef.current && fitAddonRef.current) {
-        const currentCols = xtermRef.current.cols
-        const currentRows = xtermRef.current.rows
-
-        // Step 1: Resize down by 1 column
-        xtermRef.current.resize(currentCols - 1, currentRows)
-        sendMessage({
-          type: 'TERMINAL_RESIZE',
-          terminalId,
-          cols: currentCols - 1,
-          rows: currentRows,
-        })
-
-        // Step 2: Wait then resize back to original size
-        setTimeout(() => {
-          if (xtermRef.current) {
-            xtermRef.current.resize(currentCols, currentRows)
-            sendMessage({
-              type: 'TERMINAL_RESIZE',
-              terminalId,
-              cols: currentCols,
-              rows: currentRows,
-            })
-            console.log('[Terminal] Resize trick completed - settings fully applied')
-          }
-        }, 100)
-      }
+      triggerResizeTrick()
     }, 50)
   }, [fontSize, theme, terminalId])
 

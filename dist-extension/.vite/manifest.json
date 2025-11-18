@@ -14,7 +14,7 @@
     "name": "storage"
   },
   "background/background.ts": {
-    "file": "assets/background.ts-D0cRqQzD.js",
+    "file": "assets/background.ts-Dk08UJFd.js",
     "name": "background.ts",
     "src": "background/background.ts",
     "isEntry": true,
@@ -38,7 +38,7 @@
     ]
   },
   "sidepanel/sidepanel.html": {
-    "file": "assets/sidepanel.html-CklX2_Kx.js",
+    "file": "assets/sidepanel.html-CmaMxIO_.js",
     "name": "sidepanel.html",
     "src": "sidepanel/sidepanel.html",
     "isEntry": true,
