@@ -1,5 +1,121 @@
 # PLAN.md - Chrome Extension Roadmap
 
+## ⚠️ IMPORTANT: PROJECT IDENTITY CLARIFICATION
+
+**What This Project Actually Is:**
+This is **TabzChrome** - a full-featured Chrome extension port of Tabz with:
+- Tab-based terminal interface
+- Zustand state management + localStorage
+- Settings modal, spawn options editor
+- Complete Tabz feature set in browser sidebar
+
+**What This Project Was Originally Planned To Be:**
+A lightweight tmux-polling sidebar (see `~/projects/TabzChrome/IMPLEMENTATION_PLAN.md`):
+- Simple session list (not tabs)
+- Poll tmux every 2s for sessions
+- No state management (tmux is truth)
+- Single terminal viewer
+- 40% less code
+
+**What Happened:**
+Development started on Tabz `feat/chrome-extension` branch instead of fresh repo. This inherited all Tabz architecture (tabs, Zustand, localStorage). You built a great Chrome extension - just not the originally planned one!
+
+**See Full Analysis:**
+- `COMPARISON_PLANNED_VS_ACTUAL.md` - Detailed comparison
+- `~/projects/TabzChrome/IMPLEMENTATION_PLAN.md` - Original vision
+- `~/projects/TabzChrome/README.md` - Planned features
+
+**Decision Point:**
+Test current implementation to see if you prefer:
+1. **Keep as-is** - Full Tabz experience in sidebar (what you have now)
+2. **Refactor toward original** - Simplify to tmux-polling session list
+3. **Both** - Keep this as TabzChrome, build original vision separately
+
+**Next Session:** Test the extension, decide which direction to take.
+
+---
+
+## 🎯 RECOMMENDED PATH: HYBRID ARCHITECTURE
+
+**Core Principle:** "Works great without tmux, unlocks superpowers with tmux"
+
+### Why Hybrid?
+- **Don't limit users** - Not everyone has/wants tmux
+- **Unlock power features** - TUI apps (TFE, tmuxplexer), resurrect/continuum for power users
+- **Best of both worlds** - Simple terminals OR polling-based session management
+- **Use existing badge** - "Use Tmux" toggle already exists in UI
+
+### Two Modes
+
+**Standard Mode (No Tmux):**
+- Simple terminal tabs (normal PTY processes)
+- Basic persistence (Chrome storage)
+- "Close" button kills terminal
+- Works out of the box, no dependencies
+- Perfect for most users
+
+**Tmux Mode (Tmux Available):**
+- Poll `tmux ls | grep "^ctt-"` every 2 seconds
+- Auto-restore tabs from tmux sessions
+- "Close" button detaches (session stays alive)
+- Resurrect/continuum integration
+- Perfect for power users with TUI apps
+
+### Implementation Notes
+
+```typescript
+// Auto-detect tmux on extension load
+const tmuxAvailable = await fetch('/api/tmux/check')
+  .then(res => res.json())
+  .then(data => data.tmuxAvailable);
+
+if (tmuxAvailable) {
+  // Show badge: "🚀 Tmux Mode"
+  // Enable polling (useTmuxPolling hook)
+  // Sessions survive browser restarts
+} else {
+  // Show badge: "Standard Mode"
+  // Use event-based tabs
+  // Store tabs in Chrome storage
+}
+```
+
+### Benefits
+
+**For Non-Tmux Users:**
+- ✅ Works immediately, no setup
+- ✅ No tmux learning curve
+- ✅ All Chrome extension features
+- ✅ Simple mental model (tabs = terminals)
+
+**For Tmux Users (Power Users):**
+- 🚀 Auto-detects tmux availability
+- 🚀 Polling architecture (no state sync bugs)
+- 🚀 TUI apps (TFE, tmuxplexer) work perfectly
+- 🚀 Spawn from anywhere (CLI, tmuxplexer, extension)
+- 🚀 True persistence with resurrect/continuum
+
+**For Everyone:**
+- ✅ Same extension for both use cases
+- ✅ Upgrade path (install tmux → get superpowers)
+- ✅ No forced dependencies
+- ✅ Not limiting anyone
+
+### State Management Answer
+
+**Standard Mode:** Minimal React state (current active tab, UI state)
+**Tmux Mode:** None! Polling means tmux is the only source of truth
+
+### Next Steps
+1. Test current extension with "Use Tmux" toggle
+2. Add `/api/tmux/check` endpoint
+3. Implement mode detection on load
+4. Add polling hook for tmux mode
+5. Update UI badge to show current mode
+6. Document both modes in README
+
+---
+
 ## 🚨 CURRENT STATUS - READ FIRST
 
 **Status**: ✅ **v1.0.1 COMPLETE** - All Planned Features Shipped
@@ -281,3 +397,31 @@ To port to Firefox:
 **Last Updated**: November 18, 2025
 **Maintained By**: Claude Code (with human oversight)
 **Repository**: https://github.com/GGPrompts/terminal-tabs-extension
+
+---
+
+## 📊 Quick Reference: Two Projects
+
+| Aspect | **terminal-tabs-extension** (Current) | **TabzChrome** (Original Plan) |
+|--------|---------------------------------------|-------------------------------|
+| **Location** | `~/projects/terminal-tabs-extension` | `~/projects/TabzChrome` |
+| **Repo** | `Tabz` (branch: feat/chrome-extension) | `TabzChrome` |
+| **Architecture** | Full Tabz (tabs, Zustand, localStorage) | Tmux-polling (session list) |
+| **UI Pattern** | Tab bar with multiple terminals | Session list + single viewer |
+| **State** | Zustand + localStorage + Chrome storage | Poll tmux only |
+| **Complexity** | Full feature set | 40% less code |
+| **Port** | 8127 | 8129 |
+| **Status** | ✅ Built and working | 📋 Planning docs only |
+
+**Test Tomorrow:**
+1. Use the current extension during work
+2. Pay attention to:
+   - Do you like having multiple terminal tabs?
+   - Is state management helpful or overkill?
+   - Would a simple session list be better?
+3. Decide which approach to keep/pursue
+
+**Files to Reference:**
+- `COMPARISON_PLANNED_VS_ACTUAL.md` - Full analysis
+- `~/projects/TabzChrome/IMPLEMENTATION_PLAN.md` - Original vision details
+- `~/projects/TabzChrome/README.md` - Planned UX
