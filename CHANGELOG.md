@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Testing results**: 98.5% tests passing (256/260), 4 failures in edge cases
   - **Documentation**: All testing and technical notes preserved in `~/projects/terminal-tabs-ai/`
   - **Lesson learned**: AI integration doesn't align with project's focus on simplicity and lightweight design
-  - See [FEATURE_BRANCHES.md](FEATURE_BRANCHES.md#5-featai-experiments--archived-november-17-2025) for full details
+  - Full details preserved in archived branch
 
 ---
 
@@ -748,25 +748,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Upcoming Features (Planned)
 
-### v1.2 - UX Improvements
-- [ ] Keyboard shortcuts (Ctrl+T, Ctrl+W, Ctrl+Tab, Ctrl+1-9, Ctrl+Shift+T)
-- [ ] Tab reordering (drag & drop)
-- [ ] Tab context menu (close others, close to right, rename)
+See [PLAN.md](PLAN.md) for the current roadmap.
+
+### Future Enhancements
+- [ ] Tab reordering (drag to reorder, not just split)
 - [ ] Session manager UI (reconnect to orphaned tmux sessions)
-
-### v1.3 - Mobile Support
-- [ ] Responsive CSS for tablets/phones
-- [ ] Touch-friendly tab switching
-- [ ] Mobile keyboard support
-- [ ] PWA manifest
-
-### v2.0 - Advanced Features
-- [ ] Claude Code theme integration (6 specialized palettes)
+- [ ] Tab bar overflow handling (scrolling/compression)
+- [ ] Mobile responsiveness
 - [ ] Light theme support
-- [ ] Split panes (or tmuxplexer templates)
-- [ ] Tab groups/folders
-- [ ] Search across terminals
-- [ ] Export terminal output
+- [ ] Claude Code theme integration
 
 ---
 
