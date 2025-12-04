@@ -141,7 +141,7 @@ export const Terminal = React.forwardRef<any, TerminalProps>(
               }
             }
           }
-        }, isTUITool ? 20 : 200), // 200ms for normal terminals, 20ms for TUI tools
+        }, isTUITool ? 20 : 1000), // 1000ms for normal terminals (fixes tmux split drag), 20ms for TUI tools
       [isTUITool],
     );
 

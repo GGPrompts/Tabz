@@ -118,58 +118,12 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
         return
       }
 
-      // Load gg-hub spawn options
-      let ggHubOptions: SpawnOption[] = []
-      try {
-        const ggHubResponse = await fetch('/api/gg-hub/spawn-options')
-        const ggHubResult = await ggHubResponse.json()
-        if (ggHubResult.success) {
-          ggHubOptions = ggHubResult.data
-          console.log(`[SettingsModal] Loaded ${ggHubOptions.length} gg-hub spawn options`)
-        }
-      } catch (ggHubErr) {
-        console.warn('[SettingsModal] Failed to load gg-hub spawn options:', ggHubErr)
-        // Continue without gg-hub options - not a critical error
-      }
+      // Set spawn options (manual tools only)
+      setSpawnOptions(result.data)
+      setOriginalOptions(JSON.parse(JSON.stringify(result.data))) // Deep copy for comparison
 
-      // Create section separator
-      const projectSeparator: SpawnOption = {
-        label: '─── Projects ───',
-        command: '',
-        terminalType: 'separator' as any,
-        icon: '',
-        description: 'gg-hub projects',
-        isSeparator: true
-      }
-
-      const toolsSeparator: SpawnOption = {
-        label: '─── Tools ───',
-        command: '',
-        terminalType: 'separator' as any,
-        icon: '',
-        description: 'Manual tools',
-        isSeparator: true
-      }
-
-      // Merge with visual separators
-      const mergedOptions = [
-        ...(ggHubOptions.length > 0 ? [projectSeparator, ...ggHubOptions] : []),
-        ...(result.data.length > 0 ? [toolsSeparator, ...result.data] : [])
-      ]
-
-      setSpawnOptions(mergedOptions)
-      setOriginalOptions(JSON.parse(JSON.stringify(mergedOptions))) // Deep copy for comparison
-
-      // Populate projects dropdown with gg-hub projects for quick working directory selection
-      if (ggHubOptions.length > 0) {
-        const projectsForDropdown = ggHubOptions.map((opt: SpawnOption) => ({
-          name: opt.label,
-          workingDir: opt.workingDir || ''
-        }))
-        setProjects(projectsForDropdown)
-        setOriginalProjects(JSON.parse(JSON.stringify(projectsForDropdown)))
-      } else if (result.projects) {
-        // Fallback to projects from spawn-options.json if gg-hub not available
+      // Load projects from spawn-options.json (if any)
+      if (result.projects) {
         setProjects(result.projects)
         setOriginalProjects(JSON.parse(JSON.stringify(result.projects)))
       }

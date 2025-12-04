@@ -1,0 +1,147 @@
+# Tabz Multi-Branch Docker Compose
+# Run multiple feature branches simultaneously for comparison and cherry-picking
+#
+# Usage:
+#   ./docker-branches.sh start ai-experiments      # Start single branch
+#   ./docker-branches.sh start all                 # Start all branches
+#   ./docker-branches.sh stop all                  # Stop all branches
+#   ./docker-branches.sh list                      # List running containers
+
+services:
+  # Master branch (baseline)
+  master:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BRANCH_NAME: master
+    container_name: tabz-master
+    ports:
+      - "5173:5173"  # Frontend
+      - "8127:8127"  # Backend
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=4
+      - BACKEND_PORT=8127
+      - FRONTEND_PORT=5173
+      - BRANCH_NAME=master
+    volumes:
+      # Mount source for hot reload (optional, comment out for pure Docker builds)
+      - .:/app
+      - /app/node_modules
+      - /app/backend/node_modules
+    networks:
+      - tabz-network
+    profiles:
+      - master
+      - all
+
+  # feat/ai-experiments
+  ai-experiments:
+    build:
+      context: /home/matt/projects/terminal-tabs-ai
+      dockerfile: Dockerfile
+      args:
+        BRANCH_NAME: ai-experiments
+    container_name: tabz-ai-experiments
+    ports:
+      - "5174:5173"  # Frontend
+      - "8128:8127"  # Backend
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=4
+      - BACKEND_PORT=8127
+      - FRONTEND_PORT=5173
+      - BRANCH_NAME=feat/ai-experiments
+    volumes:
+      - ai-experiments-data:/app
+    networks:
+      - tabz-network
+    profiles:
+      - ai-experiments
+      - all
+
+  # feat/chrome-extension
+  chrome-extension:
+    build:
+      context: /home/matt/projects/terminal-tabs-extension
+      dockerfile: Dockerfile
+      args:
+        BRANCH_NAME: chrome-extension
+    container_name: tabz-chrome-extension
+    ports:
+      - "5175:5173"  # Frontend
+      - "8129:8127"  # Backend
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=4
+      - BACKEND_PORT=8127
+      - FRONTEND_PORT=5173
+      - BRANCH_NAME=feat/chrome-extension
+    volumes:
+      - chrome-extension-data:/app
+    networks:
+      - tabz-network
+    profiles:
+      - chrome-extension
+      - all
+
+  # feat/component-showcase
+  component-showcase:
+    build:
+      context: /home/matt/projects/terminal-tabs-showcase
+      dockerfile: Dockerfile
+      args:
+        BRANCH_NAME: component-showcase
+    container_name: tabz-component-showcase
+    ports:
+      - "5176:5173"  # Frontend
+      - "8130:8127"  # Backend
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=4
+      - BACKEND_PORT=8127
+      - FRONTEND_PORT=5173
+      - BRANCH_NAME=feat/component-showcase
+    volumes:
+      - component-showcase-data:/app
+    networks:
+      - tabz-network
+    profiles:
+      - component-showcase
+      - all
+
+  # feat/tmux-only-simple
+  tmux-only-simple:
+    build:
+      context: /home/matt/projects/terminal-tabs-tmux-only
+      dockerfile: Dockerfile
+      args:
+        BRANCH_NAME: tmux-only-simple
+    container_name: tabz-tmux-only-simple
+    ports:
+      - "5177:5173"  # Frontend
+      - "8131:8127"  # Backend
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=4
+      - BACKEND_PORT=8127
+      - FRONTEND_PORT=5173
+      - BRANCH_NAME=feat/tmux-only-simple
+    volumes:
+      - tmux-only-simple-data:/app
+    networks:
+      - tabz-network
+    profiles:
+      - tmux-only-simple
+      - all
+
+networks:
+  tabz-network:
+    driver: bridge
+
+volumes:
+  ai-experiments-data:
+  chrome-extension-data:
+  component-showcase-data:
+  tmux-only-simple-data:
