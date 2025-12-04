@@ -14,7 +14,7 @@ async function testSpawn() {
     const bashResult = await unifiedSpawn.spawn({
       terminalType: 'bash',
       platform: 'local',
-      workingDir: '/home/matt/workspace/opustrator'
+      workingDir: process.cwd()
     });
 
     if (bashResult.success) {
@@ -33,7 +33,7 @@ async function testSpawn() {
     const claudeResult = await unifiedSpawn.spawn({
       terminalType: 'claude-code',
       platform: 'local', // All terminals run locally now
-      workingDir: '/home/matt/workspace/opustrator'
+      workingDir: process.cwd()
     });
 
     if (claudeResult.success) {

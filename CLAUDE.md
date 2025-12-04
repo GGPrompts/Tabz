@@ -856,7 +856,7 @@ curl -X POST http://localhost:8127/api/execute \
   -H "Content-Type: application/json" \
   -d '{
     "command": "npm run dev",
-    "workingDir": "/home/matt/projects/gg-hub",
+    "workingDir": "~/projects/my-project",
     "mode": "split-vertical"
   }'
 ```

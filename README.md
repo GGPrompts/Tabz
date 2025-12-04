@@ -2,20 +2,6 @@
 
 **Tab>_** - A simple, lightweight tab-based terminal interface built with React, TypeScript, and xterm.js. Spawn multiple terminals in browser tabs with full terminal emulation powered by a Node.js backend.
 
-## 🌿 Feature Branches
-
-**Multiple experimental branches are in development!** See **[FEATURE_BRANCHES.md](FEATURE_BRANCHES.md)** for complete details.
-
-Quick overview:
-- **master** (this branch) - ✅ Production-ready, stable version
-- **feat/component-showcase** - 🎨 Advanced UI components (terminals working)
-- **feat/tmux-only-simple** - ⚠️ Simplified architecture (terminals NOT working yet)
-- **feat/chrome-extension** - 🌐 Chrome extension version (build issues)
-- **feat/ai-experiments** - 🤖 AI-powered features (terminals working + AI)
-- **tmux-manager** - 🚀 Go backend replacement (Phase 1 complete)
-
----
-
 ## Features
 
 ### Core Features
@@ -108,7 +94,7 @@ Set in `spawn-options.json`:
 ```json
 {
   "globalDefaults": {
-    "workingDirectory": "/home/matt",
+    "workingDirectory": "~",
     "theme": "holographic",
     "background": "carbon",
     "transparency": 90,

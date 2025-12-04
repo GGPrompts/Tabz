@@ -517,7 +517,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                       settings.updateSettings({ workingDirectory: e.target.value })
                       setSelectedProject('') // Switch to manual entry if user edits
                     }}
-                    placeholder="/home/matt"
+                    placeholder="~"
                   />
                 </div>
               </div>
@@ -933,7 +933,7 @@ export function SettingsModal({ isOpen, onClose, onSave }: SettingsModalProps) {
                     type="text"
                     value={formData.workingDir}
                     onChange={(e) => setFormData({ ...formData, workingDir: e.target.value })}
-                    placeholder={settings.workingDirectory || '/home/matt'}
+                    placeholder={settings.workingDirectory || '~'}
                   />
                 </label>
               </div>

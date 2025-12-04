@@ -1,0 +1,65 @@
+{
+  "projects": [],
+  "globalDefaults": {
+    "workingDirectory": "~",
+    "fontFamily": "'JetBrainsMono Nerd Font', 'JetBrainsMono NF', monospace",
+    "fontSize": 16,
+    "theme": "holographic",
+    "background": "carbon",
+    "transparency": 90,
+    "useTmux": true
+  },
+  "spawnOptions": [
+    {
+      "label": "Bash",
+      "command": "",
+      "terminalType": "bash",
+      "icon": "bash",
+      "description": "Plain bash terminal",
+      "defaultTheme": "matrix",
+      "defaultTransparency": 90
+    },
+    {
+      "label": "Claude Code",
+      "command": "claude",
+      "terminalType": "claude-code",
+      "icon": "claude-code",
+      "description": "Claude Code (interactive mode)",
+      "defaultTheme": "amber",
+      "defaultTransparency": 100
+    },
+    {
+      "label": "LazyGit",
+      "command": "lazygit",
+      "terminalType": "tui-tool",
+      "icon": "lazygit",
+      "description": "Terminal UI for git",
+      "defaultTheme": "github-dark",
+      "defaultTransparency": 95,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "monospace",
+      "defaultBackground": "dark-neutral"
+    },
+    {
+      "label": "Htop",
+      "command": "htop",
+      "terminalType": "tui-tool",
+      "icon": "htop",
+      "description": "Interactive process viewer",
+      "defaultTheme": "matrix",
+      "defaultTransparency": 95,
+      "defaultFontSize": 16,
+      "defaultFontFamily": "monospace",
+      "defaultBackground": "dark-neutral"
+    },
+    {
+      "label": "Vim",
+      "command": "vim",
+      "terminalType": "bash",
+      "icon": "vim",
+      "description": "Vim text editor",
+      "defaultTheme": "monokai",
+      "defaultTransparency": 85
+    }
+  ]
+}

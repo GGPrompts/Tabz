@@ -38,3 +38,28 @@ PERSISTENCE_*.txt
 PERSISTENCE_*.md
 test-colors.sh
 xterm-js.zip
+
+# Personal config files (use .example versions as templates)
+public/spawn-options.json
+public/gg-hub-spawn-options.json
+docker-compose.yml
+
+# Session/planning files
+SESSION_*.md
+*_PROMPT.md
+FEATURE_BRANCHES.md
+PARALLEL_DEVELOPMENT.md
+
+# Developer-only scripts
+launch-all-claude.sh
+send-start-prompts.sh
+docker-branches.sh
+TMUX_STARTUP.sh
+check-terminal-size.sh
+
+# Test artifacts
+test-results.txt
+test-fix.patch
+*.html
+!index.html
+!dist/index.html
