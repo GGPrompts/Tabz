@@ -756,7 +756,6 @@ See [PLAN.md](PLAN.md) for the current roadmap.
 - [ ] Tab bar overflow handling (scrolling/compression)
 - [ ] Mobile responsiveness
 - [ ] Light theme support
-- [ ] Claude Code theme integration
 
 ---
 

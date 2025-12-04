@@ -86,18 +86,6 @@ Currently tabs can only be dragged to create splits. True tab reordering is not 
 
 ---
 
-#### 6. Claude Code Theme Integration
-**Why**: 6 specialized color palettes for Claude output
-
-**Implementation**:
-- Use existing `src/styles/claude-code-themes.ts`
-- Add palette picker to customize modal
-- Show palette variant (dark/light/high-contrast)
-
-**Estimate**: 2-3 hours
-
----
-
 ## Anti-Roadmap (Things We Won't Do)
 
 1. **No Canvas Features** - Dragging terminals on infinite workspace, zooming, panning
