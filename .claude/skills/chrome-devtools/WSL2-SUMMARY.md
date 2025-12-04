@@ -71,7 +71,7 @@ exec bash
 chrome-check
 
 # Navigate to a site
-cd /home/matt/projects/claudekit-skills/.claude/skills/chrome-devtools/scripts
+cd .claude/skills/chrome-devtools/scripts
 WS_ENDPOINT=$(powershell.exe -Command "(Invoke-WebRequest 'http://localhost:9222/json/version' -UseBasicParsing | ConvertFrom-Json).webSocketDebuggerUrl" | tr -d '\r')
 node navigate.js --url https://example.com --wsEndpoint "$WS_ENDPOINT"
 ```
