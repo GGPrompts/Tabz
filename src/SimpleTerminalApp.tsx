@@ -2034,7 +2034,10 @@ End of error report
       <div
         className={`app-header ${headerVisible ? 'visible' : 'hidden'}`}
       >
-        <div className="app-title">Tab<span style={{ fontFamily: 'monospace', fontSize: '0.9em' }}>&gt;_</span></div>
+        <div className="app-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <img src="/tabz-logo-light.png" alt="Tabz" style={{ height: '24px' }} />
+          <span>Tabz</span>
+        </div>
 
         {/* Tmux Toggle */}
         <div className="tmux-toggle-container">
